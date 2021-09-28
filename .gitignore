@@ -43,21 +43,10 @@ target_wrapper.*
 *.qmlproject.user.*
 
 # QtCreator CMake
-*.txt.user
+CMakeLists.txt.user*
 
 # QtCreator 4.8< compilation database 
 compile_commands.json
 
 # QtCreator local machine specific files for imported projects
 *creator.user*
-
-# CLion
-.idea
-
-# Others
-cbuild/
-build/
-settings.cmake
-res/*.txt
-res/database/*.txt
-*.~
