@@ -21,7 +21,7 @@ if (NOT "Qt5::QSQLCipherDriverPlugin" IN_LIST Qt${QT_VERSION_MAJOR}Sql_PLUGINS)
     message(SEND_ERROR "QSQL Cipher Driver not installed! Please install qsqlcipher-qt5 >= ${QT5_MIN_VERSION}
     https://github.com/sjemens/qsqlcipher-qt5.git")
 else ()
-    message(STATUS "Found qsqlcipher >= ${KtoBlzCheck_VERSION}")
+    message(STATUS "Found qsqlcipher")
 endif ()
 
 message(STATUS "")
