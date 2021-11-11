@@ -26,17 +26,6 @@ App::App(QWidget *parent, Qt::WindowFlags flags)
     : QMainWindow(parent, flags)
 {
     setupUi(this);
-
-    StorageUser user;
-    user.filePath = "/home/asaal/olbaflinx.storage";
-    user.password = "äöü'tW5@tEV8ź\4eTyC.Q$s;/`kuzk-QC`V";
-
-    Storage::instance()->setUser(&user);
-    Storage::instance()->initialize();
-    Storage::instance()->isInitialized();
-    Storage::instance()->checkIntegrity();
-    Storage::instance()->compress();
-
 }
 
 App::~App() = default;
