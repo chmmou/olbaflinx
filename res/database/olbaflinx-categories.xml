@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<categories>
+    <category name="Auto">
+        <entries>Garage - Garage oder Stellplatz</entries>
+        <entries>Steuer - Kfz-Steuer</entries>
+        <entries>Tanken</entries>
+        <entries>Versicherung - Kfz-Versicherung</entries>
+        <entries>Werkstatt</entries>
+    </category>
+    <category name="Bürokratie">
+        <entries>Banken - Gebühren, Kredite, Sollzinsen</entries>
+        <entries>Gebühren - Öffentliche Gebühren, Beiträge</entries>
+        <entries>Steuer - Ohne Kfz-Steuer, Steuererstattungen, Steuerberatung</entries>
+        <entries>Versicherungen - Ohne Kfz- und Krankenversicherung</entries>
+    </category>
+</categories>

@@ -1,0 +1,39 @@
+<RCC>
+    <qresource prefix="/translations">
+        <file alias="de_DE">olbaflinx_de_DE.qm</file>
+        <file alias="en_US">olbaflinx_en_US.qm</file>
+    </qresource>
+    <qresource prefix="/app">
+        <file alias="splashscreen">images/splashscreen.jpeg</file>
+        <file alias="olbaflinx-logo">olbaflinx.png</file>
+        <file alias="olbaflinx-storage">database/olbaflinx_storage.sql</file>
+        <file alias="olbaflinx-bankdata">database/olbaflinx-bankdata.sdb</file>
+        <file alias="olbaflinx-categories">database/olbaflinx-categories.xml</file>
+        <file alias="olbaflinx-desktop">olbaflinx.desktop</file>
+    </qresource>
+    <qresource prefix="/datavault">
+        <file alias="add">images/datavault/add.png</file>
+        <file alias="menu">images/datavault/menu.png</file>
+        <file alias="open">images/datavault/open.png</file>
+    </qresource>
+    <qresource prefix="/account">
+        <file alias="bank">images/account/bank.png</file>
+        <file alias="bank-account">images/account/bank-account.png</file>
+    </qresource>
+    <qresource prefix="/transaction">
+        <file alias="transaction-documents">images/transaction/transaction-documents.png</file>
+        <file alias="transaction-list">images/transaction/transaction-list.png</file>
+        <file alias="transaction-transfer">images/transaction/transaction-transfer.png</file>
+        <file alias="transaction-chart">images/transaction/transaction-chart.png</file>
+    </qresource>
+    <qresource prefix="/general">
+        <file alias="add">images/general/add.svg</file>
+        <file alias="edit">images/general/edit.svg</file>
+        <file alias="export">images/general/export.svg</file>
+        <file alias="import">images/general/import.svg</file>
+        <file alias="lock">images/general/lock.svg</file>
+        <file alias="refresh">images/general/refresh.svg</file>
+        <file alias="save">images/general/save.svg</file>
+        <file alias="undo">images/general/undo.svg</file>
+    </qresource>
+</RCC>

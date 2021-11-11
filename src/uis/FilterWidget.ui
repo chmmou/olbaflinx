@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>UiFilterWidget</class>
+ <widget class="QWidget" name="UiFilterWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>625</width>
+    <height>100</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>625</width>
+    <height>100</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="vlFilterWidget">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" name="hlDateEditTimePeriod">
+     <item>
+      <layout class="QHBoxLayout" name="hlTimePeriod">
+       <item>
+        <widget class="QLabel" name="lblTimePeriod">
+         <property name="minimumSize">
+          <size>
+           <width>110</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>110</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Time period</string>
+         </property>
+         <property name="buddy">
+          <cstring>cbxTimePeriod</cstring>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="cbxTimePeriod">
+         <item>
+          <property name="text">
+           <string>-- Please select --</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="hlDateEdit">
+       <item>
+        <spacer name="horizontalSpacerDateEdit">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Fixed</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblDateEditTo">
+         <property name="minimumSize">
+          <size>
+           <width>55</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>55</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>From</string>
+         </property>
+         <property name="buddy">
+          <cstring>dateEditFrom</cstring>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QDateEdit" name="dateEditFrom">
+         <property name="displayFormat">
+          <string>M/d/yyyy</string>
+         </property>
+         <property name="calendarPopup">
+          <bool>true</bool>
+         </property>
+         <property name="timeSpec">
+          <enum>Qt::LocalTime</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblDateEditFrom">
+         <property name="minimumSize">
+          <size>
+           <width>55</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>55</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>to</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+         <property name="buddy">
+          <cstring>dateEditTo</cstring>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QDateEdit" name="dateEditTo">
+         <property name="displayFormat">
+          <string>M/d/yyyy</string>
+         </property>
+         <property name="calendarPopup">
+          <bool>true</bool>
+         </property>
+         <property name="timeSpec">
+          <enum>Qt::LocalTime</enum>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="vlSearch">
+     <item>
+      <widget class="QLineEdit" name="leSearch">
+       <property name="placeholderText">
+        <string>Search</string>
+       </property>
+       <property name="clearButtonEnabled">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="cbxSearchAsRegEx">
+       <property name="text">
+        <string>Search term is a regular expression</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>2</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>cbxTimePeriod</tabstop>
+  <tabstop>dateEditFrom</tabstop>
+  <tabstop>dateEditTo</tabstop>
+  <tabstop>leSearch</tabstop>
+  <tabstop>cbxSearchAsRegEx</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>cbxTimePeriod</sender>
+   <signal>currentIndexChanged(int)</signal>
+   <receiver>UiFilterWidget</receiver>
+   <slot>slotTimePeriodChanged(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>167</x>
+     <y>13</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>168</x>
+     <y>32</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>dateEditFrom</sender>
+   <signal>dateChanged(QDate)</signal>
+   <receiver>UiFilterWidget</receiver>
+   <slot>slotDateEditChanged(QDate)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>411</x>
+     <y>13</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>374</x>
+     <y>63</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>dateEditTo</sender>
+   <signal>dateChanged(QDate)</signal>
+   <receiver>UiFilterWidget</receiver>
+   <slot>slotDateEditChanged(QDate)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>560</x>
+     <y>14</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>558</x>
+     <y>62</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>leSearch</sender>
+   <signal>textEdited(QString)</signal>
+   <receiver>UiFilterWidget</receiver>
+   <slot>slotSearchTextChanged(QString)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>129</x>
+     <y>45</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>312</x>
+     <y>94</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>cbxSearchAsRegEx</sender>
+   <signal>stateChanged(int)</signal>
+   <receiver>UiFilterWidget</receiver>
+   <slot>slotUseSearchTextAsRegEx(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>62</x>
+     <y>78</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>85</x>
+     <y>95</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>slotTimePeriodChanged(int)</slot>
+  <slot>slotDateEditChanged(QDate)</slot>
+  <slot>slotSearchTextChanged(QString)</slot>
+  <slot>slotUseSearchTextAsRegEx(int)</slot>
+ </slots>
+</ui>
