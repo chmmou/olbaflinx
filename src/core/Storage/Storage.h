@@ -62,7 +62,7 @@ public:
     bool isInitialized();
     bool checkIntegrity();
     bool compress();
-    bool changePassword(const QString &newPassword);
+    bool changePassword(const QString &oldPassword, const QString &newPassword);
 
     void storeSetting(const QString &group, const QString &key, const QVariant &value);
     QVariant setting(const QString &group, const QString &key, const QVariant &defaultValue = QVariant()) const;

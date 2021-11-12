@@ -48,14 +48,16 @@ private Q_SLOTS:
     void testStorageInitializingWithUserNoPassword();
     void testStorageInitializingWithUser();
     void testStorageInitializing();
+    void testStorageChangePassword();
 };
 
 StorageTest::StorageTest()
     : metaTypeIds(QList<int>()),
       storageFile(QDir::tempPath().append("/olbaflinx_test.storage")),
-      storagePassword("MyF13stP$44W03d")
+      storagePassword("M'yF13\"stP\\$44W0$3d/")
 {
 }
+
 StorageTest::~StorageTest() = default;
 
 void StorageTest::initTestCase()
@@ -141,6 +143,25 @@ void StorageTest::testStorageInitializing()
     QVERIFY(initialized);
 
     initialized = storage->isInitialized();
+    QVERIFY(initialized);
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void StorageTest::testStorageChangePassword()
+{
+    auto storage = Storage::instance();
+    QSignalSpy spy(storage, &Storage::errorOccurred);
+
+    StorageUser user;
+    user.filePath = storageFile;
+    user.password = storagePassword;
+    storage->setUser(&user);
+
+    bool initialized = storage->changePassword(
+        storagePassword,
+        "eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2"
+    );
     QVERIFY(initialized);
 
     QCOMPARE(spy.count(), 0);

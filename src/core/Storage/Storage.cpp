@@ -15,9 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <iostream>
-#include <sstream>
-
 #include <QtCore/QDebug>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
@@ -217,24 +214,45 @@ bool Storage::compress()
     return success;
 }
 
-bool Storage::changePassword(const QString &newPassword)
+bool Storage::changePassword(const QString &oldPassword, const QString &newPassword)
 {
     const auto conn = connection();
-    bool ok = checkPassword(conn, mStorageUser->password);
 
+    // Check old password
+    bool ok = checkPassword(conn, oldPassword);
     if (!ok) {
         Q_EMIT errorOccurred(tr("The entered password is not correct!"), Storage::PasswordError);
         return false;
     }
 
-    if (mStorageUser->password == newPassword) {
+    if (oldPassword == newPassword) {
         Q_EMIT errorOccurred(tr("The new password cannot be the same as the old one."), Storage::PasswordError);
         return false;
     }
 
-    // The old password is valid
+    QSqlQuery dbQuery(conn->database());
+    bool success = dbQuery.exec(QString("PRAGMA key='%1';").arg(quote(oldPassword)));
+    if (!success) {
+        Q_EMIT errorOccurred(dbQuery.lastError().text(), Storage::PasswordError);
+        return false;
+    }
 
-    return false;
+    success = dbQuery.exec(QString("PRAGMA rekey='%1';").arg(quote(newPassword)));
+    if (!success) {
+        Q_EMIT errorOccurred(dbQuery.lastError().text(), Storage::PasswordError);
+        return false;
+    }
+
+    // If the new password working?
+    success = checkPassword(conn, newPassword);
+    if (!success) {
+        Q_EMIT errorOccurred(tr("The entered password is not correct!"), Storage::PasswordError);
+        return false;
+    }
+
+    mStorageUser->password = newPassword;
+
+    return success;
 }
 
 void Storage::storeSetting(const QString &group, const QString &key, const QVariant &value)
@@ -301,14 +319,26 @@ const QString Storage::quote(const QString &string) const
         const QChar strPart = string.at(a);
         const int accii = (int) strPart.toLatin1();
 
-        if (strPart != "'" && strPart != "\"" && strPart != '\\' && accii >= 32 && accii <= 126) {
-            result += strPart;
+        bool noEscapeSeq = (strPart != "'" && strPart != "\"" && strPart != '\\');
+        bool isValidAscii = ((accii >= 32 && accii <= 126) || (accii >= 128 && accii <= 255));
+
+        if (noEscapeSeq && isValidAscii) {
+            result.append(strPart);
         }
         else {
-            std::stringstream ss;
-            ss << std::hex << std::uppercase << accii;
-
-            result += "\\x" + QString::fromStdString(ss.str());
+            switch (accii) {
+                case 34: // Char = "
+                    result.append(QString(strPart).replace(strPart, "\""));
+                    break;
+                case 39: // Char = \'
+                    result.append(QString(strPart).replace(strPart, "''"));
+                    break;
+                case 92: // Char = "\"
+                    result.append(QString(strPart).replace(strPart, "\\"));
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -319,9 +349,9 @@ bool Storage::setupTables(StorageConnection *connection, QStringList &sqlStateme
 {
     QStringList queries = defaultQueries();
 
-    for (auto &query: sqlStatements) {
+    for (auto &query: sqlStatements)
         queries << query.replace("#", ";").trimmed();
-    }
+
     queries << "VACUUM;";
 
     QSqlQuery dbQuery(connection->database());
@@ -354,9 +384,9 @@ const bool Storage::checkPassword(StorageConnection *connection, const QString &
 {
     QSqlQuery dbQuery(connection->database());
 
-    bool success = dbQuery.exec(pragmaKey());
+    bool success = dbQuery.exec(QString("PRAGMA key='%1';").arg(quote(password)));
 
-    // A select statement is not possible if we have a wrong password.
+    // We can't exec a query without a valid password.
     success &= dbQuery.exec("SELECT COUNT(id) AS ID_COUNT FROM migrations;");
 
     while (dbQuery.next()) {

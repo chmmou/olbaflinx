@@ -172,27 +172,28 @@
 <context>
     <name>olbaflinx::core::storage::Storage</name>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="92"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="89"/>
         <source>Given user object can&apos;t be null!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="97"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="94"/>
         <source>Storage file can&apos;t be empty!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="102"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="99"/>
         <source>Storage password can&apos;t be empty!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="226"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="224"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="249"/>
         <source>The entered password is not correct!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="231"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="229"/>
         <source>The new password cannot be the same as the old one.</source>
         <translation type="unfinished"></translation>
     </message>
