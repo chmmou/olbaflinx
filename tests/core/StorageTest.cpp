@@ -16,6 +16,7 @@
  */
 
 #include "Storage/Storage.h"
+#include "SingleApplication/SingleApplication.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QList>
@@ -43,12 +44,14 @@ private:
 private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
-    void testStorageInitializingWithoutUser();
-    void testStorageInitializingWithUserNoStorageFile();
-    void testStorageInitializingWithUserNoPassword();
-    void testStorageInitializingWithUser();
-    void testStorageInitializing();
-    void testStorageChangePassword();
+    void testInitializingWithoutUser();
+    void testInitializingWithUserNoStorageFile();
+    void testInitializingWithUserNoPassword();
+    void testInitializingWithUser();
+    void testInitializing();
+    void testChangePassword();
+    void testStoreSettingWithEmptyStorageFilePath();
+    void testStoreSettingWithStorageFilePath();
 };
 
 StorageTest::StorageTest()
@@ -56,6 +59,10 @@ StorageTest::StorageTest()
       storageFile(QDir::tempPath().append("/olbaflinx_test.storage")),
       storagePassword("M'yF13\"stP\\$44W0$3d/")
 {
+    SingleApplication::setApplicationName("OlbaFlinx");
+    SingleApplication::setApplicationVersion("1.0.0");
+    SingleApplication::setOrganizationName("de.chm-projects.olbaflinx");
+    SingleApplication::setOrganizationDomain("https://olbaflinx.chm-projects.de");
 }
 
 StorageTest::~StorageTest() = default;
@@ -80,7 +87,7 @@ void StorageTest::cleanupTestCase()
     storagePassword.clear();
 }
 
-void StorageTest::testStorageInitializingWithoutUser()
+void StorageTest::testInitializingWithoutUser()
 {
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
@@ -88,7 +95,7 @@ void StorageTest::testStorageInitializingWithoutUser()
     QCOMPARE(spy.count(), 1);
 }
 
-void StorageTest::testStorageInitializingWithUserNoStorageFile()
+void StorageTest::testInitializingWithUserNoStorageFile()
 {
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
@@ -102,7 +109,7 @@ void StorageTest::testStorageInitializingWithUserNoStorageFile()
     QVERIFY(type == Storage::FileNotFoundError);
 }
 
-void StorageTest::testStorageInitializingWithUserNoPassword()
+void StorageTest::testInitializingWithUserNoPassword()
 {
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
@@ -117,7 +124,7 @@ void StorageTest::testStorageInitializingWithUserNoPassword()
     QVERIFY(type == Storage::PasswordError);
 }
 
-void StorageTest::testStorageInitializingWithUser()
+void StorageTest::testInitializingWithUser()
 {
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
@@ -129,7 +136,7 @@ void StorageTest::testStorageInitializingWithUser()
     QCOMPARE(spy.count(), 0);
 }
 
-void StorageTest::testStorageInitializing()
+void StorageTest::testInitializing()
 {
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
@@ -148,7 +155,7 @@ void StorageTest::testStorageInitializing()
     QCOMPARE(spy.count(), 0);
 }
 
-void StorageTest::testStorageChangePassword()
+void StorageTest::testChangePassword()
 {
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
@@ -165,6 +172,39 @@ void StorageTest::testStorageChangePassword()
     QVERIFY(initialized);
 
     QCOMPARE(spy.count(), 0);
+}
+
+void StorageTest::testStoreSettingWithEmptyStorageFilePath()
+{
+    auto storage = Storage::instance();
+    storage->storeSetting("Vaults", QStringList(), "Storage");
+
+    auto vaults = storage->setting(
+        "Vaults",
+        "Storage",
+        QStringList()
+    ).toStringList();
+
+    QCOMPARE(vaults.size(), 0);
+}
+
+void StorageTest::testStoreSettingWithStorageFilePath()
+{
+    auto storage = Storage::instance();
+
+    QStringList vaults;
+    vaults << "/tmp/test1" << "/tmp/test2";
+    storage->storeSetting("Vaults", vaults, "Storage");
+
+    vaults = storage->setting(
+        "Vaults",
+        "Storage",
+        QStringList()
+    ).toStringList();
+
+    QCOMPARE(vaults.size(), 2);
+    QCOMPARE(vaults.at(0), "/tmp/test1");
+    QCOMPARE(vaults.at(1), "/tmp/test2");
 }
 
 }

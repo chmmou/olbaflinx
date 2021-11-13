@@ -104,7 +104,8 @@ void Storage::setUser(const StorageUser *storageUser)
 
     if (!mStorageUser.isNull()) {
         mIsUserChanged = (
-            mStorageUser->filePath != storageUser->filePath && mStorageUser->password != storageUser->password
+            mStorageUser->filePath != storageUser->filePath
+                && mStorageUser->password != storageUser->password
         );
         mStorageUser.clear();
         delete mStorageUser;
@@ -221,12 +222,18 @@ bool Storage::changePassword(const QString &oldPassword, const QString &newPassw
     // Check old password
     bool ok = checkPassword(conn, oldPassword);
     if (!ok) {
-        Q_EMIT errorOccurred(tr("The entered password is not correct!"), Storage::PasswordError);
+        Q_EMIT errorOccurred(
+            tr("The entered password is not correct!"),
+            Storage::PasswordError
+        );
         return false;
     }
 
     if (oldPassword == newPassword) {
-        Q_EMIT errorOccurred(tr("The new password cannot be the same as the old one."), Storage::PasswordError);
+        Q_EMIT errorOccurred(
+            tr("The new password cannot be the same as the old one."),
+            Storage::PasswordError
+        );
         return false;
     }
 
@@ -246,7 +253,10 @@ bool Storage::changePassword(const QString &oldPassword, const QString &newPassw
     // If the new password working?
     success = checkPassword(conn, newPassword);
     if (!success) {
-        Q_EMIT errorOccurred(tr("The entered password is not correct!"), Storage::PasswordError);
+        Q_EMIT errorOccurred(
+            tr("The entered password is not correct!"),
+            Storage::PasswordError
+        );
         return false;
     }
 
@@ -255,7 +265,7 @@ bool Storage::changePassword(const QString &oldPassword, const QString &newPassw
     return success;
 }
 
-void Storage::storeSetting(const QString &group, const QString &key, const QVariant &value)
+void Storage::storeSetting(const QString &key, const QVariant &value, const QString &group)
 {
     if (!group.isEmpty()) {
         mSettings->beginGroup(group);
@@ -270,7 +280,11 @@ void Storage::storeSetting(const QString &group, const QString &key, const QVari
     mSettings->sync();
 }
 
-QVariant Storage::setting(const QString &group, const QString &key, const QVariant &defaultValue) const
+QVariant Storage::setting(
+    const QString &key,
+    const QString &group,
+    const QVariant &defaultValue
+) const
 {
     if (!group.isEmpty()) {
         mSettings->beginGroup(group);

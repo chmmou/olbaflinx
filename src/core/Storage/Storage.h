@@ -64,8 +64,12 @@ public:
     bool compress();
     bool changePassword(const QString &oldPassword, const QString &newPassword);
 
-    void storeSetting(const QString &group, const QString &key, const QVariant &value);
-    QVariant setting(const QString &group, const QString &key, const QVariant &defaultValue = QVariant()) const;
+    void storeSetting(const QString &key, const QVariant &value, const QString &group = QString());
+    QVariant setting(
+        const QString &key,
+        const QString &group = QString(),
+        const QVariant &defaultValue = QVariant()
+    ) const;
 
 Q_SIGNALS:
     void errorOccurred(const QString &message, const Storage::ErrorType errorType);

@@ -33,8 +33,8 @@ int main(int argc, char *argv[])
 
     SingleApplication::setApplicationName("OlbaFlinx");
     SingleApplication::setApplicationVersion("1.0.0");
-    SingleApplication::setOrganizationName("de.chm-projects.fibolinx");
-    SingleApplication::setOrganizationDomain("https://fibolinx.chm-projects.de");
+    SingleApplication::setOrganizationName("de.chm-projects.olbaflinx");
+    SingleApplication::setOrganizationDomain("https://olbaflinx.chm-projects.de");
 
     SingleApplication a(argc, argv);
 
