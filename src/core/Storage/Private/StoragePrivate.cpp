@@ -115,7 +115,7 @@ StorageConnection *StoragePrivate::storageConnection()
 
 QString StoragePrivate::pragmaKey() const
 {
-    return QString("PRAGMA key='%1';").arg(quote(mStorageUser->password()));
+    return QString("PRAGMA key='%1';").arg(quotePassword(mStorageUser->password()));
 }
 
 QString StoragePrivate::quotePassword(const QString &password)
@@ -195,7 +195,7 @@ const bool StoragePrivate::checkPassword(
 {
     QSqlQuery dbQuery(connection->database());
 
-    bool success = dbQuery.exec(QString("PRAGMA key='%1';").arg(quote(password)));
+    bool success = dbQuery.exec(QString("PRAGMA key='%1';").arg(quotePassword(password)));
 
     // We can't exec a query without a valid password.
     success &= dbQuery.exec("SELECT COUNT(id) AS ID_COUNT FROM migrations;");
