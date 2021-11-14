@@ -58,7 +58,7 @@ public:
         const AB_TRANSACTION_COMMAND &cmd
     ) const;
 
-    [[nodiscard]] static Account *create(const QMap<QString, QVariant> &row) const;
+    [[nodiscard]] static Account *create(const QMap<QString, QVariant> &row);
 
 private:
     AB_ACCOUNT_SPEC *abAccountSpec;

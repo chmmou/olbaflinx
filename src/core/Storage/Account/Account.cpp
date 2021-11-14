@@ -169,7 +169,7 @@ const Account::TransactionLimits *Account::transactionLimitsForCommand(
     return AB_AccountSpec_GetTransactionLimitsForCommand(abAccountSpec, cmd);
 }
 
-Account *Account::create(const QMap<QString, QVariant> &row) const
+Account *Account::create(const QMap<QString, QVariant> &row)
 {
     auto accountSpec = AB_AccountSpec_new();
 

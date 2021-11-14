@@ -259,9 +259,7 @@ Account *Storage::account(const quint32 accountId) const
 
     const QMap<QString, QVariant> map = d_ptr->prepareForAccount(dbQuery);
 
-    auto const account = Account::create(map);
-
-    return account;
+    return Account::create(map);
 }
 
 QList<Account *> Storage::accounts() const
