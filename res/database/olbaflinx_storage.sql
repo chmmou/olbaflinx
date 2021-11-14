@@ -56,6 +56,7 @@ create table IF NOT EXISTS accounts
     bic                varchar,
     country            varchar,
     bank_code          varchar,
+    bank_name          varchar,
     branch_id          varchar,
     account_number     varchar,
     sub_account_number varchar,
@@ -178,7 +179,10 @@ CREATE TRIGGER IF NOT EXISTS trg_insert_migrations
     after insert
     on migrations
 begin
-    update migrations set migrated = 1, created_at = (datetime('now', 'localtime')) where id = new.id#
+    update migrations
+    set migrated   = 1,
+        created_at = (datetime('now', 'localtime'))
+    where id = new.id#
 end;
 
 INSERT OR IGNORE INTO migrations (name)
