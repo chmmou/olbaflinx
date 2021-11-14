@@ -27,7 +27,7 @@ endif ()
 message(STATUS "")
 
 message(STATUS "Checking for KtoBlzCheck >= ${KTOBLZCHECK_MIN_VERSION}")
-find_package(KtoBlzCheck QUIET)
+find_package(KtoBlzCheck ${KTOBLZCHECK_MIN_VERSION})
 if (NOT KtoBlzCheck_FOUND)
     message(SEND_ERROR "KtoBlzCheck >= ${KTOBLZCHECK_MIN_VERSION} not found! Please install KtoBlzCheck >= ${KTOBLZCHECK_MIN_VERSION}
     https://sourceforge.net/projects/ktoblzcheck/")

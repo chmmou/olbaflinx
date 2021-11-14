@@ -39,6 +39,14 @@ set(
         ${Qt${QT_VERSION_MAJOR}Svg_INCLUDE_DIRS}
 )
 
+set(
+        AQ_INCLUDES
+        ${AQBANKING_INCLUDE_DIRS}
+        ${GWENHYWFAR_INCLUDE_DIRS}
+)
+
+include_directories(${AQ_INCLUDES})
+
 add_definitions(
         ${Qt${QT_VERSION_MAJOR}Widgets_DEFINITIONS}
         ${Qt${QT_VERSION_MAJOR}Gui_DEFINITIONS}
@@ -63,7 +71,9 @@ file(
         ${APP_DIR}/core/*.cpp
         ${APP_DIR}/core/Banking/*.cpp
         ${APP_DIR}/core/Storage/*.cpp
+        ${APP_DIR}/core/Storage/Account/*.cpp
         ${APP_DIR}/core/Storage/Connection/*.cpp
+        ${APP_DIR}/core/Storage/Private/*.cpp
         ${APP_DIR}/app/*.cpp
         ${APP_DIR}/app/Components/*.cpp
         ${APP_DIR}/app/Banking/*.cpp
@@ -74,7 +84,9 @@ file(
         ${APP_DIR}/core/*.h
         ${APP_DIR}/core/Banking/*.h
         ${APP_DIR}/core/Storage/*.h
+        ${APP_DIR}/core/Storage/Account/*.h
         ${APP_DIR}/core/Storage/Connection/*.h
+        ${APP_DIR}/core/Storage/Private/*.h
         ${APP_DIR}/app/*.h
         ${APP_DIR}/app/Components/*.h
         ${APP_DIR}/app/Banking/*.h

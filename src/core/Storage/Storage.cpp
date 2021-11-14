@@ -15,14 +15,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <QtCore/QDebug>
-#include <QtCore/QDir>
 #include <QtCore/QFile>
-#include <QtCore/QPointer>
 #include <QtCore/QStringList>
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>
-#include <QtCore/QTextStream>
 
 #include <QtSql/QSqlDriver>
 #include <QtSql/QSqlError>
@@ -34,21 +30,17 @@
 #include "core/SingleApplication/SingleApplication.h"
 
 #include "Storage.h"
+#include "Private/StoragePrivate.h"
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
 
 QSettings *mSettings;
 
-QPointer<StorageUser> mStorageUser;
-
-StorageConnection *mStorageConnection;
-
-bool mIsUserChanged;
-
 Storage::Storage()
-    : QObject(nullptr)
+    : QObject(nullptr),
+      d_ptr(new StoragePrivate(this))
 {
-
     mSettings = new QSettings(
         QSettings::IniFormat,
         QSettings::UserScope,
@@ -56,72 +48,28 @@ Storage::Storage()
         SingleApplication::applicationName(),
         this
     );
-
-    mStorageUser = nullptr;
-    mStorageConnection = nullptr;
-    mIsUserChanged = false;
 }
 
 Storage::~Storage()
 {
-    if (!mStorageUser.isNull()) {
-        mStorageUser.clear();
-        delete mStorageUser;
-        mStorageUser = nullptr;
-    }
-
-    if (mStorageConnection != nullptr) {
-        mStorageConnection->close();
-        mStorageConnection->deleteLater();
-    }
-
     if (mSettings != nullptr) {
         mSettings->sync();
         mSettings->deleteLater();
     }
 
-    mIsUserChanged = false;
+    if (!d_ptr.isNull()) {
+        d_ptr->deleteLater();
+    }
 }
 
 void Storage::setUser(const StorageUser *storageUser)
 {
-    if (storageUser == nullptr) {
-        Q_EMIT errorOccurred(tr("Given user object can't be null!"), Storage::UnknownError);
-        return;
-    }
-
-    if (storageUser->filePath.isEmpty()) {
-        Q_EMIT errorOccurred(tr("Storage file can't be empty!"), Storage::FileNotFoundError);
-        return;
-    }
-
-    if (storageUser->password.isEmpty()) {
-        Q_EMIT errorOccurred(tr("Storage password can't be empty!"), Storage::PasswordError);
-        return;
-    }
-
-    mIsUserChanged = false;
-
-    if (!mStorageUser.isNull()) {
-        mIsUserChanged = (
-            mStorageUser->filePath != storageUser->filePath
-                && mStorageUser->password != storageUser->password
-        );
-        mStorageUser.clear();
-        delete mStorageUser;
-        mStorageUser = nullptr;
-    }
-
-    QPointer<StorageUser> storageUserPtr(const_cast<StorageUser *>(storageUser));
-    storageUserPtr.swap(mStorageUser);
-    storageUserPtr.clear();
-
-    delete storageUserPtr;
+    d_ptr->setUser(storageUser);
 }
 
 bool Storage::initialize()
 {
-    const auto conn = connection();
+    const auto conn = d_ptr->storageConnection();
     if (!conn->isOpen()) {
         Q_EMIT errorOccurred(conn->lastErrorMessage(), Storage::ConnectionError);
         return false;
@@ -135,7 +83,7 @@ bool Storage::initialize()
 
     QStringList sqlStatements = QTextStream(&storageFile).readAll().split(';');
 
-    bool ok = setupTables(conn, sqlStatements);
+    bool ok = d_ptr->setupTables(conn, sqlStatements);
 
     sqlStatements.clear();
 
@@ -144,15 +92,15 @@ bool Storage::initialize()
 
 bool Storage::isInitialized()
 {
-    QFile storageFile(mStorageUser->filePath);
+    QFile storageFile(d_ptr->storageUser()->filePath());
     if (storageFile.size() == 0 || !storageFile.exists()) {
         return false;
     }
 
-    const auto conn = connection();
+    const auto conn = d_ptr->storageConnection();
 
     QStringList queries;
-    queries << pragmaKey();
+    queries << d_ptr->pragmaKey();
     queries << "SELECT migrated FROM migrations;";
 
     QSqlQuery dbQuery(conn->database());
@@ -179,10 +127,10 @@ bool Storage::isInitialized()
 
 bool Storage::checkIntegrity()
 {
-    const auto conn = connection();
+    const auto conn = d_ptr->storageConnection();
     QSqlQuery dbQuery(conn->database());
 
-    bool success = dbQuery.exec(pragmaKey());
+    bool success = dbQuery.exec(d_ptr->pragmaKey());
 
     success &= dbQuery.exec("PRAGMA integrity_check;");
     if (!success) {
@@ -201,10 +149,10 @@ bool Storage::checkIntegrity()
 
 bool Storage::compress()
 {
-    const auto conn = connection();
+    const auto conn = d_ptr->storageConnection();
     QSqlQuery dbQuery(conn->database());
 
-    bool success = dbQuery.exec(pragmaKey());
+    bool success = dbQuery.exec(d_ptr->pragmaKey());
     success &= dbQuery.exec("VACUUM;");
 
     if (!success) {
@@ -217,10 +165,10 @@ bool Storage::compress()
 
 bool Storage::changePassword(const QString &oldPassword, const QString &newPassword)
 {
-    const auto conn = connection();
+    const auto conn = d_ptr->storageConnection();
 
     // Check old password
-    bool ok = checkPassword(conn, oldPassword);
+    bool ok = d_ptr->checkPassword(conn, oldPassword);
     if (!ok) {
         Q_EMIT errorOccurred(
             tr("The entered password is not correct!"),
@@ -238,20 +186,27 @@ bool Storage::changePassword(const QString &oldPassword, const QString &newPassw
     }
 
     QSqlQuery dbQuery(conn->database());
-    bool success = dbQuery.exec(QString("PRAGMA key='%1';").arg(quote(oldPassword)));
+    bool success = dbQuery.exec(
+        QString("PRAGMA key='%1';").arg(StoragePrivate::quotePassword(oldPassword))
+    );
+
     if (!success) {
         Q_EMIT errorOccurred(dbQuery.lastError().text(), Storage::PasswordError);
         return false;
     }
 
-    success = dbQuery.exec(QString("PRAGMA rekey='%1';").arg(quote(newPassword)));
+    success = dbQuery.exec(
+        QString("PRAGMA rekey='%1';").arg(
+            StoragePrivate::quotePassword(newPassword)
+        )
+    );
     if (!success) {
         Q_EMIT errorOccurred(dbQuery.lastError().text(), Storage::PasswordError);
         return false;
     }
 
     // If the new password working?
-    success = checkPassword(conn, newPassword);
+    success = d_ptr->checkPassword(conn, newPassword);
     if (!success) {
         Q_EMIT errorOccurred(
             tr("The entered password is not correct!"),
@@ -260,9 +215,73 @@ bool Storage::changePassword(const QString &oldPassword, const QString &newPassw
         return false;
     }
 
-    mStorageUser->password = newPassword;
+    d_ptr->storageUser()->setPassword(newPassword);
 
     return success;
+}
+
+Account *Storage::account(const quint32 accountId) const
+{
+    if (accountId <= 0) {
+        Q_EMIT errorOccurred(
+            tr("Given unique account id is wrong."),
+            Storage::AccountError
+        );
+        return nullptr;
+    }
+
+    const auto conn = d_ptr->storageConnection();
+
+    QSqlQuery dbQuery(conn->database());
+    bool success = dbQuery.exec(d_ptr->pragmaKey());
+
+    dbQuery.prepare("SELECT * from accounts WHERE unique_id = :unique_id;");
+    dbQuery.bindValue(":unique_id", accountId);
+    success &= dbQuery.exec();
+
+    if (!success) {
+        Q_EMIT errorOccurred(
+            dbQuery.lastError().text(),
+            Storage::StatementError
+        );
+        return nullptr;
+    }
+
+    if (dbQuery.record().count() == 0) {
+        Q_EMIT errorOccurred(
+            tr("No accounts found with unique account id."),
+            Storage::AccountError
+        );
+        return nullptr;
+    }
+
+    dbQuery.next();
+
+    const QMap<QString, QVariant> map = d_ptr->prepareForAccount(dbQuery);
+
+    auto const account = Account::create(map);
+
+    return account;
+}
+
+QList<Account *> Storage::accounts() const
+{
+    return QList<Account *>();
+}
+
+bool Storage::storeAccounts(const QList<Account *> &accounts) const
+{
+    if (accounts.empty()) {
+        Q_EMIT errorOccurred(
+            tr("Given accounts can't be empty"),
+            Storage::AccountError
+        );
+        return false;
+    }
+
+    auto conn = d_ptr->storageConnection();
+
+    return false;
 }
 
 void Storage::storeSetting(const QString &key, const QVariant &value, const QString &group)
@@ -299,114 +318,3 @@ QVariant Storage::setting(
     return value;
 }
 
-StorageConnection *Storage::connection()
-{
-    if (mIsUserChanged) {
-        if (mStorageConnection != nullptr) {
-            mStorageConnection->close();
-            delete mStorageConnection;
-            mStorageConnection = nullptr;
-        }
-
-        mStorageConnection = new StorageConnection(mStorageUser->filePath);
-        return mStorageConnection;
-    }
-
-    if (mStorageConnection == nullptr) {
-        mStorageConnection = new StorageConnection(mStorageUser->filePath);
-    }
-
-    return mStorageConnection;
-}
-
-const QString Storage::pragmaKey() const
-{
-    return QString("PRAGMA key='%1';").arg(quote(mStorageUser->password));
-}
-
-const QString Storage::quote(const QString &string) const
-{
-    QString result = {};
-
-    const int stringLength = string.length();
-    for (int a = 0; a < stringLength; ++a) {
-        const QChar strPart = string.at(a);
-        const int accii = (int) strPart.toLatin1();
-
-        bool noEscapeSeq = (strPart != "'" && strPart != "\"" && strPart != '\\');
-        bool isValidAscii = ((accii >= 32 && accii <= 126) || (accii >= 128 && accii <= 255));
-
-        if (noEscapeSeq && isValidAscii) {
-            result.append(strPart);
-        }
-        else {
-            switch (accii) {
-                case 34: // Char = "
-                    result.append(QString(strPart).replace(strPart, "\""));
-                    break;
-                case 39: // Char = \'
-                    result.append(QString(strPart).replace(strPart, "''"));
-                    break;
-                case 92: // Char = "\"
-                    result.append(QString(strPart).replace(strPart, "\\"));
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-
-    return result;
-}
-
-bool Storage::setupTables(StorageConnection *connection, QStringList &sqlStatements) const
-{
-    QStringList queries = defaultQueries();
-
-    for (auto &query: sqlStatements)
-        queries << query.replace("#", ";").trimmed();
-
-    queries << "VACUUM;";
-
-    QSqlQuery dbQuery(connection->database());
-
-    bool success = true;
-    for (const auto &query: qAsConst(queries)) {
-        if (query.trimmed().isEmpty()) {
-            continue;
-        }
-
-        success &= dbQuery.exec(query);
-        dbQuery.finish();
-    }
-
-    return success;
-}
-
-const QStringList Storage::defaultQueries() const
-{
-    QStringList queries;
-    queries << pragmaKey();
-    queries << "PRAGMA auto_vacuum = FULL;";
-    queries << "PRAGMA foreign_keys = ON;";
-    queries << "PRAGMA encoding = 'UTF-8';";
-
-    return queries;
-}
-
-const bool Storage::checkPassword(StorageConnection *connection, const QString &password) const
-{
-    QSqlQuery dbQuery(connection->database());
-
-    bool success = dbQuery.exec(QString("PRAGMA key='%1';").arg(quote(password)));
-
-    // We can't exec a query without a valid password.
-    success &= dbQuery.exec("SELECT COUNT(id) AS ID_COUNT FROM migrations;");
-
-    while (dbQuery.next()) {
-        const int count = dbQuery.value("ID_COUNT").toInt();
-        success &= (count > 0);
-    }
-
-    return success;
-}

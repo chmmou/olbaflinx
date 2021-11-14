@@ -19,8 +19,10 @@
 #define OLBAFLINX_STORAGE_H
 
 #include <QtCore/QObject>
+#include <QtCore/QScopedPointer>
 #include <QtCore/QVariant>
 
+#include "Account/Account.h"
 #include "Connection/StorageConnection.h"
 
 #include "core/Container.h"
@@ -29,9 +31,9 @@
 namespace olbaflinx::core::storage
 {
 
-using namespace core;
-using namespace connection;
+using namespace account;
 
+class StoragePrivate;
 class Storage: public QObject, public Singleton<Storage>
 {
 
@@ -41,6 +43,7 @@ Q_OBJECT
 public:
     enum ErrorType
     {
+        AccountError,
         ConnectionError,
         StatementError,
         TransactionError,
@@ -64,6 +67,10 @@ public:
     bool compress();
     bool changePassword(const QString &oldPassword, const QString &newPassword);
 
+    [[nodiscard]] Account *account(quint32 accountId) const;
+    [[nodiscard]] QList<Account *> accounts() const;
+    [[nodiscard]] bool storeAccounts(const QList<Account *> &accounts) const;
+
     void storeSetting(const QString &key, const QVariant &value, const QString &group = QString());
     QVariant setting(
         const QString &key,
@@ -72,20 +79,14 @@ public:
     ) const;
 
 Q_SIGNALS:
-    void errorOccurred(const QString &message, const Storage::ErrorType errorType);
+    void errorOccurred(const QString &message, const Storage::ErrorType errorType) const;
 
 private:
-    StorageConnection *connection();
-    const QString pragmaKey() const;
-    const QString quote(const QString &string) const;
-    bool setupTables(StorageConnection *connection, QStringList &sqlStatements) const;
-    const QStringList defaultQueries() const;
-    const bool checkPassword(StorageConnection *connection, const QString &password) const;
+    QScopedPointer<StoragePrivate> const d_ptr;
 
 protected:
     Storage();
     Q_DISABLE_COPY(Storage)
-
 };
 
 }

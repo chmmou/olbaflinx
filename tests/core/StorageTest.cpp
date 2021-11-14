@@ -100,7 +100,7 @@ void StorageTest::testInitializingWithUserNoStorageFile()
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
     StorageUser user;
-    user.filePath = "";
+    user.setFilePath("");
     storage->setUser(&user);
     QCOMPARE(spy.count(), 1);
 
@@ -114,8 +114,8 @@ void StorageTest::testInitializingWithUserNoPassword()
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
     StorageUser user;
-    user.filePath = storageFile;
-    user.password = "";
+    user.setFilePath(storageFile);
+    user.setPassword("");
     storage->setUser(&user);
     QCOMPARE(spy.count(), 1);
 
@@ -129,8 +129,8 @@ void StorageTest::testInitializingWithUser()
     auto storage = Storage::instance();
     QSignalSpy spy(storage, &Storage::errorOccurred);
     StorageUser user;
-    user.filePath = storageFile;
-    user.password = storagePassword;
+    user.setFilePath(storageFile);
+    user.setPassword(storagePassword);
     storage->setUser(&user);
 
     QCOMPARE(spy.count(), 0);
@@ -142,8 +142,8 @@ void StorageTest::testInitializing()
     QSignalSpy spy(storage, &Storage::errorOccurred);
 
     StorageUser user;
-    user.filePath = storageFile;
-    user.password = storagePassword;
+    user.setFilePath(storageFile);
+    user.setPassword(storagePassword);
     storage->setUser(&user);
 
     bool initialized = storage->initialize();
@@ -161,8 +161,8 @@ void StorageTest::testChangePassword()
     QSignalSpy spy(storage, &Storage::errorOccurred);
 
     StorageUser user;
-    user.filePath = storageFile;
-    user.password = storagePassword;
+    user.setFilePath(storageFile);
+    user.setPassword(storagePassword);
     storage->setUser(&user);
 
     bool initialized = storage->changePassword(

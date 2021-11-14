@@ -48,8 +48,22 @@ inline SignalBlocker<T> whileSignalBlocking(T *blocked)
 
 struct StorageUser: public QObject
 {
-    QString password;
-    QString filePath;
+public:
+    void setPassword(const QString &password)
+    { mPassword = password; }
+
+    [[nodiscard]] QString password() const
+    { return mPassword; }
+
+    void setFilePath(const QString &filePath)
+    { mFilePath = filePath; }
+
+    [[nodiscard]] QString filePath() const
+    { return mFilePath; }
+
+private:
+    QString mPassword;
+    QString mFilePath;
 };
 
 }

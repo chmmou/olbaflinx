@@ -17,29 +17,12 @@ set(CMAKE_AUTORCC ON)
 
 set(EXECUTABLE_OUTPUT_PATH bin/)
 
-set(QT_LIBS ${Qt${QT_VERSION_MAJOR}Sql_LIBRARIES} ${Qt${QT_VERSION_MAJOR}Test_LIBRARIES} SingleApplication::SingleApplication)
-
-set(QT_INCLUDES ${Qt${QT_VERSION_MAJOR}Sql_INCLUDE_DIRS} ${Qt${QT_VERSION_MAJOR}Test_INCLUDE_DIRS})
-include_directories(${QT_INCLUDES})
-
-add_definitions(${Qt${QT_VERSION_MAJOR}Sql_DEFINITIONS})
-add_definitions(${Qt${QT_VERSION_MAJOR}Test_DEFINITIONS})
-
-set(TEST_APP_CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
-file(GLOB_RECURSE APP_SRC_FILES ${TEST_APP_CORE_DIR}/core/*.cpp ${TEST_APP_CORE_DIR}/core/Banking/*.cpp ${TEST_APP_CORE_DIR}/core/Storage/*.cpp ${TEST_APP_CORE_DIR}/core/Storage/Connection/*.cpp)
-file(GLOB_RECURSE APP_HDR_FILES ${TEST_APP_CORE_DIR}/core/*.h ${TEST_APP_CORE_DIR}/core/Banking/*.h ${TEST_APP_CORE_DIR}/core/Storage/*.h ${TEST_APP_CORE_DIR}/core/Storage/Connection/*.h)
-set(APP_FILES ${APP_SRC_FILES} ${APP_HDR_FILES})
-
-set(TEST_APP_RCS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../res/olbaflinx.qrc)
-qt_add_resources(TEST_APP_RCS_FILE ${TEST_APP_RCS_FILE})
-
-set(TEST_INCLUDES ${TEST_APP_CORE_DIR} ${TEST_APP_CORE_DIR}/core ${TEST_APP_CORE_DIR}/core/Banking ${TEST_APP_CORE_DIR}/core/SingleApplication ${TEST_APP_CORE_DIR}/core/Storage ${TEST_APP_CORE_DIR}/core/Storage/Connection)
-include_directories(${TEST_INCLUDES})
+include("Config.cmake")
 
 ### Adding tests here
 add_executable(StorageTest core/StorageTest.cpp ${APP_FILES} ${TEST_APP_RCS_FILE})
 add_test(NAME StorageTest COMMAND StorageTest)
-target_link_libraries(StorageTest PRIVATE ${QT_LIBS})
+target_link_libraries(StorageTest PRIVATE ${QT_LIBS} ${AQ_LIBS})
 ### Adding tests here
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
