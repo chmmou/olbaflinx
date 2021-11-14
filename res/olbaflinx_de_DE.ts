@@ -2,45 +2,103 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="de_DE">
 <context>
+    <name>QObject</name>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="51"/>
+        <source>Invalid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="54"/>
+        <source>Unknown</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="57"/>
+        <source>Bank</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="60"/>
+        <source>Credit Card</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="63"/>
+        <source>Checking</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="66"/>
+        <source>Savings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="69"/>
+        <source>Investment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="72"/>
+        <source>Cash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="75"/>
+        <source>Money Market</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="78"/>
+        <source>Credit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Account/Account.cpp" line="81"/>
+        <source>Unspecified</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>UiFilterWidget</name>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="157"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="157"/>
         <source>Form</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="158"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="158"/>
         <source>Time period</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="159"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="159"/>
         <source>-- Please select --</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="161"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="161"/>
         <source>From</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="162"/>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="164"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="162"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="164"/>
         <source>M/d/yyyy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="163"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="163"/>
         <source>to</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="165"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="165"/>
         <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_FilterWidget.h" line="166"/>
+        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="166"/>
         <source>Search term is a regular expression</source>
         <translation type="unfinished"></translation>
     </message>
@@ -48,37 +106,37 @@
 <context>
     <name>UiOlbaFlinx</name>
     <message>
-        <location filename="../cbuild/debug/src/ui_OlbaFlinx.h" line="188"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="188"/>
         <source>MainWindow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_OlbaFlinx.h" line="189"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="189"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_OlbaFlinx.h" line="191"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="191"/>
         <source>Accounts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_OlbaFlinx.h" line="192"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="192"/>
         <source>Transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_OlbaFlinx.h" line="193"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="193"/>
         <source>Standing Orders</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_OlbaFlinx.h" line="194"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="194"/>
         <source>Documents</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_OlbaFlinx.h" line="195"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="195"/>
         <source>Jobs</source>
         <translation type="unfinished"></translation>
     </message>
@@ -86,27 +144,27 @@
 <context>
     <name>UiTransaction</name>
     <message>
-        <location filename="../cbuild/debug/src/ui_Transaction.h" line="149"/>
+        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="149"/>
         <source>Transaction</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_Transaction.h" line="151"/>
+        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="151"/>
         <source>Transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_Transaction.h" line="153"/>
+        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="153"/>
         <source>Export transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_Transaction.h" line="156"/>
+        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="156"/>
         <source>Import transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug/src/ui_Transaction.h" line="159"/>
+        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="159"/>
         <source>Filter reset</source>
         <translation type="unfinished"></translation>
     </message>
@@ -172,29 +230,47 @@
 <context>
     <name>olbaflinx::core::storage::Storage</name>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="89"/>
-        <source>Given user object can&apos;t be null!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="94"/>
-        <source>Storage file can&apos;t be empty!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="99"/>
-        <source>Storage password can&apos;t be empty!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="224"/>
-        <location filename="../src/core/Storage/Storage.cpp" line="249"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="174"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="208"/>
         <source>The entered password is not correct!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="229"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="182"/>
         <source>The new password cannot be the same as the old one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Storage.cpp" line="223"/>
+        <source>Given unique account id is wrong.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Storage.cpp" line="248"/>
+        <source>No accounts found with unique account id.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Storage.cpp" line="270"/>
+        <source>Given accounts can&apos;t be empty</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>olbaflinx::core::storage::StoragePrivate</name>
+    <message>
+        <location filename="../src/core/Storage/Private/StoragePrivate.cpp" line="55"/>
+        <source>Given user object can&apos;t be null!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Private/StoragePrivate.cpp" line="63"/>
+        <source>Storage file can&apos;t be empty!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/Storage/Private/StoragePrivate.cpp" line="71"/>
+        <source>Storage password can&apos;t be empty!</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
