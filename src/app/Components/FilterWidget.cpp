@@ -117,7 +117,7 @@ void FilterWidget::slotSearchTextChanged(const QString &searchText)
 {
     if (mUseSearchTextAsRegEx) {
         QRegExp regExp(QRegExp::escape(searchText));
-        if (!regExp.isValid()) {
+        if (regExp.isValid()) {
             Q_EMIT searchTextChanged(regExp.pattern(), true);
             return;
         }
