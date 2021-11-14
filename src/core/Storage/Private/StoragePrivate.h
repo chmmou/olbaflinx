@@ -26,12 +26,14 @@
 #include <QtSql/QSqlQuery>
 
 #include "core/Container.h"
+#include "core/Storage/Account/Account.h"
 #include "core/Storage/Connection/StorageConnection.h"
 
 namespace olbaflinx::core::storage
 {
 
 using namespace core;
+using namespace account;
 using namespace connection;
 
 class Storage;
@@ -50,14 +52,17 @@ public:
 
     [[nodiscard]] StorageConnection *storageConnection();
     [[nodiscard]] QString pragmaKey() const;
-    [[nodiscard]] static QString quotePassword(const QString &string) ;
+    [[nodiscard]] static QString quotePassword(const QString &string);
     [[nodiscard]] bool setupTables(StorageConnection *connection, QStringList &sqlStatements) const;
     [[nodiscard]] const QStringList defaultQueries() const;
     [[nodiscard]] const bool checkPassword(
         StorageConnection *connection,
         const QString &password
     ) const;
-    [[nodiscard]] QMap<QString, QVariant> prepareForAccount(const QSqlQuery &query) const;
+
+    [[nodiscard]] QMap<QString, QVariant> queryToAccountMap(const QSqlQuery &query) const;
+    void prepareAccountQuery(QSqlQuery &preparedQuery, const Account *account);
+
     [[nodiscard]] StorageUser *storageUser() const;
 
 private:

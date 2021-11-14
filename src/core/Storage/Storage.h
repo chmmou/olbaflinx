@@ -67,9 +67,9 @@ public:
     bool compress();
     bool changePassword(const QString &oldPassword, const QString &newPassword);
 
-    [[nodiscard]] Account *account(quint32 accountId) const;
-    [[nodiscard]] QList<Account *> accounts() const;
-    [[nodiscard]] bool storeAccounts(const QList<Account *> &accounts) const;
+    void receiveAccount(quint32 accountId);
+    void receiveAccounts();
+    [[nodiscard]] bool storeAccounts(const QList<const Account *> &accounts);
 
     void storeSetting(const QString &key, const QVariant &value, const QString &group = QString());
     QVariant setting(
@@ -79,7 +79,8 @@ public:
     ) const;
 
 Q_SIGNALS:
-    void errorOccurred(const QString &message, const Storage::ErrorType errorType) const;
+    void errorOccurred(const QString &message, const Storage::ErrorType errorType);
+    void accountReceived(const QList<const Account *> &accounts);
 
 private:
     QScopedPointer<StoragePrivate> const d_ptr;

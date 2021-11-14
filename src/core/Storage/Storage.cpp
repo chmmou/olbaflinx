@@ -220,14 +220,14 @@ bool Storage::changePassword(const QString &oldPassword, const QString &newPassw
     return success;
 }
 
-Account *Storage::account(const quint32 accountId) const
+void Storage::receiveAccount(const quint32 accountId)
 {
     if (accountId <= 0) {
         Q_EMIT errorOccurred(
             tr("Given unique account id is wrong."),
             Storage::AccountError
         );
-        return nullptr;
+        return;
     }
 
     const auto conn = d_ptr->storageConnection();
@@ -244,7 +244,7 @@ Account *Storage::account(const quint32 accountId) const
             dbQuery.lastError().text(),
             Storage::StatementError
         );
-        return nullptr;
+        return;
     }
 
     if (dbQuery.record().count() == 0) {
@@ -252,22 +252,53 @@ Account *Storage::account(const quint32 accountId) const
             tr("No accounts found with unique account id."),
             Storage::AccountError
         );
-        return nullptr;
+        return;
     }
 
     dbQuery.next();
 
-    const QMap<QString, QVariant> map = d_ptr->prepareForAccount(dbQuery);
+    const QMap<QString, QVariant> map = d_ptr->queryToAccountMap(dbQuery);
 
-    return Account::create(map);
+    QList<const Account *> accounts;
+    accounts << Account::create(map);
+
+    Q_EMIT accountReceived(accounts);
+
+    qDeleteAll(accounts);
+    accounts.clear();
 }
 
-QList<Account *> Storage::accounts() const
+void Storage::receiveAccounts()
 {
-    return QList<Account *>();
+    QList<const Account *> accounts = {};
+
+    const auto conn = d_ptr->storageConnection();
+
+    QSqlQuery dbQuery(conn->database());
+    dbQuery.exec(d_ptr->pragmaKey());
+
+    bool success = dbQuery.exec("SELECT * from accounts;");
+    if (!success) {
+        Q_EMIT errorOccurred(
+            dbQuery.lastError().text(),
+            Storage::AccountError
+        );
+        return;
+    }
+
+    while (dbQuery.next()) {
+        const QMap<QString, QVariant> map = d_ptr->queryToAccountMap(dbQuery);
+        accounts << Account::create(map);
+    }
+    dbQuery.finish();
+
+    Q_EMIT accountReceived(accounts);
+
+    qDeleteAll(accounts);
+    accounts.clear();
 }
 
-bool Storage::storeAccounts(const QList<Account *> &accounts) const
+bool Storage::storeAccounts(const QList<const Account *> &accounts)
 {
     if (accounts.empty()) {
         Q_EMIT errorOccurred(
@@ -279,7 +310,20 @@ bool Storage::storeAccounts(const QList<Account *> &accounts) const
 
     auto conn = d_ptr->storageConnection();
 
-    return false;
+    QSqlQuery dbQuery(conn->database());
+    dbQuery.exec(d_ptr->pragmaKey());
+
+    bool success = true;
+    for (const auto account: qAsConst(accounts)) {
+        dbQuery.prepare(
+            "INSERT INTO accounts (type, unique_id, backend_name, owner_name, account_name, currency, memo, iban, bic, country, bank_code, bank_name, branch_id, account_number, sub_account_number) "
+            "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, :currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, :branch_id, :account_number, :sub_account_number);"
+        );
+        d_ptr->prepareAccountQuery(dbQuery, account);
+        success &= dbQuery.exec();
+    }
+
+    return success;
 }
 
 void Storage::storeSetting(const QString &key, const QVariant &value, const QString &group)

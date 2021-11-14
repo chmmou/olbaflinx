@@ -208,7 +208,7 @@ const bool StoragePrivate::checkPassword(
     return success;
 }
 
-QMap<QString, QVariant> StoragePrivate::prepareForAccount(const QSqlQuery &query) const
+QMap<QString, QVariant> StoragePrivate::queryToAccountMap(const QSqlQuery &query) const
 {
     QMap<QString, QVariant> map = QMap<QString, QVariant>();
 
@@ -229,6 +229,25 @@ QMap<QString, QVariant> StoragePrivate::prepareForAccount(const QSqlQuery &query
     map["subAccountNumber"] = query.record().field("sub_account_number").value();
 
     return map;
+}
+
+void StoragePrivate::prepareAccountQuery(QSqlQuery &preparedQuery, const Account *account)
+{
+    preparedQuery.bindValue(":type", account->type());
+    preparedQuery.bindValue(":unique_id", account->uniqueId());
+    preparedQuery.bindValue(":backend_name", account->backendName());
+    preparedQuery.bindValue(":owner_name", account->ownerName());
+    preparedQuery.bindValue(":account_name", account->accountName());
+    preparedQuery.bindValue(":currency", account->currency());
+    preparedQuery.bindValue(":memo", account->memo());
+    preparedQuery.bindValue(":iban", account->iban());
+    preparedQuery.bindValue(":bic", account->bic());
+    preparedQuery.bindValue(":country", account->country());
+    preparedQuery.bindValue(":bank_code", account->bankCode());
+    preparedQuery.bindValue(":bank_name", account->bankName());
+    preparedQuery.bindValue(":branch_id", account->branchId());
+    preparedQuery.bindValue(":account_number", account->accountNumber());
+    preparedQuery.bindValue(":sub_account_number", account->subAccountNumber());
 }
 
 StorageUser *StoragePrivate::storageUser() const
