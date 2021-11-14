@@ -231,7 +231,7 @@
     <name>olbaflinx::core::storage::Storage</name>
     <message>
         <location filename="../src/core/Storage/Storage.cpp" line="174"/>
-        <location filename="../src/core/Storage/Storage.cpp" line="208"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="212"/>
         <source>The entered password is not correct!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -241,17 +241,17 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="223"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="227"/>
         <source>Given unique account id is wrong.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="248"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="252"/>
         <source>No accounts found with unique account id.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="270"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="274"/>
         <source>Given accounts can&apos;t be empty</source>
         <translation type="unfinished"></translation>
     </message>
