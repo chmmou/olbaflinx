@@ -79,6 +79,13 @@ jobs:
           cached: ${{ steps.cache-qt.outputs.cache-hit }}
 
       - name: Setup additional dependencies
-        id: aqbanking
+        id: additional-dependencies
         run: |
-          ls -lvah
+          cd ..
+          wget -c "https://www.aquamaniac.de/rdm/attachments/390/gwenhywfar-5.7.3.tar.gz"
+          tar -xzf gwenhywfar-5.7.3.tar.gz
+          cd gwenhywfar-5.7.3
+          ./configure --prefix=/usr/local --with-guis="qt5"
+          make -j$(nproc) all
+          sudo make install
+          ls -lvah /usr/local/lib
