@@ -59,5 +59,39 @@ jobs:
           sudo ln -s /usr/bin/gcc-9 /usr/bin/gcc
           sudo add-apt-repository ppa:beineri/opt-qt-5.15.2-focal
           sudo apt-get -qq update
-          sudo apt install -y -qq qt515*
-
+          sudo apt install -y -qq qt5153d \
+            qt515base \
+            qt515charts-no-lgpl \
+            qt515connectivity \
+            qt515datavis3d-no-lgpl \
+            qt515declarative \
+            qt515doc \
+            qt515gamepad \
+            qt515graphicaleffects \
+            qt515imageformats \
+            qt515location \
+            qt515lottie-no-lgpl \
+            qt515multimedia \
+            qt515networkauth-no-lgpl \
+            qt515opcua \
+            qt515quick3d-no-lgpl \
+            qt515quickcontrols \
+            qt515quickcontrols2 \
+            qt515quicktimeline-no-lgpl \
+            qt515remoteobjects \
+            qt515script \
+            qt515scxml \
+            qt515sensors \
+            qt515serialbus \
+            qt515serialport \
+            qt515speech \
+            qt515svg \
+            qt515tools \
+            qt515translations \
+            qt515wayland \
+            qt515webchannel \
+            qt515webengine \
+            qt515webglplugin-no-lgpl \
+            qt515websockets \
+            qt515x11extras \
+            qt515xmlpatterns
