@@ -62,9 +62,10 @@ jobs:
         id: cache-qt
         uses: actions/cache@v1
         with:
+          path: ../Qt
           key: ${{ runner.os }}-QtCache
 
-      - name: Install Qt for AppImage
+      - name: Install Qt
         uses: jurplel/install-qt-action@v2.14.0
         env:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
@@ -80,7 +81,6 @@ jobs:
       - name: Setup additional dependencies
         id: aqbanking
         run: |
-          source /opt/qt515/bin/qt515-env.sh
           echo $PATH
           echo $LD_LIBRARY_PATH
           qmake -v
