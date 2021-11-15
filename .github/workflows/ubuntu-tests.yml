@@ -78,14 +78,40 @@ jobs:
           modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
           cached: ${{ steps.cache-qt.outputs.cache-hit }}
 
-      - name: Setup additional dependencies
-        id: additional-dependencies
+      - name: Cache additional dependencies
+        id: cache-additional-dependencies
+        uses: actions/cache@v2
+        with:
+          path: ~/.additional-dependencies
+          key: ${{ runner.os }}-additional-dependencies-cache
+
+      - name: Installing additional dependencies
+        if: steps.cache-additional-dependencies.outputs.cache-hit != 'true'
         run: |
-          ls -lvah /usr/local
-          cd ..
           wget -c "https://www.aquamaniac.de/rdm/attachments/download/390/gwenhywfar-5.7.3.tar.gz"
           tar -xzf gwenhywfar-5.7.3.tar.gz
           cd gwenhywfar-5.7.3
-          ./configure --prefix=/usr/local --with-guis="qt5"
+          ./configure --prefix=~/.additional-dependencies --with-guis="qt5"
           make -j$(nproc) all
-          sudo make install
+          make install
+          rm -rf gwenhywfar-5.7.3.tar.gz gwenhywfar-5.7.3
+          export PATH="$PATH:~/.additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:~/.additional-dependencies/lib"
+          wget -c "https://www.aquamaniac.de/rdm/attachments/download/386/aqbanking-6.3.2.tar.gz"
+          tar -xzf aqbanking-6.3.2.tar.gz
+          cd aqbanking-6.3.2
+          ./configure --prefix=~/.additional-dependencies --with-guis="qt5"
+          make typedefs
+          make types
+          make -j$(nproc) all
+          make install
+          rm -rf aqbanking-6.3.2.tar.gz aqbanking-6.3.2
+          ls -lvah ~/.additional-dependencies/*
+
+      - name: Setup additional dependencies
+        with:
+          cached: ${{ steps.cache-additional-dependencies.outputs.cache-hit }}
+        run:
+          export PATH="$PATH:~/.additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:~/.additional-dependencies/lib"
+          aqhbci-tool4 versions
