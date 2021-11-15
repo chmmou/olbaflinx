@@ -1,5 +1,7 @@
 ## olbaflinx
 
+[![Ubuntu (CTests)](https://github.com/chmmou/olbaflinx/actions/workflows/ubuntu-tests.yml/badge.svg?branch=develop)](https://github.com/chmmou/olbaflinx/actions/workflows/ubuntu-tests.yml)
+
 OlbaFlinx is an online banking software for Linux based on the popular AqBaning library and the Qt 5 framework.
 
 ## Build Instructions

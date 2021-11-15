@@ -81,6 +81,4 @@ jobs:
       - name: Setup additional dependencies
         id: aqbanking
         run: |
-          echo $PATH
-          echo $LD_LIBRARY_PATH
-          qmake -v
+          ls -lvah
