@@ -95,3 +95,10 @@ jobs:
             qt515websockets \
             qt515x11extras \
             qt515xmlpatterns
+      - name: Setup additional dependencies
+        id: aqbanking
+        run: |
+          source /opt/qt515/bin/qt515-env.sh
+          echo $PATH
+          echo $LD_LIBRARY_PATH
+          qmake -v
