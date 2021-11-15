@@ -95,8 +95,9 @@ jobs:
           make -j$(nproc) all
           make install
           rm -rf gwenhywfar-5.7.3.tar.gz gwenhywfar-5.7.3
-          export PATH="$PATH:~/.additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:~/.additional-dependencies/lib"
+          export PATH="$PATH:$HOME/.additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
           wget -c "https://www.aquamaniac.de/rdm/attachments/download/386/aqbanking-6.3.2.tar.gz"
           tar -xzf aqbanking-6.3.2.tar.gz
           cd aqbanking-6.3.2
@@ -113,4 +114,5 @@ jobs:
         run:
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
           aqhbci-tool4 versions
