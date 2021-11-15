@@ -100,7 +100,7 @@ jobs:
           wget -c "https://www.aquamaniac.de/rdm/attachments/download/386/aqbanking-6.3.2.tar.gz"
           tar -xzf aqbanking-6.3.2.tar.gz
           cd aqbanking-6.3.2
-          ./configure --prefix=~/.additional-dependencies --with-guis="qt5"
+          ./configure --prefix=~/.additional-dependencies
           make typedefs
           make types
           make -j$(nproc) all
