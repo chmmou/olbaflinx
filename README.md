@@ -1,7 +1,5 @@
 ## olbaflinx
 
-[![Build Status](https://app.travis-ci.com/chmmou/olbaflinx.svg?branch=develop)](https://app.travis-ci.com/chmmou/olbaflinx)
-
 OlbaFlinx is an online banking software for Linux based on the popular AqBaning library and the Qt 5 framework.
 
 ## Build Instructions
