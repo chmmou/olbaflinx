@@ -111,6 +111,6 @@ jobs:
       - name: Setup additional dependencies
         if: steps.cache-additional-dependencies.outputs.cache-hit == 'true'
         run:
-          export PATH="$PATH:~/.additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:~/.additional-dependencies/lib"
+          export PATH="$PATH:$HOME/.additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
           aqhbci-tool4 versions
