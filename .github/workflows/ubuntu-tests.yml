@@ -81,11 +81,11 @@ jobs:
       - name: Setup additional dependencies
         id: additional-dependencies
         run: |
+          ls -lvah /usr/local
           cd ..
-          wget -c "https://www.aquamaniac.de/rdm/attachments/390/gwenhywfar-5.7.3.tar.gz"
+          wget -c "https://www.aquamaniac.de/rdm/attachments/download/390/gwenhywfar-5.7.3.tar.gz"
           tar -xzf gwenhywfar-5.7.3.tar.gz
           cd gwenhywfar-5.7.3
           ./configure --prefix=/usr/local --with-guis="qt5"
           make -j$(nproc) all
           sudo make install
-          ls -lvah /usr/local/lib
