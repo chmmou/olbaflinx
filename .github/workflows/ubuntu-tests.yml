@@ -114,8 +114,8 @@ jobs:
           make -j$(nproc) all
           make install
           wget -c "https://www.aquamaniac.de/rdm/attachments/download/382/libchipcard-5.1.6.tar.gz"
-          tar -xzf libchipcard-5.6.1.tar.gz
-          cd libchipcard-5.6.1
+          tar -xzf libchipcard-5.1.6.tar.gz
+          cd libchipcard-5.1.6
           ./configure --prefix=$HOME/.additional-dependencies
           make -j$(nproc) all
           make install
