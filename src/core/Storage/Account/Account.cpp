@@ -38,12 +38,12 @@ Account::~Account()
     abAccountSpec = nullptr;
 }
 
-const qint32 Account::type() const
+qint32 Account::type() const
 {
     return AB_AccountSpec_GetType(abAccountSpec);
 }
 
-const QString Account::typeString() const
+QString Account::typeString() const
 {
     QString typeString;
     switch (type()) {
@@ -87,86 +87,91 @@ const QString Account::typeString() const
     return typeString;
 }
 
-const quint32 Account::uniqueId() const
+quint32 Account::uniqueId() const
 {
     return AB_AccountSpec_GetUniqueId(abAccountSpec);
 }
 
-const QString Account::backendName() const
+QString Account::backendName() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetBackendName(abAccountSpec));
 }
 
-const QString Account::ownerName() const
+QString Account::ownerName() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetOwnerName(abAccountSpec));
 }
 
-const QString Account::accountName() const
+QString Account::accountName() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetAccountName(abAccountSpec));
 }
 
-const QString Account::currency() const
+QString Account::currency() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetCurrency(abAccountSpec));
 }
 
-const QString Account::memo() const
+QString Account::memo() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetMemo(abAccountSpec));
 }
 
-const QString Account::iban() const
+QString Account::iban() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetIban(abAccountSpec));
 }
 
-const QString Account::bic() const
+QString Account::bic() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetBic(abAccountSpec));
 }
 
-const QString Account::country() const
+QString Account::country() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetCountry(abAccountSpec));
 }
 
-const QString Account::bankCode() const
+QString Account::bankCode() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetBankCode(abAccountSpec));
 }
 
-const QString Account::bankName() const
+QString Account::bankName() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetBankName(abAccountSpec));
 }
 
-const QString Account::branchId() const
+QString Account::branchId() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetBranchId(abAccountSpec));
 }
 
-const QString Account::accountNumber() const
+QString Account::accountNumber() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetAccountNumber(abAccountSpec));
 }
 
-const QString Account::subAccountNumber() const
+QString Account::subAccountNumber() const
 {
     return QString::fromUtf8(AB_AccountSpec_GetSubAccountNumber(abAccountSpec));
 }
 
-const Account::TransactionLimitsList *Account::transactionLimitsList() const
+Account::TransactionLimitsList *Account::transactionLimitsList() const
 {
     return AB_AccountSpec_GetTransactionLimitsList(abAccountSpec);
 }
 
-const Account::TransactionLimits *Account::transactionLimitsForCommand(
+Account::TransactionLimits *Account::transactionLimitsForCommand(
     const AB_TRANSACTION_COMMAND &cmd
 ) const
 {
     return AB_AccountSpec_GetTransactionLimitsForCommand(abAccountSpec, cmd);
+}
+
+bool Account::isValid() const
+{
+    return type() != AB_AccountType_Invalid && type() != AB_AccountType_Unspecified;
 }
 
 Account *Account::create(const QMap<QString, QVariant> &row)

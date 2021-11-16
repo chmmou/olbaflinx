@@ -20,6 +20,10 @@ set(EXECUTABLE_OUTPUT_PATH bin/)
 include("Config.cmake")
 
 ### Adding tests here
+add_executable(BankingTest core/BankingTest.cpp ${APP_FILES} ${TEST_APP_RCS_FILE})
+add_test(NAME BankingTest COMMAND BankingTest)
+target_link_libraries(BankingTest PRIVATE ${QT_LIBS} ${AQ_LIBS})
+
 add_executable(StorageTest core/StorageTest.cpp ${APP_FILES} ${TEST_APP_RCS_FILE})
 add_test(NAME StorageTest COMMAND StorageTest)
 target_link_libraries(StorageTest PRIVATE ${QT_LIBS} ${AQ_LIBS})

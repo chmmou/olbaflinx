@@ -37,27 +37,27 @@ public:
     explicit Account(const AB_ACCOUNT_SPEC *accountSpec);
     ~Account();
 
-    [[nodiscard]] const qint32 type() const;
-    [[nodiscard]] const QString typeString() const;
-    [[nodiscard]] const quint32 uniqueId() const;
-    [[nodiscard]] const QString backendName() const;
-    [[nodiscard]] const QString ownerName() const;
-    [[nodiscard]] const QString accountName() const;
-    [[nodiscard]] const QString currency() const;
-    [[nodiscard]] const QString memo() const;
-    [[nodiscard]] const QString iban() const;
-    [[nodiscard]] const QString bic() const;
-    [[nodiscard]] const QString country() const;
-    [[nodiscard]] const QString bankCode() const;
-    [[nodiscard]] const QString bankName() const;
-    [[nodiscard]] const QString branchId() const;
-    [[nodiscard]] const QString accountNumber() const;
-    [[nodiscard]] const QString subAccountNumber() const;
-    [[nodiscard]] const TransactionLimitsList *transactionLimitsList() const;
-    [[nodiscard]] const TransactionLimits *transactionLimitsForCommand(
+    [[nodiscard]] qint32 type() const;
+    [[nodiscard]] QString typeString() const;
+    [[nodiscard]] quint32 uniqueId() const;
+    [[nodiscard]] QString backendName() const;
+    [[nodiscard]] QString ownerName() const;
+    [[nodiscard]] QString accountName() const;
+    [[nodiscard]] QString currency() const;
+    [[nodiscard]] QString memo() const;
+    [[nodiscard]] QString iban() const;
+    [[nodiscard]] QString bic() const;
+    [[nodiscard]] QString country() const;
+    [[nodiscard]] QString bankCode() const;
+    [[nodiscard]] QString bankName() const;
+    [[nodiscard]] QString branchId() const;
+    [[nodiscard]] QString accountNumber() const;
+    [[nodiscard]] QString subAccountNumber() const;
+    [[nodiscard]] TransactionLimitsList *transactionLimitsList() const;
+    [[nodiscard]] TransactionLimits *transactionLimitsForCommand(
         const AB_TRANSACTION_COMMAND &cmd
     ) const;
-
+    [[nodiscard]] bool isValid() const;
     [[nodiscard]] static Account *create(const QMap<QString, QVariant> &row);
 
 private:

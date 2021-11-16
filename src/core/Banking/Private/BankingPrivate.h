@@ -14,46 +14,42 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef OLBAFLINX_BANKINGPRIVATE_H
+#define OLBAFLINX_BANKINGPRIVATE_H
 
-#include "Banking.h"
+#include <QtCore/QObject>
 
-using namespace olbaflinx::core::banking;
+#include "Container.h"
 
-Banking::Banking()
-    : QObject(nullptr),
-      d_ptr(new BankingPrivate(this))
+namespace olbaflinx::core::banking
 {
+
+class Banking;
+class BankingPrivate: public QObject
+{
+    Q_DISABLE_COPY(BankingPrivate)
+    Q_DECLARE_PUBLIC(Banking)
+
+Q_OBJECT
+
+public:
+    explicit BankingPrivate(Banking *banking);
+    ~BankingPrivate() override;
+
+    bool initializeAqBanking(const QString &name, const QString &key, const QString &version);
+    bool finalizeAqBanking();
+
+    [[nodiscard]] Account *account(quint32 uniqueId) const;
+    void receiveAccounts();
+    void receiveAccountIds();
+
+private:
+    Banking *const q_ptr;
+    bool mIsInitialized;
+
+};
 
 }
 
-Banking::~Banking()
-{
-    if (!d_ptr.isNull()) {
-        d_ptr->deleteLater();
-    }
-}
 
-bool Banking::initialize(const QString &name, const QString &key, const QString &version) const
-{
-    return d_ptr->initializeAqBanking(name, key, version);
-}
-
-bool Banking::deInitialize() const
-{
-    return d_ptr->finalizeAqBanking();
-}
-
-Account *Banking::account(quint32 uniqueId)
-{
-    return d_ptr->account(uniqueId);
-}
-
-void Banking::receiveAccounts()
-{
-    d_ptr->receiveAccounts();
-}
-
-void Banking::receiveAccountIds()
-{
-    d_ptr->receiveAccountIds();
-}
+#endif // OLBAFLINX_BANKINGPRIVATE_H

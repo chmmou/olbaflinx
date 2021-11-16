@@ -26,14 +26,12 @@
 #include <QtSql/QSqlQuery>
 
 #include "Container.h"
-#include "Storage/Account/Account.h"
 #include "Storage/Connection/StorageConnection.h"
 
 namespace olbaflinx::core::storage
 {
 
 using namespace core;
-using namespace account;
 using namespace connection;
 
 class Storage;

@@ -18,6 +18,8 @@
 #define OLBAFLINX_BANKING_H
 
 #include <QtCore/QObject>
+#include <Banking/Private/BankingPrivate.h>
+
 
 #include "core/Singleton.h"
 #include "core/Container.h"
@@ -25,8 +27,10 @@
 namespace olbaflinx::core::banking
 {
 
+class BankingPrivate;
 class Banking: public QObject, public Singleton<Banking>
 {
+
 Q_OBJECT
     friend class Singleton<Banking>;
 
@@ -34,16 +38,22 @@ public:
     ~Banking() override;
 
     [[nodiscard]] bool initialize(
-            const QString &name = QString(),
-            const QString &key = QString()
+        const QString &name,
+        const QString &key,
+        const QString &version
     ) const;
     [[nodiscard]] bool deInitialize() const;
 
-    void receiveBankingAccounts();
-    void creatBankingAccount();
+    Account *account(quint32 uniqueId);
+    void receiveAccounts();
+    void receiveAccountIds();
 
 Q_SIGNALS:
-    void accountReceived(const AccountList &accountList);
+    void accountsReceived(const AccountList &accountList);
+    void accountIdsReceived(const AccountIds &accountIds);
+
+private:
+    QScopedPointer<BankingPrivate> const d_ptr;
 
 private Q_SLOTS:
 

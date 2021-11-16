@@ -73,6 +73,11 @@ private:
 
 typedef QList<const Account *> AccountList;
 
+typedef QList<quint32> AccountIds;
+
 }
+
+Q_DECLARE_METATYPE(olbaflinx::core::AccountList)
+Q_DECLARE_METATYPE(olbaflinx::core::AccountIds)
 
 #endif // OLBAFLINX_CONTAINER_H

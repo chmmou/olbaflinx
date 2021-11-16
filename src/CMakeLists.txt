@@ -70,6 +70,7 @@ file(
         APP_SRC_FILES
         ${APP_DIR}/core/*.cpp
         ${APP_DIR}/core/Banking/*.cpp
+        ${APP_DIR}/core/Banking/Private/*.cpp
         ${APP_DIR}/core/Storage/*.cpp
         ${APP_DIR}/core/Storage/Account/*.cpp
         ${APP_DIR}/core/Storage/Connection/*.cpp
@@ -83,6 +84,7 @@ file(
         APP_HDR_FILES
         ${APP_DIR}/core/*.h
         ${APP_DIR}/core/Banking/*.h
+        ${APP_DIR}/core/Banking/Private/*.h
         ${APP_DIR}/core/Storage/*.h
         ${APP_DIR}/core/Storage/Account/*.h
         ${APP_DIR}/core/Storage/Connection/*.h
