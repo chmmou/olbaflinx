@@ -51,6 +51,13 @@ jobs:
             libxcb-keysyms1 \
             libxcb-* \
             fakeroot \
+            libsqlite3-0 \
+            libsqlite3-dev \
+            sqlite3 \
+            python3-all \
+            python3-all-dev \
+            python3-xlrd \
+            doxygen \
             git \
             cmake
           sudo apt-get remove -y -qq gcc g++
@@ -83,7 +90,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.additional-dependencies
-          key: ${{ runner.os }}-additional-dependencies-cache
+          key: ${{ runner.os }}-additional-dependencies-cache-v1
 
       - name: Installing additional dependencies
         if: steps.cache-additional-dependencies.outputs.cache-hit != 'true'
@@ -106,8 +113,20 @@ jobs:
           make types
           make -j$(nproc) all
           make install
-          rm -rf aqbanking-6.3.2.tar.gz aqbanking-6.3.2
-          ls -lvah ~/.additional-dependencies/*
+          wget -c "https://www.aquamaniac.de/rdm/attachments/download/382/libchipcard-5.1.6.tar.gz"
+          tar -xzf libchipcard-5.6.1.tar.gz
+          cd libchipcard-5.6.1
+          ./configure --prefix=$HOME/.additional-dependencies
+          make -j$(nproc) all
+          make install
+          git clone https://git.code.sf.net/p/ktoblzcheck/code ktoblzcheck
+          cd  ktoblzcheck
+          git checkout 1.53
+          mkdir cbuild
+          cmake -DCMAKE_INSTALL_PREFIX=$HOME/.additional-dependencies -DENABLE_BANKDATA_DOWNLOAD=ON -DBUILD_STATIC=OFF ..
+          make -j$(nproc) all
+          make install
+          rm -rf ktoblzcheck
 
       - name: Setup additional dependencies
         if: steps.cache-additional-dependencies.outputs.cache-hit == 'true'
