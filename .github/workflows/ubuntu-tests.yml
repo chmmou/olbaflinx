@@ -57,6 +57,8 @@ jobs:
             python3-all \
             python3-all-dev \
             python3-xlrd \
+            libpcsclite1 \
+            libpcsclite-dev \
             doxygen \
             git \
             cmake
@@ -101,6 +103,7 @@ jobs:
           ./configure --prefix=$HOME/.additional-dependencies --with-guis="qt5"
           make -j$(nproc) all
           make install
+          cd ..
           rm -rf gwenhywfar-5.7.3.tar.gz gwenhywfar-5.7.3
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
@@ -113,19 +116,25 @@ jobs:
           make types
           make -j$(nproc) all
           make install
+          cd ..
+          rm -rf aqbanking-6.3.2.tar.gz aqbanking-6.3.2
           wget -c "https://www.aquamaniac.de/rdm/attachments/download/382/libchipcard-5.1.6.tar.gz"
           tar -xzf libchipcard-5.1.6.tar.gz
           cd libchipcard-5.1.6
           ./configure --prefix=$HOME/.additional-dependencies
           make -j$(nproc) all
           make install
+          cd ..
+          rm -rf libchipcard-5.1.6.tar.gz libchipcard-5.1.6
           git clone https://git.code.sf.net/p/ktoblzcheck/code ktoblzcheck
           cd  ktoblzcheck
           git checkout 1.53
           mkdir cbuild
+          cd cbuild
           cmake -DCMAKE_INSTALL_PREFIX=$HOME/.additional-dependencies -DENABLE_BANKDATA_DOWNLOAD=ON -DBUILD_STATIC=OFF ..
           make -j$(nproc) all
           make install
+          cd ../..
           rm -rf ktoblzcheck
 
       - name: Setup additional dependencies
