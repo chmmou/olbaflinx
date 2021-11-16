@@ -18,6 +18,7 @@
 #define OLBAFLINX_FILTERWIDGET_H
 
 #include <QWidget>
+
 #include "ui_FilterWidget.h"
 
 namespace olbaflinx::app::components

@@ -32,6 +32,12 @@ Q_OBJECT
 public:
     ~Banking() override;
 
+    [[nodiscard]] bool initialize(
+            const QString &name = QString(),
+            const QString &key = QString()
+    ) const;
+    [[nodiscard]] bool deInitialize() const;
+
 Q_SIGNALS:
 
 private Q_SLOTS:

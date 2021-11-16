@@ -21,7 +21,7 @@
 #include <QtCore/QSignalBlocker>
 #include <QtCore/QRegExp>
 
-#include "core/Container.h"
+#include "Container.h"
 #include "FilterWidget.h"
 
 using namespace olbaflinx::core;

@@ -25,9 +25,9 @@
 
 #include <QtSql/QSqlQuery>
 
-#include "core/Container.h"
-#include "core/Storage/Account/Account.h"
-#include "core/Storage/Connection/StorageConnection.h"
+#include "Container.h"
+#include "Storage/Account/Account.h"
+#include "Storage/Connection/StorageConnection.h"
 
 namespace olbaflinx::core::storage
 {

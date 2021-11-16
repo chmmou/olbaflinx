@@ -92,6 +92,7 @@ file(
         ${APP_DIR}/app/Banking/*.h
 )
 include_directories(${APP_DIR})
+include_directories(${APP_DIR}/core)
 include_directories(${APP_DIR}/app)
 include_directories(${APP_DIR}/app/Components)
 include_directories(${APP_DIR}/app/Banking)

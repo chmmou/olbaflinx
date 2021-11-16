@@ -25,8 +25,8 @@
 #include "Account/Account.h"
 #include "Connection/StorageConnection.h"
 
-#include "core/Container.h"
-#include "core/Singleton.h"
+#include "Container.h"
+#include "Singleton.h"
 
 namespace olbaflinx::core::storage
 {

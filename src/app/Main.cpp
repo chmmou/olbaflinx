@@ -17,7 +17,7 @@
 
 #include <QtCore/QTranslator>
 
-#include "core/SingleApplication/SingleApplication.h"
+#include "SingleApplication/SingleApplication.h"
 #include "app/App.h"
 
 using namespace olbaflinx::app;

@@ -19,6 +19,7 @@
 #define OLBAFLINX_APP_H
 
 #include <QtWidgets/QMainWindow>
+
 #include "ui_OlbaFlinx.h"
 
 namespace olbaflinx::app

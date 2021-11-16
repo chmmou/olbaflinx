@@ -17,6 +17,9 @@
 
 #include "Banking.h"
 
+#include "Storage/Account/Account.h"
+
+using namespace olbaflinx::core::storage::account;
 using namespace olbaflinx::core::banking;
 
 Banking::Banking()
@@ -27,4 +30,14 @@ Banking::Banking()
 
 Banking::~Banking()
 {
+}
+
+bool Banking::initialize(const QString &name, const QString &key) const
+{
+    return false;
+}
+
+bool Banking::deInitialize() const
+{
+    return false;
 }

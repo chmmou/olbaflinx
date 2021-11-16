@@ -27,7 +27,7 @@
 #include <QtSql/QSqlRecord>
 #include <QtSql/QSqlResult>
 
-#include "core/SingleApplication/SingleApplication.h"
+#include "SingleApplication/SingleApplication.h"
 
 #include "Storage.h"
 #include "Private/StoragePrivate.h"

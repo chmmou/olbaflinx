@@ -19,7 +19,7 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 
-#include "core/Storage/Storage.h"
+#include "Storage/Storage.h"
 
 #include "StoragePrivate.h"
 

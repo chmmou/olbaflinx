@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "core/Storage/Storage.h"
+#include "Storage/Storage.h"
 
 #include "App.h"
 
