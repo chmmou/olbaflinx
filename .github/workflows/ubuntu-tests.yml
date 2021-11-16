@@ -68,11 +68,11 @@ jobs:
           sudo ln -s /usr/bin/gcc-9 /usr/bin/gcc
 
       - name: Cache Qt
-        id: cache-qt
+        id: cache-qt-v1
         uses: actions/cache@v1
         with:
           path: ../Qt
-          key: ${{ runner.os }}-QtCache
+          key: ${{ runner.os }}-QtCache-v1
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v2.14.0
@@ -85,7 +85,15 @@ jobs:
           host: linux
           install-deps: true
           modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
-          cached: ${{ steps.cache-qt.outputs.cache-hit }}
+          cached: ${{ steps.cache-qt-v1.outputs.cache-hit }}
+        run: |
+          git clone https://github.com/sjemens/qsqlcipher-qt5.git
+          cd qsqlcipher-qt5
+          git checkout v5.15-3
+          mkdir -p build && cd build
+          qmake -recursive ../qsqlcipher.pro
+          make
+          make install
 
       - name: Cache additional dependencies
         id: cache-additional-dependencies
@@ -137,10 +145,13 @@ jobs:
           cd ../..
           rm -rf ktoblzcheck
 
-      - name: Setup additional dependencies
-        if: steps.cache-additional-dependencies.outputs.cache-hit == 'true'
-        run:
+      - name: CTest running
+        if: steps.cache-additional-dependencies.outputs.cache-hit == 'true' && steps.cache-qt.outputs.cache-hit == 'true'
+        run: |
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
           export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
+          echo $PATH
+          echo $LD_LIBRARY_PATH
+          echo $PKG_CONFIG_PATH
 
