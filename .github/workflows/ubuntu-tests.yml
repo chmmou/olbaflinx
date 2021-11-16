@@ -96,6 +96,8 @@ jobs:
           qmake -recursive ../qsqlcipher.pro
           make
           make install
+          cd ..
+          rm -rf qsqlcipher-qt5
 
       - name: Cache additional dependencies
         id: cache-additional-dependencies

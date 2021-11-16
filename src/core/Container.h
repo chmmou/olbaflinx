@@ -19,6 +19,11 @@
 #define OLBAFLINX_CONTAINER_H
 
 #include <QtCore/QObject>
+#include <QtCore/QList>
+
+#include "Storage/Account/Account.h"
+
+using namespace olbaflinx::core::storage::account;
 
 namespace olbaflinx::core
 {
@@ -65,6 +70,8 @@ private:
     QString mPassword;
     QString mFilePath;
 };
+
+typedef QList<const Account *> AccountList;
 
 }
 

@@ -259,7 +259,7 @@ void Storage::receiveAccount(const quint32 accountId)
 
     const QMap<QString, QVariant> map = d_ptr->queryToAccountMap(dbQuery);
 
-    QList<const Account *> accounts;
+    AccountList accounts;
     accounts << Account::create(map);
 
     Q_EMIT accountReceived(accounts);
@@ -298,7 +298,7 @@ void Storage::receiveAccounts()
     accounts.clear();
 }
 
-bool Storage::storeAccounts(const QList<const Account *> &accounts)
+bool Storage::storeAccounts(const AccountList &accounts)
 {
     if (accounts.empty()) {
         Q_EMIT errorOccurred(

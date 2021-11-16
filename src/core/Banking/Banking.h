@@ -20,6 +20,7 @@
 #include <QtCore/QObject>
 
 #include "core/Singleton.h"
+#include "core/Container.h"
 
 namespace olbaflinx::core::banking
 {
@@ -38,7 +39,11 @@ public:
     ) const;
     [[nodiscard]] bool deInitialize() const;
 
+    void receiveBankingAccounts();
+    void creatBankingAccount();
+
 Q_SIGNALS:
+    void accountReceived(const AccountList &accountList);
 
 private Q_SLOTS:
 

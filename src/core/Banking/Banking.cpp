@@ -17,9 +17,6 @@
 
 #include "Banking.h"
 
-#include "Storage/Account/Account.h"
-
-using namespace olbaflinx::core::storage::account;
 using namespace olbaflinx::core::banking;
 
 Banking::Banking()

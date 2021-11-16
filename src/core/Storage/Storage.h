@@ -22,7 +22,6 @@
 #include <QtCore/QScopedPointer>
 #include <QtCore/QVariant>
 
-#include "Account/Account.h"
 #include "Connection/StorageConnection.h"
 
 #include "Container.h"
@@ -30,8 +29,6 @@
 
 namespace olbaflinx::core::storage
 {
-
-using namespace account;
 
 class StoragePrivate;
 class Storage: public QObject, public Singleton<Storage>
@@ -69,7 +66,7 @@ public:
 
     void receiveAccount(quint32 accountId);
     void receiveAccounts();
-    [[nodiscard]] bool storeAccounts(const QList<const Account *> &accounts);
+    [[nodiscard]] bool storeAccounts(const AccountList &accounts);
 
     void storeSetting(const QString &key, const QVariant &value, const QString &group = QString());
     QVariant setting(
@@ -80,7 +77,7 @@ public:
 
 Q_SIGNALS:
     void errorOccurred(const QString &message, const Storage::ErrorType errorType);
-    void accountReceived(const QList<const Account *> &accounts);
+    void accountReceived(const AccountList &accounts);
 
 private:
     QScopedPointer<StoragePrivate> const d_ptr;

@@ -62,43 +62,43 @@
 <context>
     <name>UiFilterWidget</name>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="157"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="157"/>
         <source>Form</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="158"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="158"/>
         <source>Time period</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="159"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="159"/>
         <source>-- Please select --</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="161"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="161"/>
         <source>From</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="162"/>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="164"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="162"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="164"/>
         <source>M/d/yyyy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="163"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="163"/>
         <source>to</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="165"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="165"/>
         <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_FilterWidget.h" line="166"/>
+        <location filename="../cbuild/coverage/src/ui_FilterWidget.h" line="166"/>
         <source>Search term is a regular expression</source>
         <translation type="unfinished"></translation>
     </message>
@@ -106,37 +106,37 @@
 <context>
     <name>UiOlbaFlinx</name>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="188"/>
+        <location filename="../cbuild/coverage/src/ui_OlbaFlinx.h" line="188"/>
         <source>MainWindow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="189"/>
+        <location filename="../cbuild/coverage/src/ui_OlbaFlinx.h" line="189"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="191"/>
+        <location filename="../cbuild/coverage/src/ui_OlbaFlinx.h" line="191"/>
         <source>Accounts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="192"/>
+        <location filename="../cbuild/coverage/src/ui_OlbaFlinx.h" line="192"/>
         <source>Transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="193"/>
+        <location filename="../cbuild/coverage/src/ui_OlbaFlinx.h" line="193"/>
         <source>Standing Orders</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="194"/>
+        <location filename="../cbuild/coverage/src/ui_OlbaFlinx.h" line="194"/>
         <source>Documents</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="195"/>
+        <location filename="../cbuild/coverage/src/ui_OlbaFlinx.h" line="195"/>
         <source>Jobs</source>
         <translation type="unfinished"></translation>
     </message>
@@ -144,27 +144,27 @@
 <context>
     <name>UiTransaction</name>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="149"/>
+        <location filename="../cbuild/coverage/src/ui_Transaction.h" line="149"/>
         <source>Transaction</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="151"/>
+        <location filename="../cbuild/coverage/src/ui_Transaction.h" line="151"/>
         <source>Transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="153"/>
+        <location filename="../cbuild/coverage/src/ui_Transaction.h" line="153"/>
         <source>Export transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="156"/>
+        <location filename="../cbuild/coverage/src/ui_Transaction.h" line="156"/>
         <source>Import transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_Transaction.h" line="159"/>
+        <location filename="../cbuild/coverage/src/ui_Transaction.h" line="159"/>
         <source>Filter reset</source>
         <translation type="unfinished"></translation>
     </message>
@@ -251,7 +251,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/Storage/Storage.cpp" line="274"/>
+        <location filename="../src/core/Storage/Storage.cpp" line="305"/>
         <source>Given accounts can&apos;t be empty</source>
         <translation type="unfinished"></translation>
     </message>
