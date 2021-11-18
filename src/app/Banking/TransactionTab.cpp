@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021, Alexander Saal <alexander.saal@chm-projects.de>
+ * Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,35 +15,43 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "Transaction.h"
+#include "TransactionTab.h"
 
 #include "app/Components/FilterWidget.h"
 
 using namespace olbaflinx::app::components;
 using namespace olbaflinx::app::banking;
 
-Transaction::Transaction(QWidget *parent)
+TransactionTab::TransactionTab(QWidget *parent)
     : QWidget(parent)
 {
     setupUi(this);
 
-    connect(filterWidget, &FilterWidget::searchTextChanged, this, &Transaction::searchTextChanged);
-    connect(filterWidget, &FilterWidget::dateTimePeriodChanged, this, &Transaction::dateTimePeriodChanged);
-    connect(filterWidget, &FilterWidget::dateChanged, this, &Transaction::dateChanged);
+    connect(filterWidget,
+            &FilterWidget::searchTextChanged,
+            this,
+            &TransactionTab::searchTextChanged
+    );
+    connect(filterWidget,
+            &FilterWidget::dateTimePeriodChanged,
+            this,
+            &TransactionTab::dateTimePeriodChanged
+    );
+    connect(filterWidget, &FilterWidget::dateChanged, this, &TransactionTab::dateChanged);
 }
 
-Transaction::~Transaction() = default;
+TransactionTab::~TransactionTab() = default;
 
-void Transaction::searchTextChanged(const QString &searchText, const bool isRegularExpression)
+void TransactionTab::searchTextChanged(const QString &searchText, const bool isRegularExpression)
 {
     // @todo
 }
 
-void Transaction::dateTimePeriodChanged(const QDate &from, const QDate &to)
+void TransactionTab::dateTimePeriodChanged(const QDate &from, const QDate &to)
 {
     // @todo
 }
-void Transaction::dateChanged(const QDate &date)
+void TransactionTab::dateChanged(const QDate &date)
 {
     // @todo
 }

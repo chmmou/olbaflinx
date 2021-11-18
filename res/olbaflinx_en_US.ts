@@ -58,6 +58,29 @@
         <source>Unspecified</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../src/app/Main.cpp" line="56"/>
+        <source>Banking backend can&apos;t be initialized</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>UiAccountItemWidget</name>
+    <message>
+        <location filename="../cbuild/debug-coverage/src/ui_AccountItemWidget.h" line="83"/>
+        <source>Kreditkartenkonto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../cbuild/debug-coverage/src/ui_AccountItemWidget.h" line="84"/>
+        <source>- €</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../cbuild/debug-coverage/src/ui_AccountItemWidget.h" line="85"/>
+        <source>...</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UiFilterWidget</name>
@@ -106,37 +129,37 @@
 <context>
     <name>UiOlbaFlinx</name>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="188"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="182"/>
         <source>MainWindow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="189"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="183"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="191"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="185"/>
         <source>Accounts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="192"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="186"/>
         <source>Transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="193"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="187"/>
         <source>Standing Orders</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="194"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="188"/>
         <source>Documents</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="195"/>
+        <location filename="../cbuild/debug-coverage/src/ui_OlbaFlinx.h" line="189"/>
         <source>Jobs</source>
         <translation type="unfinished"></translation>
     </message>

@@ -38,9 +38,9 @@ bool Banking::initialize(const QString &name, const QString &key, const QString 
     return d_ptr->initializeAqBanking(name, key, version);
 }
 
-bool Banking::deInitialize() const
+void Banking::deInitialize() const
 {
-    return d_ptr->finalizeAqBanking();
+    d_ptr->finalizeAqBanking();
 }
 
 bool Banking::createAccount() const

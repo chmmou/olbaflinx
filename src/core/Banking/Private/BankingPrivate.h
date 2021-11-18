@@ -41,7 +41,7 @@ public:
         const QString &key,
         const QString &version
     );
-    bool finalizeAqBanking();
+    void finalizeAqBanking();
 
     Account *account(quint32 uniqueId) const;
     void receiveAccounts();

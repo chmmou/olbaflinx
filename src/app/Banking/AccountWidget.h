@@ -15,39 +15,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OLBAFLINX_STORAGECONNECTION_H
-#define OLBAFLINX_STORAGECONNECTION_H
+#ifndef OLBAFLINX_ACCOUNT_TREE_H
+#define OLBAFLINX_ACCOUNT_TREE_H
 
-#include <QtCore/QObject>
-#include <QtSql/QSqlDatabase>
+#include <QtWidgets/QTreeWidget>
 
-namespace olbaflinx::core::storage::connection
+namespace olbaflinx::app::banking
 {
 
-class StorageConnection: public QObject
+class AccountWidget: public QTreeWidget
 {
+
 Q_OBJECT
 
 public:
-    explicit StorageConnection(const QString &fileName,
-                               const QString &driver = "QSQLCIPHER",
-                               QObject *parent = nullptr);
+    explicit AccountWidget(QWidget *parent = nullptr);
+    ~AccountWidget() override;
 
-    ~StorageConnection() override;
+Q_SIGNALS:
 
-    QSqlDatabase database();
-    void close();
-
-    bool isValid();
-    bool isOpen();
-
-    const QString lastErrorMessage();
-
-protected:
-    QString connectionName;
+private Q_SLOTS:
 
 };
 
 }
 
-#endif //OLBAFLINX_STORAGECONNECTION_H
+#endif // OLBAFLINX_ACCOUNT_TREE_H

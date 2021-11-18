@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021, Alexander Saal <alexander.saal@chm-projects.de>
+ * Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#ifndef OLBAFLINX_TRANSACTION_H
-#define OLBAFLINX_TRANSACTION_H
+#ifndef OLBAFLINX_TRANSACTION_TAB_H
+#define OLBAFLINX_TRANSACTION_TAB_H
 
 #include <QtWidgets/QWidget>
 
@@ -24,14 +24,14 @@
 namespace olbaflinx::app::banking
 {
 
-class Transaction: public QWidget, private Ui::UiTransaction
+class TransactionTab: public QWidget, private Ui::UiTransaction
 {
 
 Q_OBJECT
 
 public:
-    explicit Transaction(QWidget *parent = nullptr);
-    ~Transaction() override;
+    explicit TransactionTab(QWidget *parent = nullptr);
+    ~TransactionTab() override;
 
 private Q_SLOTS:
     void searchTextChanged(const QString &searchText, bool isRegularExpression);
@@ -41,4 +41,4 @@ private Q_SLOTS:
 
 } // olbaflinx::app::transaction
 
-#endif //OLBAFLINX_TRANSACTION_H
+#endif //OLBAFLINX_TRANSACTION_TAB_H

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2021, Alexander Saal <alexander.saal@chm-projects.de>
+ * Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,9 @@
 
 #include "SingleApplication/SingleApplication.h"
 #include "app/App.h"
+#include "core/Banking/Banking.h"
 
+using namespace olbaflinx::core::banking;
 using namespace olbaflinx::app;
 
 int main(int argc, char *argv[])
@@ -43,10 +45,24 @@ int main(int argc, char *argv[])
         a.exit(0);
     }
 
+    // ToDo Alexander Saal: Add own FinTS registration key
+    bool initialized = Banking::instance()->initialize(
+        SingleApplication::applicationName(),
+        "", // ToDo Alexander Saal: FinTS product registration: Status => Pending
+        SingleApplication::applicationVersion()
+    );
+
+    if (!initialized) {
+        a.sendMessage(QObject::tr("Banking backend can't be initialized").toUtf8());
+        a.exit(-1);
+    }
+
     App *app = new App();
     app->setVisible(true);
 
     const int result = a.exec();
+
+    Banking::instance()->deInitialize();
 
     delete app;
 

@@ -42,7 +42,7 @@ public:
         const QString &key,
         const QString &version
     ) const;
-    [[nodiscard]] bool deInitialize() const;
+    void deInitialize() const;
 
     [[nodiscard]] bool createAccount() const;
     [[nodiscard]] Account *account(quint32 uniqueId) const;

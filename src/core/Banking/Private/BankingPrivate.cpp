@@ -30,7 +30,7 @@
 #include <aqbanking/types/imexporter_accountinfo.h>
 #include <aqbanking/types/imexporter_context.h>
 #include <aqbanking/types/message.h>
-#include <aqbanking/types/refaccount.h>
+//#include <aqbanking/types/refaccount.h> <<--- new one
 #include <aqbanking/types/security.h>
 #include <aqbanking/types/transaction.h>
 #include <aqbanking/types/transactionlimits.h>
@@ -81,7 +81,7 @@ bool BankingPrivate::initializeAqBanking(
     const QString &version
 )
 {
-    if (name.isEmpty() || key.isEmpty()) {
+    if (name.isEmpty() || key.isEmpty() || version.isEmpty()) {
         return false;
     }
 
@@ -100,12 +100,20 @@ bool BankingPrivate::initializeAqBanking(
     const QByteArray local8BitName = name.toLocal8Bit();
     abBanking = AB_Banking_new(local8BitName.data(), nullptr, 0);
 
-    const QByteArray local8BitKey = key.toLocal8Bit();
-    AB_Banking_RuntimeConfig_SetCharValue(
+    const char *fintsRegistrationKey = AB_Banking_RuntimeConfig_GetCharValue(
         abBanking,
         "fintsRegistrationKey",
-        local8BitKey.data()
+        nullptr
     );
+
+    if (fintsRegistrationKey == nullptr) {
+        const QByteArray local8BitKey = key.toLocal8Bit();
+        AB_Banking_RuntimeConfig_SetCharValue(
+            abBanking,
+            "fintsRegistrationKey",
+            local8BitKey.data()
+        );
+    }
 
     const QByteArray local8BitVersion = version.toLocal8Bit();
     AB_Banking_RuntimeConfig_SetCharValue(
@@ -126,16 +134,14 @@ bool BankingPrivate::initializeAqBanking(
     return mIsInitialized;
 }
 
-bool BankingPrivate::finalizeAqBanking()
+void BankingPrivate::finalizeAqBanking()
 {
     if (abBanking != nullptr) {
         int rv = AB_Banking_Fini(abBanking);
-        if (rv != AB_SUCCESS) {
-            return false;
+        if (rv == AB_SUCCESS) {
+            AB_Gui_Unextend(gwenGui);
+            AB_Banking_free(abBanking);
         }
-
-        AB_Gui_Unextend(gwenGui);
-        AB_Banking_free(abBanking);
     }
 
     if (gwenGui != nullptr) {
@@ -143,11 +149,10 @@ bool BankingPrivate::finalizeAqBanking()
         GWEN_Gui_free(gwenGui);
         GWEN_Fini();
     }
+
     gwenGui = nullptr;
     abBanking = nullptr;
     mIsInitialized = false;
-
-    return true;
 }
 
 Account *BankingPrivate::account(quint32 uniqueId) const

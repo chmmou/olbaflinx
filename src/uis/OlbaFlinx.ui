@@ -115,8 +115,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>84</width>
+             <height>16</height>
             </rect>
            </property>
           </widget>
@@ -164,17 +164,17 @@
       <widget class="QWidget" name="pageApplication">
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
-         <widget class="QTreeWidget" name="treeWidgetAccounts">
+         <widget class="olbaflinx::app::banking::AccountWidget" name="treeWidgetAccounts">
           <property name="minimumSize">
            <size>
             <width>0</width>
-            <height>130</height>
+            <height>150</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
             <width>16777215</width>
-            <height>130</height>
+            <height>150</height>
            </size>
           </property>
           <column>
@@ -187,12 +187,12 @@
         <item>
          <widget class="QTabWidget" name="tabWidgetApplication">
           <property name="currentIndex">
-           <number>0</number>
+           <number>3</number>
           </property>
           <property name="documentMode">
            <bool>false</bool>
           </property>
-          <widget class="olbaflinx::app::banking::Transaction" name="tabTransactions">
+          <widget class="olbaflinx::app::banking::TransactionTab" name="tabTransactions">
            <attribute name="title">
             <string>Transactions</string>
            </attribute>
@@ -220,24 +220,19 @@
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>930</width>
-     <height>21</height>
-    </rect>
-   </property>
-  </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <customwidgets>
   <customwidget>
-   <class>olbaflinx::app::banking::Transaction</class>
+   <class>olbaflinx::app::banking::TransactionTab</class>
    <extends>QWidget</extends>
-   <header>Transaction.h</header>
+   <header>TransactionTab.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>olbaflinx::app::banking::AccountWidget</class>
+   <extends>QTreeWidget</extends>
+   <header>AccountWidget.h</header>
   </customwidget>
  </customwidgets>
  <resources>

@@ -32,9 +32,13 @@ The Qt 5 from Ubuntu LTS 20.04 repository is too old. That's why we installing i
 Or, if you preferred, from launchpad ppa. Or you can install from the launchpad repository `ppa:beineri/opt-qt-5.15.2-focal` for Ubuntu LTS 20.04.
 
 
-    sudo add-apt-repository ppa:beineri/opt-qt-5.15.2-focal
-    sudo apt update
-    # install all qt515* packages 
+    :~$ sudo add-apt-repository ppa:beineri/opt-qt-5.15.2-focal
+    :~$ sudo apt update
+    :~$ # install all qt515* packages 
+
+The qsqlcipher-qt5 dependency is used to store all sensitive data in encrypted form. This includes account information, transactions, standing orders, documents, etc.
+
+- [qsqlcipher-qt5](https://github.com/sjemens/qsqlcipher-qt5) >= 5.15
 
 The dependencies `ktoblzcheck, aqbanking, gwenhywfar & libchipcard` are too old in the Ubuntu LTS 20.04 repository. That's why we download the tar archive and build it from scratch.
 
@@ -60,54 +64,54 @@ Some dependencies require additional dependencies. These must be installed first
 #### _Install the `gwenhywfar` as first dependencies._
 
 
-          wget -c "https://www.aquamaniac.de/rdm/attachments/download/390/gwenhywfar-5.7.3.tar.gz"
-          tar -xzf gwenhywfar-5.7.3.tar.gz
-          cd gwenhywfar-5.7.3
-          ./configure --prefix=/usr/local --with-guis="qt5"
-          make -j$(nproc) all
-          make install
-          cd ..
-          rm -rf gwenhywfar-5.7.3.tar.gz gwenhywfar-5.7.3
+    :~$ wget -c "https://www.aquamaniac.de/rdm/attachments/download/390/gwenhywfar-5.7.3.tar.gz"
+    :~$ tar -xzf gwenhywfar-5.7.3.tar.gz
+    :~$ cd gwenhywfar-5.7.3
+    :~$ ./configure --prefix=/usr/local --with-guis="qt5"
+    :~$ make -j$(nproc) all
+    :~$ make install
+    :~$ cd ..
+    :~$ rm -rf gwenhywfar-5.7.3.tar.gz gwenhywfar-5.7.3
 
 #### _Install the `aqbanking` as second dependencies_ 
 
 
-          wget -c "https://www.aquamaniac.de/rdm/attachments/download/386/aqbanking-6.3.2.tar.gz"
-          tar -xzf aqbanking-6.3.2.tar.gz
-          cd aqbanking-6.3.2
-          ./configure --prefix=/usr/local
-          make typedefs
-          make types
-          make -j$(nproc) all
-          make install
-          cd ..
-          rm -rf aqbanking-6.3.2.tar.gz aqbanking-6.3.2
+    :~$ wget -c "https://www.aquamaniac.de/rdm/attachments/download/386/aqbanking-6.3.2.tar.gz"
+    :~$ tar -xzf aqbanking-6.3.2.tar.gz
+    :~$ cd aqbanking-6.3.2
+    :~$ ./configure --prefix=/usr/local
+    :~$ make typedefs
+    :~$ make types
+    :~$ make -j$(nproc) all
+    :~$ make install
+    :~$ cd ..
+    :~$ rm -rf aqbanking-6.3.2.tar.gz aqbanking-6.3.2
 
 #### _Install the `libchipcard` as third dependencies_
 
 
-          wget -c "https://www.aquamaniac.de/rdm/attachments/download/382/libchipcard-5.1.6.tar.gz"
-          tar -xzf libchipcard-5.1.6.tar.gz
-          cd libchipcard-5.1.6
-          ./configure --prefix=/usr/local
-          make -j$(nproc) all
-          make install
-          cd ..
-          rm -rf libchipcard-5.1.6.tar.gz libchipcard-5.1.6
+    :~$ wget -c "https://www.aquamaniac.de/rdm/attachments/download/382/libchipcard-5.1.6.tar.gz"
+    :~$ tar -xzf libchipcard-5.1.6.tar.gz
+    :~$ cd libchipcard-5.1.6
+    :~$ ./configure --prefix=/usr/local
+    :~$ make -j$(nproc) all
+    :~$ make install
+    :~$ cd ..
+    :~$ rm -rf libchipcard-5.1.6.tar.gz libchipcard-5.1.6
 
 #### _At and finally install the `ktoblzcheck` dependencies_
 
 
-          git clone https://git.code.sf.net/p/ktoblzcheck/code ktoblzcheck
-          cd  ktoblzcheck
-          git checkout 1.53
-          mkdir cbuild
-          cd cbuild
-          cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_BANKDATA_DOWNLOAD=ON -DBUILD_STATIC=OFF ..
-          make -j$(nproc) all
-          make install
-          cd ../..
-          rm -rf ktoblzcheck
+    :~$ git clone https://git.code.sf.net/p/ktoblzcheck/code ktoblzcheck
+    :~$ cd  ktoblzcheck
+    :~$ git checkout 1.53
+    :~$ mkdir cbuild
+    :~$ cd cbuild
+    :~$ cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_BANKDATA_DOWNLOAD=ON -DBUILD_STATIC=OFF ..
+    :~$ make -j$(nproc) all
+    :~$ make install
+    :~$ cd ../..
+    :~$ rm -rf ktoblzcheck
 
 #### _Building OlbaFlinx from GIT_
 
@@ -115,8 +119,8 @@ TBD
 
 ## ToDo
 
-- [ ] Get transactions, standing orders, digital documents, ... (WiP)
-- [ ] Create / send transactions, standing orders, ...
+- [ ] Get accounts, transactions, standing orders, digital documents, ... (WiP)
+- [ ] Create / send transactions, standing orders, accounts...
 - [ ] tbd
 
 > WiP = Work In Progress
@@ -132,7 +136,7 @@ TBD
 
 ## License
 
-> Copyright (c) 2021, Alexander Saal <alexander.saal@chm-projects.de>
+> Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
 >
 > This program is free software: you can redistribute it and/or modify
 > it under the terms of the GNU General Public License as published by
@@ -141,8 +145,8 @@ TBD
 >
 > This program is distributed in the hope that it will be useful,
 > but WITHOUT ANY WARRANTY; without even the implied warranty of
-> MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+> MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 > GNU General Public License for more details.
 >
 > You should have received a copy of the GNU General Public License
-> along with this program.  If not, see <https://www.gnu.org/licenses/>.
+> along with this program. If not, see <https://www.gnu.org/licenses/>.
