@@ -43,7 +43,12 @@ bool Banking::deInitialize() const
     return d_ptr->finalizeAqBanking();
 }
 
-Account *Banking::account(quint32 uniqueId)
+bool Banking::createAccount() const
+{
+    return d_ptr->createAccount();
+}
+
+Account *Banking::account(quint32 uniqueId) const
 {
     return d_ptr->account(uniqueId);
 }

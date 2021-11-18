@@ -46,6 +46,7 @@ private Q_SLOTS:
     void testReceiveAccount();
     void testReceiveAccounts();
     void testReceiveAccountIds();
+    void testCreateAccount();
 };
 
 BankingTest::BankingTest()
@@ -115,6 +116,13 @@ void BankingTest::testReceiveAccountIds()
     banking->receiveAccountIds();
 
     QCOMPARE(spy.count(), 1);
+}
+
+void BankingTest::testCreateAccount()
+{
+    const auto banking = Banking::instance();
+    bool ok = banking->createAccount();
+    QVERIFY(ok);
 }
 
 }

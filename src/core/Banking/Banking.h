@@ -44,7 +44,8 @@ public:
     ) const;
     [[nodiscard]] bool deInitialize() const;
 
-    Account *account(quint32 uniqueId);
+    [[nodiscard]] bool createAccount() const;
+    [[nodiscard]] Account *account(quint32 uniqueId) const;
     void receiveAccounts();
     void receiveAccountIds();
 

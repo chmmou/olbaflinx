@@ -36,12 +36,18 @@ public:
     explicit BankingPrivate(Banking *banking);
     ~BankingPrivate() override;
 
-    bool initializeAqBanking(const QString &name, const QString &key, const QString &version);
+    bool initializeAqBanking(
+        const QString &name,
+        const QString &key,
+        const QString &version
+    );
     bool finalizeAqBanking();
 
-    [[nodiscard]] Account *account(quint32 uniqueId) const;
+    Account *account(quint32 uniqueId) const;
     void receiveAccounts();
     void receiveAccountIds();
+
+    bool createAccount() const;
 
 private:
     Banking *const q_ptr;

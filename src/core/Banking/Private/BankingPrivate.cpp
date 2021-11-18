@@ -21,12 +21,30 @@
 #include <gwenhywfar/dialog.h>
 #include <gwen-gui-qt5/qt5_gui.hpp>
 
-#include <aqbanking/version.h>
-#include <aqbanking/banking.h>
-#include <aqbanking/banking_dialogs.h>
-#include <aqbanking/error.h>
 #include <aqbanking/gui/abgui.h>
+#include <aqbanking/types/account_spec.h>
+#include <aqbanking/types/balance.h>
+#include <aqbanking/types/bankinfo.h>
+#include <aqbanking/types/bankinfoservice.h>
+#include <aqbanking/types/document.h>
+#include <aqbanking/types/imexporter_accountinfo.h>
+#include <aqbanking/types/imexporter_context.h>
+#include <aqbanking/types/message.h>
+#include <aqbanking/types/refaccount.h>
+#include <aqbanking/types/security.h>
+#include <aqbanking/types/transaction.h>
+#include <aqbanking/types/transactionlimits.h>
 #include <aqbanking/types/value.h>
+#include <aqbanking/account_type.h>
+#include <aqbanking/banking.h>
+#include <aqbanking/banking_bankinfo.h>
+#include <aqbanking/banking_dialogs.h>
+#include <aqbanking/banking_imex.h>
+#include <aqbanking/banking_online.h>
+#include <aqbanking/banking_transaction.h>
+#include <aqbanking/error.h>
+#include <aqbanking/system.h>
+#include <aqbanking/version.h>
 
 #include "Banking/Banking.h"
 #include "BankingPrivate.h"
@@ -125,8 +143,6 @@ bool BankingPrivate::finalizeAqBanking()
         GWEN_Gui_free(gwenGui);
         GWEN_Fini();
     }
-
-
     gwenGui = nullptr;
     abBanking = nullptr;
     mIsInitialized = false;
@@ -224,3 +240,17 @@ void BankingPrivate::receiveAccountIds()
 
     receiveAccounts();
 }
+
+bool BankingPrivate::createAccount() const
+{
+    if (!mIsInitialized) {
+        return false;
+    }
+
+    auto dialog = AB_Banking_CreateSetupDialog(abBanking);
+    int dlgResult = GWEN_Gui_ExecDialog(dialog, 0);
+    GWEN_Dialog_free(dialog);
+
+    return dlgResult == 1;
+}
+
