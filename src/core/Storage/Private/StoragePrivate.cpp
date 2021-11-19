@@ -179,7 +179,7 @@ bool StoragePrivate::setupTables(StorageConnection *connection, QStringList &sql
     return success;
 }
 
-const QStringList StoragePrivate::defaultQueries() const
+QStringList StoragePrivate::defaultQueries() const
 {
     QStringList queries;
     queries << pragmaKey();
@@ -190,10 +190,7 @@ const QStringList StoragePrivate::defaultQueries() const
     return queries;
 }
 
-const bool StoragePrivate::checkPassword(
-    StorageConnection *connection,
-    const QString &password
-) const
+bool StoragePrivate::checkPassword(StorageConnection *connection, const QString &password) const
 {
     QSqlQuery dbQuery(connection->database());
 

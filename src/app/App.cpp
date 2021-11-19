@@ -181,7 +181,7 @@ void App::addDataVault(const QString &title, const QString &fileName)
             connect(
                 Storage::instance(),
                 &Storage::userChanged,
-                [=](const StorageUser *user)
+                [=](const StorageUser *)
                 {
                     if (!Storage::instance()->isInitialized()) {
                         QMessageBox::critical(

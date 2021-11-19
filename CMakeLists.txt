@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 project(olbaflinx VERSION 0.9.99 LANGUAGES CXX)
 
-enable_testing()
-
 set(GWENHYWFAR_MIN_VERSION 5.7.0)
 set(GWENGUI_CPP_MIN_VERSION 5.7.0)
 set(GWENGUI_QT5_MIN_VERSION 5.7.0)
 set(AQBANKING_MIN_VERSION 6.3.0)
 set(QT5_MIN_VERSION 5.15.2)
 set(KTOBLZCHECK_MIN_VERSION 1.53.0)
+
+option(BUILD_TESTS "Build test" OFF)
 
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
@@ -70,4 +70,8 @@ else ()
 endif ()
 
 add_subdirectory(src)
-add_subdirectory(tests)
+
+if (BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif (BUILD_TESTS)

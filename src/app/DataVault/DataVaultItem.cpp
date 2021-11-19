@@ -196,8 +196,7 @@ void DataVaultItem::showPasswordChangeDialog()
             connect(
                 Storage::instance(),
                 &Storage::userChanged,
-                [&passwordChangeDlg, currPassword, newPassword]
-                    (const StorageUser *user)
+                [&passwordChangeDlg, currPassword, newPassword](const StorageUser *)
                 {
                     const bool success = Storage::instance()->changePassword(
                         currPassword,

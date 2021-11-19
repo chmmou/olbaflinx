@@ -14,13 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#include "Storage/Storage.h"
-#include "SingleApplication/SingleApplication.h"
-
 #include <QtCore/QDir>
 #include <QtCore/QList>
 #include <QtTest/QtTest>
+
+#include "core/Storage/Storage.h"
+#include "core/Container.h"
+#include "core/SingleApplication/SingleApplication.h"
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
@@ -48,6 +48,7 @@ private Q_SLOTS:
     void testInitializingWithUserNoStorageFile();
     void testInitializingWithUserNoPassword();
     void testInitializingWithUser();
+    void testChangeUser();
     void testInitializing();
     void testChangePassword();
     void testStoreSettingWithEmptyStorageFilePath();
@@ -70,6 +71,7 @@ StorageTest::~StorageTest() = default;
 void StorageTest::initTestCase()
 {
     metaTypeIds << qRegisterMetaType<Storage::ErrorType>("Storage::ErrorType");
+    metaTypeIds << qRegisterMetaType<const StorageUser *>("const StorageUser *");
 }
 
 void StorageTest::cleanupTestCase()
@@ -134,6 +136,39 @@ void StorageTest::testInitializingWithUser()
     storage->setUser(&user);
 
     QCOMPARE(spy.count(), 0);
+}
+
+void StorageTest::testChangeUser()
+{
+    auto storage = Storage::instance();
+    QSignalSpy spyErrorOccurred(storage, &Storage::errorOccurred);
+    QSignalSpy spyUserChanged(storage, &Storage::userChanged);
+
+    StorageUser storageUser;
+    storageUser.setFilePath(storageFile);
+    storageUser.setPassword(storagePassword);
+    storage->setUser(&storageUser);
+
+    QCOMPARE(spyErrorOccurred.count(), 0);
+    QCOMPARE(spyUserChanged.count(), 1);
+
+    QList<QVariant> arguments = spyUserChanged.takeFirst();
+    auto actualUser = qvariant_cast<const StorageUser *>(arguments.at(0));
+    QCOMPARE(actualUser, &storageUser);
+
+    StorageUser userChanged;
+    userChanged.setFilePath("/tmp/test1");
+    userChanged.setPassword("Storage_Password");
+    storage->setUser(&userChanged);
+
+    QCOMPARE(spyErrorOccurred.count(), 0);
+    QCOMPARE(spyUserChanged.count(), 1);
+
+    arguments = spyUserChanged.takeFirst();
+    auto actualUser1 = qvariant_cast<const StorageUser *>(arguments.at(0));
+    QCOMPARE(actualUser1, &userChanged);
+    QVERIFY(actualUser1 != &storageUser);
+
 }
 
 void StorageTest::testInitializing()

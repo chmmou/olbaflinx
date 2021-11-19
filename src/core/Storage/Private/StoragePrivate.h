@@ -52,8 +52,8 @@ public:
     [[nodiscard]] QString pragmaKey() const;
     [[nodiscard]] static QString quotePassword(const QString &string);
     [[nodiscard]] bool setupTables(StorageConnection *connection, QStringList &sqlStatements) const;
-    [[nodiscard]] const QStringList defaultQueries() const;
-    [[nodiscard]] const bool checkPassword(
+    [[nodiscard]] QStringList defaultQueries() const;
+    [[nodiscard]] bool checkPassword(
         StorageConnection *connection,
         const QString &password
     ) const;

@@ -155,7 +155,8 @@ jobs:
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
           export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
-          echo $PATH
-          echo $LD_LIBRARY_PATH
-          echo $PKG_CONFIG_PATH
-
+          mkdir cbuild
+          cd cbuild
+          cmake -DBUILD_TESTS=ON ..
+          make -j$(nproc) all
+          ctest

@@ -101,5 +101,7 @@ typedef QList<quint32> AccountIds;
 
 Q_DECLARE_METATYPE(olbaflinx::core::AccountList)
 Q_DECLARE_METATYPE(olbaflinx::core::AccountIds)
+Q_DECLARE_METATYPE(olbaflinx::core::StorageUser *)
+Q_DECLARE_METATYPE(const olbaflinx::core::StorageUser *)
 
 #endif // OLBAFLINX_CONTAINER_H
