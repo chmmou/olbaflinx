@@ -39,7 +39,7 @@ file(
 )
 set(APP_FILES ${APP_SRC_FILES} ${APP_HDR_FILES})
 
-set(TEST_APP_RCS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../res/olbaflinx.qrc)
+set(TEST_APP_RCS_FILE ${TEST_APP_CORE_DIR}/../res/olbaflinx.qrc)
 qt_add_resources(TEST_APP_RCS_FILE ${TEST_APP_RCS_FILE})
 
 set(
