@@ -18,6 +18,7 @@
 #include "Banking.h"
 
 using namespace olbaflinx::core::banking;
+using namespace olbaflinx::core::storage::account;
 
 Banking::Banking()
     : QObject(nullptr),

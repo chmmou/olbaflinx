@@ -163,6 +163,12 @@ bool Storage::compress()
     return success;
 }
 
+QString Storage::storagePath() const
+{
+    QString path = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+    return QString("%1/%2").arg(path, SingleApplication::organizationName());
+}
+
 bool Storage::changePassword(const QString &oldPassword, const QString &newPassword)
 {
     const auto conn = d_ptr->storageConnection();
@@ -270,7 +276,7 @@ void Storage::receiveAccount(const quint32 accountId)
 
 void Storage::receiveAccounts()
 {
-    QList<const Account *> accounts = {};
+    AccountList accounts = {};
 
     const auto conn = d_ptr->storageConnection();
 

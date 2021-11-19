@@ -24,8 +24,8 @@
 
 #include "Connection/StorageConnection.h"
 
-#include "Container.h"
-#include "Singleton.h"
+#include "core/Container.h"
+#include "core/Singleton.h"
 
 namespace olbaflinx::core::storage
 {
@@ -62,6 +62,7 @@ public:
     bool isInitialized();
     bool checkIntegrity();
     bool compress();
+    QString storagePath() const;
     bool changePassword(const QString &oldPassword, const QString &newPassword);
 
     void receiveAccount(quint32 accountId);
@@ -76,6 +77,7 @@ public:
     ) const;
 
 Q_SIGNALS:
+    void userChanged(const StorageUser *storageUser);
     void errorOccurred(const QString &message, const Storage::ErrorType errorType);
     void accountReceived(const AccountList &accounts);
 

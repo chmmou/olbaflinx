@@ -42,5 +42,15 @@ set(APP_FILES ${APP_SRC_FILES} ${APP_HDR_FILES})
 set(TEST_APP_RCS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../res/olbaflinx.qrc)
 qt_add_resources(TEST_APP_RCS_FILE ${TEST_APP_RCS_FILE})
 
-set(TEST_INCLUDES ${TEST_APP_CORE_DIR} ${TEST_APP_CORE_DIR}/core ${TEST_APP_CORE_DIR}/core/Banking ${TEST_APP_CORE_DIR}/core/Banking/Private ${TEST_APP_CORE_DIR}/core/SingleApplication ${TEST_APP_CORE_DIR}/core/Storage ${TEST_APP_CORE_DIR}/core/Storage/Connection ${TEST_APP_CORE_DIR}/core/Storage/Private)
+set(
+        TEST_INCLUDES
+        ${TEST_APP_CORE_DIR}
+        ${TEST_APP_CORE_DIR}/core
+        ${TEST_APP_CORE_DIR}/core/Banking
+        ${TEST_APP_CORE_DIR}/core/Banking/Private
+        ${TEST_APP_CORE_DIR}/core/SingleApplication
+        ${TEST_APP_CORE_DIR}/core/Storage
+        ${TEST_APP_CORE_DIR}/core/Storage/Connection
+        ${TEST_APP_CORE_DIR}/core/Storage/Private
+)
 include_directories(${TEST_INCLUDES})

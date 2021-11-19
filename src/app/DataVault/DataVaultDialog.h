@@ -15,31 +15,33 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OLBAFLINX_APP_H
-#define OLBAFLINX_APP_H
+#ifndef OLBAFLINX_DATAVAULTDIALOG_H
+#define OLBAFLINX_DATAVAULTDIALOG_H
 
-#include <QtWidgets/QMainWindow>
+#include <QtWidgets/QDialog>
 
-#include "ui_OlbaFlinx.h"
+#include "ui_DataVaultDialog.h"
 
-namespace olbaflinx::app
+namespace olbaflinx::app::datavault
 {
 
-class App: public QMainWindow, private Ui::UiOlbaFlinx
+class DataVaultDialog: public QDialog, private Ui::UiDataVaultDialog
 {
 
 Q_OBJECT
 
 public:
-    explicit App(QWidget *parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
-    ~App() override;
+    explicit DataVaultDialog(QWidget *parent = nullptr);
+    ~DataVaultDialog() override;
 
-private:
-    void setupDataVault();
-    void addDataVault(const QString &title, const QString &fileName);
+    QString vaultName() const;
+    QString vaultPassword() const;
+
+public Q_SLOTS:
+    void accept() override;
 
 };
 
 }
 
-#endif // OLBAFLINX_APP_H
+#endif // OLBAFLINX_DATAVAULTDIALOG_H

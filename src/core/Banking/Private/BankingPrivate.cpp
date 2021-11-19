@@ -16,46 +16,28 @@
  */
 
 #include <gwenhywfar/gwenhywfar.h>
-#include <gwenhywfar/gwendate.h>
 #include <gwenhywfar/gui.h>
 #include <gwenhywfar/dialog.h>
 #include <gwen-gui-qt5/qt5_gui.hpp>
 
 #include <aqbanking/gui/abgui.h>
 #include <aqbanking/types/account_spec.h>
-#include <aqbanking/types/balance.h>
-#include <aqbanking/types/bankinfo.h>
-#include <aqbanking/types/bankinfoservice.h>
-#include <aqbanking/types/document.h>
-#include <aqbanking/types/imexporter_accountinfo.h>
-#include <aqbanking/types/imexporter_context.h>
-#include <aqbanking/types/message.h>
-//#include <aqbanking/types/refaccount.h> <<--- new one
-#include <aqbanking/types/security.h>
-#include <aqbanking/types/transaction.h>
-#include <aqbanking/types/transactionlimits.h>
-#include <aqbanking/types/value.h>
-#include <aqbanking/account_type.h>
 #include <aqbanking/banking.h>
-#include <aqbanking/banking_bankinfo.h>
 #include <aqbanking/banking_dialogs.h>
-#include <aqbanking/banking_imex.h>
 #include <aqbanking/banking_online.h>
-#include <aqbanking/banking_transaction.h>
 #include <aqbanking/error.h>
-#include <aqbanking/system.h>
-#include <aqbanking/version.h>
 
 #include "Banking/Banking.h"
 #include "BankingPrivate.h"
 
-#include "SingleApplication/SingleApplication.h"
+#include "core/SingleApplication/SingleApplication.h"
 
 #ifndef AB_SUCCESS
 #define AB_SUCCESS GWEN_SUCCESS
 #endif
 
 using namespace olbaflinx::core::banking;
+using namespace olbaflinx::core::storage::account;
 
 GWEN_GUI *gwenGui;
 

@@ -20,13 +20,35 @@
 
 #include <QtCore/QObject>
 #include <QtCore/QList>
+#include <QtCore/QRegularExpression>
 
 #include "Storage/Account/Account.h"
 
-using namespace olbaflinx::core::storage::account;
+/**
+ * Password regular expression
+ *
+ * /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!"§$%&\/()=?´`{}\[\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>])[A-Za-z\d!"§$%&\/()=?´`{}\[\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>]{6,}$/g
+ *
+ * At least one lower case English letter, a-z
+ * At least one upper case English letter, A-Z
+ * At least one lower case letter, öäü
+ * At least one upper case letter, ÖÄÜ
+ * At least one digit, 0-9
+ * At least one of special character, !"§$%&/()=?´`{}[]\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>
+ * Minimum six in length 6 (with the anchors)
+ */
+#define MinPasswordReqEx QRegularExpression("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!\"§$%&/()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>])[A-Za-z\\d!\"§$%&/()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>]{6,}$")
+
+/**
+ * Group & Key for settings
+ */
+#define StorageSettingGroup "Vaults"
+#define StorageSettingGroupKey "Paths"
 
 namespace olbaflinx::core
 {
+
+using namespace storage::account;
 
 template<class T>
 class SignalBlocker

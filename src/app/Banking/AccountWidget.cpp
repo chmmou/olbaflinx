@@ -16,13 +16,22 @@
  */
 
 #include "AccountWidget.h"
+#include "AccountWidgetItem.h"
 
+#include "core/Storage/Account/Account.h"
+
+using namespace olbaflinx::core::storage::account;
 using namespace olbaflinx::app::banking;
+
+int metaTypeId = 0;
 
 AccountWidget::AccountWidget(QWidget *parent)
     : QTreeWidget(parent)
 {
-
+    metaTypeId = qRegisterMetaType<AccountWidgetItem *>();
 }
 
-AccountWidget::~AccountWidget() = default;
+AccountWidget::~AccountWidget()
+{
+    QMetaType::unregisterType(metaTypeId);
+}

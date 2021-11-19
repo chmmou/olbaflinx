@@ -91,6 +91,8 @@ void StoragePrivate::setUser(const StorageUser *storageUser)
     storageUserPtr.clear();
 
     delete storageUserPtr;
+
+    Q_EMIT q_ptr->userChanged(mStorageUser);
 }
 
 StorageConnection *StoragePrivate::storageConnection()

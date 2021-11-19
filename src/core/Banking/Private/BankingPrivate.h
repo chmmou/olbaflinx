@@ -19,7 +19,7 @@
 
 #include <QtCore/QObject>
 
-#include "Container.h"
+#include "core/Container.h"
 
 namespace olbaflinx::core::banking
 {
@@ -43,7 +43,7 @@ public:
     );
     void finalizeAqBanking();
 
-    Account *account(quint32 uniqueId) const;
+    [[nodiscard]] Account *account(quint32 uniqueId) const;
     void receiveAccounts();
     void receiveAccountIds();
 
