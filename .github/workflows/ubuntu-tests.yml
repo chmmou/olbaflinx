@@ -151,8 +151,6 @@ jobs:
     steps:
       - name: Checking out the code
         uses: actions/checkout@v2
-        with:
-          path: olbaflinx
       - name: CTest running
         run: |
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
@@ -161,6 +159,6 @@ jobs:
           cd olbaflinx
           mkdir cbuild
           cd cbuild
-          cmake -G"Ninja" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON $GITHUB_WORKSPACE
           make -j$(nproc) all
           ctest
