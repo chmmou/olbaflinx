@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+#include <QtCore/QDebug>
 #include <QtCore/QFileInfo>
 #include <QtGui/QKeySequence>
 #include <QtWidgets/QVBoxLayout>
@@ -40,7 +40,11 @@ using namespace olbaflinx::core::storage;
 
 QLabel *vaultInfoLabel = nullptr;
 
-QSpacerItem *scrollAreaSpacer = nullptr;
+QSpacerItem *scrollAreaSpacerTop = nullptr;
+
+QSpacerItem *scrollAreaSpacerBottom = nullptr;
+
+QVBoxLayout *scrollAreaDataVaultsContentsLayout = nullptr;
 
 App::App(QWidget *parent, Qt::WindowFlags flags)
     : QMainWindow(parent, flags)
@@ -56,6 +60,64 @@ App::~App() = default;
 
 void App::setupDataVault()
 {
+    createVaultInfoLabel();
+    createVaultInfoSpacerItems();
+
+    scrollAreaDataVaultsContentsLayout = new QVBoxLayout(scrollAreaDataVaultsContents);
+
+    scrollAreaDataVaults->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollAreaDataVaults->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollAreaDataVaults->setFrameShape(QScrollArea::NoFrame);
+    scrollAreaDataVaults->setFrameShadow(QScrollArea::Plain);
+
+    pushButtonAddDataVaults->setShortcut(QKeySequence("Ctrl+N"));
+
+    connectDataVaultForAdding();
+
+    auto storageFiles = Storage::instance()->setting(
+        StorageSettingGroup,
+        StorageSettingGroupKey,
+        QStringList()
+    ).toStringList();
+
+    if (storageFiles.isEmpty()) {
+        removeVaultInfo();
+        addVaultInfo();
+    }
+    else {
+        removeVaultInfo();
+
+        for (const auto &file: qAsConst(storageFiles)) {
+            addDataVault(QFileInfo(file).baseName(), file);
+        }
+
+        scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
+        scrollAreaDataVaultsContentsLayout->update();
+
+        storageFiles.clear();
+    }
+}
+
+void App::addDataVault(const QString &title, const QString &fileName)
+{
+    auto dataVaultItem = new DataVaultItem();
+    dataVaultItem->setVaultTitle(title);
+    dataVaultItem->setVaultFilePath(fileName);
+
+    QFileInfo fi(fileName);
+    const QString vaultItemCreationDateTimeString = fi.lastModified().toString("dd.MM.yyyy hh:mm");
+    const QString vaultItemMessageString = tr("Created on %1").arg(vaultItemCreationDateTimeString);
+
+    dataVaultItem->setVaultFileInfo(vaultItemMessageString);
+
+    connectDataVaultItemForOpen(dataVaultItem);
+    connectDataVaultItemForDeletion(dataVaultItem);
+
+    scrollAreaDataVaultsContentsLayout->addWidget(dataVaultItem);
+}
+
+void App::createVaultInfoLabel()
+{
     vaultInfoLabel = new QLabel();
     vaultInfoLabel->setTextFormat(Qt::RichText);
     vaultInfoLabel->setAlignment(Qt::AlignCenter);
@@ -66,19 +128,59 @@ void App::setupDataVault()
             "<p>You can create as many vaults as you like, each with its own password, e.g. for different user</p>"
         )
     );
+}
 
-    scrollAreaSpacer = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
+void App::createVaultInfoSpacerItems()
+{
+    scrollAreaSpacerTop = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
+    scrollAreaSpacerBottom = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
+}
 
-    scrollAreaDataVaults->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scrollAreaDataVaults->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollAreaDataVaults->setFrameShape(QScrollArea::NoFrame);
-    scrollAreaDataVaults->setFrameShadow(QScrollArea::Plain);
-    scrollAreaDataVaults->setWidgetResizable(true);
+void App::addVaultInfo()
+{
+    scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerTop);
+    scrollAreaDataVaultsContentsLayout->addWidget(vaultInfoLabel);
+    scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
+    scrollAreaDataVaultsContentsLayout->update();
+    scrollAreaDataVaultsContents->update();
+    scrollAreaDataVaults->update();
+}
 
-    scrollAreaDataVaultsContents->setLayout(new QVBoxLayout());
+void App::removeVaultInfo()
+{
+    int indexOf = scrollAreaDataVaultsContentsLayout->indexOf(scrollAreaSpacerTop);
+    if (indexOf >= 0) {
+        auto item = scrollAreaDataVaultsContentsLayout->takeAt(indexOf);
+        delete item;
 
-    pushButtonAddDataVaults->setShortcut(QKeySequence("Ctrl+N"));
+        scrollAreaSpacerTop = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
+    }
 
+    indexOf = scrollAreaDataVaultsContentsLayout->indexOf(vaultInfoLabel);
+    if (indexOf >= 0) {
+        auto item = scrollAreaDataVaultsContentsLayout->takeAt(indexOf);
+        delete item->widget();
+        delete item;
+
+        createVaultInfoLabel();
+    }
+
+    indexOf = scrollAreaDataVaultsContentsLayout->indexOf(scrollAreaSpacerBottom);
+    if (indexOf >= 0) {
+        auto item = scrollAreaDataVaultsContentsLayout->takeAt(indexOf);
+        delete item;
+
+        scrollAreaSpacerBottom = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
+    }
+
+    scrollAreaDataVaultsContentsLayout->update();
+    scrollAreaDataVaultsContents->update();
+    scrollAreaDataVaults->update();
+}
+
+void App::connectDataVaultForAdding()
+{
+    disconnect(pushButtonAddDataVaults, &QPushButton::clicked, nullptr, nullptr);
     connect(
         pushButtonAddDataVaults,
         &QPushButton::clicked,
@@ -107,56 +209,42 @@ void App::setupDataVault()
                     StorageSettingGroupKey
                 );
 
+                disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
+                connect(
+                    Storage::instance(),
+                    &Storage::userChanged,
+                    [newDataVaultDlg, this](const StorageUser *user)
+                    {
+                        if (!Storage::instance()->isInitialized()) {
+                            Storage::instance()->initialize();
+                        }
+
+                        removeVaultInfo();
+
+                        addDataVault(newDataVaultDlg->vaultName(), user->filePath());
+
+                        scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
+                        scrollAreaDataVaultsContentsLayout->update();
+                        scrollAreaDataVaultsContents->update();
+                        scrollAreaDataVaults->update();
+                    }
+                );
+
                 StorageUser storageUser;
                 storageUser.setPassword(storagePassword);
                 storageUser.setFilePath(storageFile);
-
                 Storage::instance()->setUser(&storageUser);
-                if (!Storage::instance()->isInitialized()) {
-                    Storage::instance()->initialize();
-                }
-
-                scrollAreaDataVaultsContents->layout()->removeItem(scrollAreaSpacer);
-                scrollAreaDataVaultsContents->layout()->removeWidget(vaultInfoLabel);
-
-                addDataVault(newDataVaultDlg->vaultName(), storageFile);
-
             }
             newDataVaultDlg->deleteLater();
         }
     );
-
-    auto storageFiles = Storage::instance()->setting(
-        StorageSettingGroup,
-        StorageSettingGroupKey,
-        QStringList()
-    ).toStringList();
-
-    if (storageFiles.isEmpty()) {
-        scrollAreaDataVaultsContents->layout()->removeItem(scrollAreaSpacer);
-        scrollAreaDataVaultsContents->layout()->addWidget(vaultInfoLabel);
-    }
-    else {
-        scrollAreaDataVaultsContents->layout()->removeItem(scrollAreaSpacer);
-        scrollAreaDataVaultsContents->layout()->removeWidget(vaultInfoLabel);
-    }
-
-    for (const auto &file: qAsConst(storageFiles)) {
-        addDataVault(QFileInfo(file).baseName(), file);
-    }
-
-    storageFiles.clear();
-
 }
 
-void App::addDataVault(const QString &title, const QString &fileName)
+void App::connectDataVaultItemForOpen(const DataVaultItem *item)
 {
-    auto dataVault = new DataVaultItem();
-    dataVault->setVaultTitle(title);
-    dataVault->setVaultFilePath(fileName);
-
+    disconnect(item, &DataVaultItem::vaultOpened, nullptr, nullptr);
     connect(
-        dataVault,
+        item,
         &DataVaultItem::vaultOpened,
         [=](const QString &filePath, const QString &password)
         {
@@ -202,9 +290,13 @@ void App::addDataVault(const QString &title, const QString &fileName)
             Storage::instance()->setUser(&storageUser);
         }
     );
+}
 
+void App::connectDataVaultItemForDeletion(const DataVaultItem *item)
+{
+    disconnect(item, &DataVaultItem::vaultDeleted, nullptr, nullptr);
     connect(
-        dataVault,
+        item,
         &DataVaultItem::vaultDeleted,
         [=](bool success, DataVaultItem *item)
         {
@@ -227,18 +319,14 @@ void App::addDataVault(const QString &title, const QString &fileName)
                 );
 
                 if (storageFiles.isEmpty()) {
-                    scrollAreaDataVaultsContents->layout()->removeWidget(vaultInfoLabel);
-                    scrollAreaDataVaultsContents->layout()->removeItem(scrollAreaSpacer);
-                    scrollAreaDataVaultsContents->layout()->addWidget(vaultInfoLabel);
+                    removeVaultInfo();
+                    addVaultInfo();
                 }
 
+                scrollAreaDataVaultsContentsLayout->removeWidget(item);
                 item->deleteLater();
-                scrollAreaDataVaultsContents->update();
                 storageFiles.clear();
             }
         }
     );
-
-    scrollAreaDataVaultsContents->layout()->addWidget(dataVault);
-    scrollAreaDataVaultsContents->layout()->addItem(scrollAreaSpacer);
 }

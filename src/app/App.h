@@ -20,10 +20,14 @@
 
 #include <QtWidgets/QMainWindow>
 
+#include "app/DataVault/DataVaultItem.h"
+
 #include "ui_OlbaFlinx.h"
 
 namespace olbaflinx::app
 {
+
+using namespace datavault;
 
 class App: public QMainWindow, private Ui::UiOlbaFlinx
 {
@@ -37,7 +41,13 @@ public:
 private:
     void setupDataVault();
     void addDataVault(const QString &title, const QString &fileName);
-
+    void createVaultInfoLabel();
+    void createVaultInfoSpacerItems();
+    void addVaultInfo();
+    void removeVaultInfo();
+    void connectDataVaultForAdding();
+    void connectDataVaultItemForOpen(const DataVaultItem *item);
+    void connectDataVaultItemForDeletion(const DataVaultItem *item);
 };
 
 }

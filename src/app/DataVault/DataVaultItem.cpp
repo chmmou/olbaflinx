@@ -50,6 +50,11 @@ void DataVaultItem::setVaultTitle(const QString &title) const
     labelDataVaultTitel->setText(title);
 }
 
+void DataVaultItem::setVaultFileInfo(const QString &info) const
+{
+    labelDataVaultFileInfo->setText(info);
+}
+
 void DataVaultItem::setVaultFilePath(const QString &filePath) const
 {
     labelDataVaultFilePath->setText(filePath);
@@ -214,7 +219,6 @@ void DataVaultItem::showPasswordChangeDialog()
             StorageUser storageUser;
             storageUser.setPassword(currPassword);
             storageUser.setFilePath(vaultFilePath());
-
             Storage::instance()->setUser(&storageUser);
         }
     );

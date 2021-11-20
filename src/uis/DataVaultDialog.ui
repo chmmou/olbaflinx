@@ -111,6 +111,9 @@
       <layout class="QVBoxLayout" name="verticalLayoutPasswordBox">
        <item>
         <layout class="QHBoxLayout" name="horizontalLayoutPassword">
+         <property name="spacing">
+          <number>3</number>
+         </property>
          <item>
           <widget class="QLabel" name="labelPassword">
            <property name="minimumSize">
@@ -136,10 +139,49 @@
          <item>
           <widget class="QLineEdit" name="lineEditPassword"/>
          </item>
+         <item>
+          <widget class="QLabel" name="label">
+           <property name="minimumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;
+&lt;body&gt;
+    &lt;h6&gt;Password Rules&lt;/h6&gt;
+    &lt;ul&gt;
+        &lt;li&gt;At least one lower and upper case letter: a-z A-Z öäü ÖÄÜ&lt;/li&gt;
+        &lt;li&gt;At least one digit: 0-9&lt;/li&gt;
+        &lt;li&gt;At least one of special character: !&amp;quot;§$%&amp;/()=?&amp;#180;&amp;#96;{}[]\ß&amp;#64;€~’*'+#-_.:,;µ&amp;ouml;&amp;auml;&amp;uuml;&amp;Ouml;&amp;Auml;&amp;Uuml;&amp;lt;|&amp;gt;&lt;/li&gt;
+        &lt;li&gt;Minimum six in length 6 (with the anchors)&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</string>
+           </property>
+           <property name="pixmap">
+            <pixmap resource="../../res/olbaflinx.qrc">:/general/question</pixmap>
+           </property>
+           <property name="scaledContents">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayoutPasswordConfirm">
+         <property name="spacing">
+          <number>3</number>
+         </property>
          <item>
           <widget class="QLabel" name="labelPasswordConfirm">
            <property name="minimumSize">
@@ -164,6 +206,42 @@
          </item>
          <item>
           <widget class="QLineEdit" name="lineEditPasswordConfirm"/>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_2">
+           <property name="minimumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;
+&lt;body&gt;
+    &lt;h6&gt;Password Rules&lt;/h6&gt;
+    &lt;ul&gt;
+        &lt;li&gt;At least one lower and upper case letter: a-z A-Z öäü ÖÄÜ&lt;/li&gt;
+        &lt;li&gt;At least one digit: 0-9&lt;/li&gt;
+        &lt;li&gt;At least one of special character: !&amp;quot;§$%&amp;/()=?&amp;#180;&amp;#96;{}[]\ß&amp;#64;€~’*'+#-_.:,;µ&amp;ouml;&amp;auml;&amp;uuml;&amp;Ouml;&amp;Auml;&amp;Uuml;&amp;lt;|&amp;gt;&lt;/li&gt;
+        &lt;li&gt;Minimum six in length 6 (with the anchors)&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</string>
+           </property>
+           <property name="pixmap">
+            <pixmap resource="../../res/olbaflinx.qrc">:/general/question</pixmap>
+           </property>
+           <property name="scaledContents">
+            <bool>true</bool>
+           </property>
+          </widget>
          </item>
         </layout>
        </item>
@@ -235,7 +313,9 @@
   <tabstop>pushButtonOk</tabstop>
   <tabstop>pushButtonCancel</tabstop>
  </tabstops>
- <resources/>
+ <resources>
+  <include location="../../res/olbaflinx.qrc"/>
+ </resources>
  <connections>
   <connection>
    <sender>pushButtonCancel</sender>

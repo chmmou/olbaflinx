@@ -35,6 +35,7 @@ public:
     ~DataVaultItem() override;
 
     void setVaultTitle(const QString &title) const;
+    void setVaultFileInfo(const QString &info) const;
     void setVaultFilePath(const QString &filePath) const;
     QString vaultFilePath() const;
 
