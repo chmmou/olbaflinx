@@ -145,12 +145,6 @@ jobs:
           make install
           cd ../..
           rm -rf ktoblzcheck
-  tests:
-    runs-on: ubuntu-18.04
-    needs: build
-    steps:
-      - name: Checking out the code
-        uses: actions/checkout@v2
       - name: CTest running
         run: |
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
