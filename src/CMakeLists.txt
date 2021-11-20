@@ -140,7 +140,7 @@ source_group("App Translations" FILES ${APP_TS_FILES})
 source_group("App Reource" FILES ${APP_RCS_FILE} ${RC_FILES})
 
 if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_create_translation(APP_TR_FILES ${APP_FILES})
+    qt_create_translation(APP_TR_FILES ${APP_FILES} ${APP_TS_FILES})
     qt_add_executable(
             ${CMAKE_PROJECT_NAME} ${EXEC_PROPERTY}
             ${APP_FILES}
@@ -148,7 +148,7 @@ if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
             ${APP_TR_FILES}
     )
 else ()
-    qt5_create_translation(APP_TR_FILES ${APP_FILES})
+    qt5_create_translation(APP_TR_FILES ${APP_FILES} ${APP_TS_FILES})
     add_executable(
             ${CMAKE_PROJECT_NAME} ${EXEC_PROPERTY}
             ${APP_FILES}

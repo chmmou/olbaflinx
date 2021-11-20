@@ -35,5 +35,6 @@
         <file alias="refresh">images/general/refresh.svg</file>
         <file alias="save">images/general/save.svg</file>
         <file alias="undo">images/general/undo.svg</file>
+        <file alias="question">images/general/question.svg</file>
     </qresource>
 </RCC>
