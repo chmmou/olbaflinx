@@ -1,8 +1,4 @@
 <RCC>
-    <qresource prefix="/translations">
-        <file alias="de_DE">olbaflinx_de_DE.qm</file>
-        <file alias="en_US">olbaflinx_en_US.qm</file>
-    </qresource>
     <qresource prefix="/app">
         <file alias="splashscreen">images/splashscreen.jpeg</file>
         <file alias="olbaflinx-logo">olbaflinx.png</file>

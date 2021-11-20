@@ -107,7 +107,11 @@ file(GLOB APP_UI_FILES ${APP_UI_DIR}/*.ui)
 include_directories(${APP_UI_DIR})
 qt_wrap_ui(APP_UI_HDRS ${APP_UI_FILES})
 
-set(APP_RCS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../res/${CMAKE_PROJECT_NAME}.qrc)
+set(
+        APP_RCS_FILE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../res/${CMAKE_PROJECT_NAME}.qrc
+        ${CMAKE_CURRENT_SOURCE_DIR}/../res/${CMAKE_PROJECT_NAME}-translations.qrc
+)
 qt_add_resources(APP_RCS_FILE ${APP_RCS_FILE})
 
 set(EXEC_PROPERTY "")
@@ -140,7 +144,7 @@ source_group("App Translations" FILES ${APP_TS_FILES})
 source_group("App Reource" FILES ${APP_RCS_FILE} ${RC_FILES})
 
 if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_create_translation(APP_TR_FILES ${APP_FILES} ${APP_TS_FILES})
+    qt_create_translation(APP_TR_FILES ${APP_FILES})
     qt_add_executable(
             ${CMAKE_PROJECT_NAME} ${EXEC_PROPERTY}
             ${APP_FILES}
@@ -148,7 +152,7 @@ if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
             ${APP_TR_FILES}
     )
 else ()
-    qt5_create_translation(APP_TR_FILES ${APP_FILES} ${APP_TS_FILES})
+    qt5_create_translation(APP_TR_FILES ${APP_FILES})
     add_executable(
             ${CMAKE_PROJECT_NAME} ${EXEC_PROPERTY}
             ${APP_FILES}
