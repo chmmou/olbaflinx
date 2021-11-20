@@ -11,8 +11,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
-
+    runs-on: ubuntu-18.04
     steps:
       - name: Checking out the code
         uses: actions/checkout@v2
@@ -150,7 +149,10 @@ jobs:
           make install
           cd ../..
           rm -rf ktoblzcheck
-
+  tests:
+    runs-on: ubuntu-18.04
+    needs: build
+    steps:
       - name: CTest running
         if: steps.cache-additional-dependencies.outputs.cache-hit == 'true' && steps.cache-qt.outputs.cache-hit == 'true'
         run: |

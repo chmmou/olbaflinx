@@ -61,5 +61,7 @@ compile_commands.json
 cbuild/
 settings.cmake
 res/*.txt
+res/*.qm
+res/*.ts
 res/database/*.txt
 *.~
