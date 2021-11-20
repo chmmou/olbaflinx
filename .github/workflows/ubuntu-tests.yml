@@ -150,8 +150,9 @@ jobs:
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
           export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
+          cd olbaflinx
           mkdir cbuild
           cd cbuild
-          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON $GITHUB_WORKSPACE
+          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON $GITHUB_WORKSPACE/olbaflinx
           make -j$(nproc) all
           ctest
