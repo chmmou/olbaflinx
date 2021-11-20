@@ -8,6 +8,7 @@ on:
 
 env:
   BUILD_TYPE: Debug
+  QT_QPA_PLATFORM: minimal
 
 jobs:
   build:
