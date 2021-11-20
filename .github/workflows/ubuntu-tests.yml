@@ -153,8 +153,11 @@ jobs:
     runs-on: ubuntu-18.04
     needs: build
     steps:
+      - name: Checking out the code
+        uses: actions/checkout@v2
+        with:
+          path: olbaflinx
       - name: CTest running
-        if: steps.cache-additional-dependencies.outputs.cache-hit == 'true' && steps.cache-qt.outputs.cache-hit == 'true'
         run: |
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
