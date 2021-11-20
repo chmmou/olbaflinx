@@ -17,7 +17,6 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: olbaflinx
-
       - name: Install dependencies
         id: vars
         run: |
@@ -62,19 +61,18 @@ jobs:
             libpcsclite-dev \
             doxygen \
             git \
-            cmake
+            cmake \
+            ninja-build
           sudo apt-get remove -y -qq gcc g++
           sudo apt install -y -qq gcc-9 g++-9
           sudo ln -s /usr/bin/g++-9 /usr/bin/g++
           sudo ln -s /usr/bin/gcc-9 /usr/bin/gcc
-
       - name: Cache Qt
         id: cache-qt
         uses: actions/cache@v1
         with:
           path: ../Qt
           key: ${{ runner.os }}-QtCache
-
       - name: Install Qt
         uses: jurplel/install-qt-action@v2.14.0
         env:
@@ -87,7 +85,6 @@ jobs:
           install-deps: true
           modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
           cached: ${{ steps.cache-qt.outputs.cache-hit }}
-
       - name: Install Qt SQL Cipher for Qt 5.15
         run: |
           git clone https://github.com/sjemens/qsqlcipher-qt5.git
@@ -99,7 +96,6 @@ jobs:
           make install
           cd ..
           rm -rf qsqlcipher-qt5
-
       - name: Cache additional dependencies
         id: cache-additional-dependencies
         uses: actions/cache@v2
@@ -162,8 +158,9 @@ jobs:
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
           export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
+          cd olbaflinx
           mkdir cbuild
           cd cbuild
-          cmake -DBUILD_TESTS=ON ..
+          cmake -G"Ninja" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON ..
           make -j$(nproc) all
           ctest
