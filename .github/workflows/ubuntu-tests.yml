@@ -155,4 +155,4 @@ jobs:
           cd cbuild
           cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON $GITHUB_WORKSPACE/olbaflinx
           make -j$(nproc) all
-          ctest
+          ctest --extra-verbose --rerun-failed --output-on-failure
