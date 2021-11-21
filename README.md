@@ -122,7 +122,8 @@ TBD
 
 - [ ] Get accounts, transactions, standing orders, electronic documents, ... (WiP)
 - [ ] Create / send transactions, standing orders, accounts,...
-- [ ] tbd
+- [ ] tbd ...
+- [ ] Switch to Qt 6 
 
 > WiP = Work In Progress
 
