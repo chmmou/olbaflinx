@@ -18,7 +18,7 @@
 #define OLBAFLINX_BANKING_H
 
 #include <QtCore/QObject>
-#include <Banking/Private/BankingPrivate.h>
+#include <core/Banking/Private/BankingPrivate.h>
 
 
 #include "core/Singleton.h"

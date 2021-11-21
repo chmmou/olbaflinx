@@ -26,16 +26,20 @@
 
 #include "App.h"
 
-#include "DataVault/DataVaultItem.h"
-#include "DataVault/DataVaultDialog.h"
+#include "app/DataVault/DataVaultItem.h"
+#include "app/DataVault/DataVaultDialog.h"
 
 #include "core/Container.h"
+#include "core/Banking/Banking.h"
 #include "core/Storage/Storage.h"
+#include "core/SingleApplication/SingleApplication.h"
 
 using namespace olbaflinx::app;
+using namespace olbaflinx::app::banking;
 using namespace olbaflinx::app::datavault;
 
 using namespace olbaflinx::core;
+using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage;
 
 QLabel *vaultInfoLabel = nullptr;
@@ -50,13 +54,36 @@ App::App(QWidget *parent, Qt::WindowFlags flags)
     : QMainWindow(parent, flags)
 {
     setupUi(this);
+}
 
+App::~App() = default;
+
+void App::initialize()
+{
     stackedWidgetMain->setCurrentIndex(0);
+
+    // ToDo Alexander Saal: Add own FinTS registration key
+    bool initialized = Banking::instance()->initialize(
+        SingleApplication::applicationName(),
+        "", // ToDo Alexander Saal: FinTS product registration: Status => Pending
+        SingleApplication::applicationVersion()
+    );
+
+    if (!initialized) {
+        QMessageBox::critical(
+            this,
+            SingleApplication::applicationName(),
+            tr("Banking backend can't be initialized"));
+    }
 
     setupDataVault();
 }
 
-App::~App() = default;
+void App::closeEvent(QCloseEvent *event)
+{
+    Banking::instance()->deInitialize();
+    QWidget::closeEvent(event);
+}
 
 void App::setupDataVault()
 {

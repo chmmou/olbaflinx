@@ -7,13 +7,17 @@ set(GWENGUI_QT5_MIN_VERSION 5.7.0)
 set(AQBANKING_MIN_VERSION 6.3.0)
 set(QT5_MIN_VERSION 5.15.2)
 set(KTOBLZCHECK_MIN_VERSION 1.53.0)
+set(LIBCHIPCARD_MIN_VERSION 5.1.6)
+set(EXECUTABLE_OUTPUT_PATH "bin/")
 
 option(BUILD_TESTS "Build test" OFF)
 
+find_package(PkgConfig)
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
 
-set(EXECUTABLE_OUTPUT_PATH "bin/")
+# libchipcard use the PkgConfig
+pkg_check_modules(libchipcard-client REQUIRED IMPORTED_TARGET libchipcard-client>=${LIBCHIPCARD_MIN_VERSION})
 
 # Check if we have the required Qt5 plugin installed
 message(STATUS "Checking for qsqlcipher >= ${QT5_MIN_VERSION}")

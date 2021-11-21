@@ -38,6 +38,11 @@ public:
     explicit App(QWidget *parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
     ~App() override;
 
+    void initialize();
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private:
     void setupDataVault();
     void addDataVault(const QString &title, const QString &fileName);

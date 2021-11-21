@@ -17,11 +17,9 @@
 
 #include <QtCore/QTranslator>
 
-#include "SingleApplication/SingleApplication.h"
 #include "app/App.h"
-#include "core/Banking/Banking.h"
+#include "core/SingleApplication/SingleApplication.h"
 
-using namespace olbaflinx::core::banking;
 using namespace olbaflinx::app;
 
 int main(int argc, char *argv[])
@@ -45,24 +43,11 @@ int main(int argc, char *argv[])
         a.exit(0);
     }
 
-    // ToDo Alexander Saal: Add own FinTS registration key
-    bool initialized = Banking::instance()->initialize(
-        SingleApplication::applicationName(),
-        "", // ToDo Alexander Saal: FinTS product registration: Status => Pending
-        SingleApplication::applicationVersion()
-    );
-
-    if (!initialized) {
-        a.sendMessage(QObject::tr("Banking backend can't be initialized").toUtf8());
-        a.exit(-1);
-    }
-
     App *app = new App();
+    app->initialize();
     app->setVisible(true);
 
     const int result = a.exec();
-
-    Banking::instance()->deInitialize();
 
     delete app;
 

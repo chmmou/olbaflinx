@@ -41,6 +41,8 @@ using namespace olbaflinx::core::storage::account;
 
 GWEN_GUI *gwenGui;
 
+QT5_Gui *qtGui;
+
 AB_BANKING *abBanking;
 
 BankingPrivate::BankingPrivate(Banking *banking)
@@ -48,6 +50,7 @@ BankingPrivate::BankingPrivate(Banking *banking)
       q_ptr(banking),
       mIsInitialized(false)
 {
+    qtGui = nullptr;
     gwenGui = nullptr;
     abBanking = nullptr;
 }
@@ -75,7 +78,7 @@ bool BankingPrivate::initializeAqBanking(
 
     GWEN_Init();
 
-    auto qtGui = new QT5_Gui();
+    qtGui = new QT5_Gui();
     gwenGui = qtGui->getCInterface();
     GWEN_Gui_SetGui(gwenGui);
 
@@ -132,8 +135,10 @@ void BankingPrivate::finalizeAqBanking()
         GWEN_Fini();
     }
 
+    qtGui = nullptr;
     gwenGui = nullptr;
     abBanking = nullptr;
+
     mIsInitialized = false;
 }
 
@@ -242,4 +247,3 @@ bool BankingPrivate::createAccount() const
 
     return dlgResult == 1;
 }
-

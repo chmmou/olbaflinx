@@ -1,6 +1,6 @@
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 ${CMAKE_CXX_FLAGS} ${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
+set(CMAKE_CXX_FLAGS "-std=c++17 ${CMAKE_CXX_FLAGS} ${Qt${QT_VERSION_MAJOR}Widgets_EXECUTABLE_COMPILE_FLAGS}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -27,6 +27,7 @@ set(
         gwenhywfar::core
         gwenhywfar::gui-cpp
         gwenhywfar::gui-qt5
+        ${libchipcard-client_LIBRARIES}
 )
 
 set(
@@ -43,6 +44,7 @@ set(
         AQ_INCLUDES
         ${AQBANKING_INCLUDE_DIRS}
         ${GWENHYWFAR_INCLUDE_DIRS}
+        ${libchipcard-client_INCLUDE_DIRS}
 )
 
 include_directories(${AQ_INCLUDES})
@@ -78,21 +80,23 @@ file(
         ${APP_DIR}/app/*.cpp
         ${APP_DIR}/app/Components/*.cpp
         ${APP_DIR}/app/Banking/*.cpp
+        ${APP_DIR}/app/Banking/Assistant/*.cpp
         ${APP_DIR}/app/DataVault/*.cpp
 )
 file(
         GLOB_RECURSE
         APP_HDR_FILES
         ${APP_DIR}/core/*.h
-        ${APP_DIR}/core/Banking/*.h
-        ${APP_DIR}/core/Banking/Private/*.h
         ${APP_DIR}/core/Storage/*.h
         ${APP_DIR}/core/Storage/Account/*.h
+        ${APP_DIR}/core/Banking/*.h
+        ${APP_DIR}/core/Banking/Private/*.h
         ${APP_DIR}/core/Storage/Connection/*.h
         ${APP_DIR}/core/Storage/Private/*.h
         ${APP_DIR}/app/*.h
         ${APP_DIR}/app/Components/*.h
         ${APP_DIR}/app/Banking/*.h
+        ${APP_DIR}/app/BankingAssistant/*.h
         ${APP_DIR}/app/DataVault/*.h
 )
 include_directories(${APP_DIR})
@@ -143,6 +147,9 @@ source_group("App Ui" FILES ${APP_UI_FILES})
 source_group("App Translations" FILES ${APP_TS_FILES})
 source_group("App Reource" FILES ${APP_RCS_FILE} ${RC_FILES})
 
+add_compile_definitions(QT_DEPRECATED_WARNINGS)
+add_compile_definitions(QT_DISABLE_DEPRECATED_BEFORE=0x050F00)
+
 if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_create_translation(APP_TR_FILES ${APP_FILES})
     qt_add_executable(
@@ -164,7 +171,7 @@ endif ()
 target_compile_definitions(
         ${CMAKE_PROJECT_NAME} PRIVATE
         QT_DEPRECATED_WARNINGS
-        QT_DISABLE_DEPRECATED_BEFORE=0x050E20
+        QT_DISABLE_DEPRECATED_BEFORE=0x050F00
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>")
