@@ -4,11 +4,11 @@
 [![experimental](http://badges.github.io/stability-badges/dist/experimental.svg)](https://github.com/chmmou/olbaflinx)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-OlbaFlinx is an online banking software for Linux based on the popular AqBaning library and the Qt 5 framework.
+OlbaFlinx is an multibank-capable online banking software for Linux based on the popular AqBanking library and the Qt 5 framework.
 
-OlbaFlinx has the advantage that it is made for people who are just about to switch to Linux and or have switched and are looking for a simple financial software. The other advantage is that OlbaFlinx runs on any Linux Desktop Environment that supports the Qt 5 framework. This makes it possible for users to decide which desktop environment they want to use on Linux. 
+OlbaFlinx has the advantage that it is made for people who are just about to switch to Linux and or have switched and are looking for a simple financial software. The other advantage is that OlbaFlinx runs on any Linux Desktop Environment that supports the Qt 5 framework. This makes it possible for users to decide which desktop environment they want to use.
 
-The idea to develop OlbaFlinx for Linux came from the fact that I was looking for a simple financial software for Linux that had the simplicity of [Banking4 (Windows / Mac)](https://subsembly.com/banking4.html). Unfortunately, none of the existing graphical financial software could convince me.
+The idea to develop OlbaFlinx came from the fact that I was looking for a simple financial software for Linux that had the simplicity of [Banking4 (Windows / Mac)](https://subsembly.com/banking4.html). Unfortunately, none of the existing graphical financial software could convince me.
 
 #### **_The development of OlbaFlinx is still in a very early state._**
 
@@ -120,8 +120,8 @@ TBD
 
 ## ToDo
 
-- [ ] Get accounts, transactions, standing orders, digital documents, ... (WiP)
-- [ ] Create / send transactions, standing orders, accounts...
+- [ ] Get accounts, transactions, standing orders, electronic documents, ... (WiP)
+- [ ] Create / send transactions, standing orders, accounts,...
 - [ ] tbd
 
 > WiP = Work In Progress
@@ -129,6 +129,7 @@ TBD
 ## References
 
 - [Qt Framework](https://www.qt.io/)
+- [Qt SQL driver plugin for SQLCipher](https://github.com/sjemens/qsqlcipher-qt5)
 - [AqBanking-Projektfamilie](https://www.aquamaniac.de/rdm/)
     - [gwenhywfar](https://www.aquamaniac.de/rdm/projects/gwenhywfar)
     - [aqbanking](https://www.aquamaniac.de/rdm/projects/aqbanking)
