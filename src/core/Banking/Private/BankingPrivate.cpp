@@ -170,31 +170,33 @@ void BankingPrivate::receiveAccounts()
     AB_ACCOUNT_SPEC_LIST *accountSpecList = nullptr;
 
     int rv = AB_Banking_GetAccountSpecList(abBanking, &accountSpecList);
-    if (rv == AB_SUCCESS) {
-
-        AB_ACCOUNT_SPEC *accountSpec;
-        while ((accountSpec = AB_AccountSpec_List_First(accountSpecList))) {
-            AB_AccountSpec_List_Del(accountSpec);
-            accountList.push_back(new Account(accountSpec));
-        }
-
-        AB_AccountSpec_List_free(accountSpecList);
-
-        std::sort(
-            accountList.begin(),
-            accountList.end(),
-            [=](const Account *first, const Account *second)
-            {
-                return first->accountName() < second->accountName();
-            }
-        );
-
+    if (rv != AB_SUCCESS) {
         Q_EMIT q_ptr->accountsReceived(accountList);
+        return;
+    }
 
-        if (!accountList.empty()) {
-            qDeleteAll(accountList);
-            accountList.clear();
+    AB_ACCOUNT_SPEC *accountSpec;
+    while ((accountSpec = AB_AccountSpec_List_First(accountSpecList))) {
+        AB_AccountSpec_List_Del(accountSpec);
+        accountList.push_back(new Account(accountSpec));
+    }
+
+    AB_AccountSpec_List_free(accountSpecList);
+
+    std::sort(
+        accountList.begin(),
+        accountList.end(),
+        [=](const Account *first, const Account *second)
+        {
+            return first->accountName() < second->accountName();
         }
+    );
+
+    Q_EMIT q_ptr->accountsReceived(accountList);
+
+    if (!accountList.empty()) {
+        qDeleteAll(accountList);
+        accountList.clear();
     }
 }
 

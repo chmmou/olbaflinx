@@ -44,8 +44,8 @@ private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
     void testReceiveAccount();
-    void testReceiveAccounts();
-    void testReceiveAccountIds();
+    void testReceiveAccountsEmpty();
+    void testReceiveAccountIdsEmpty();
     void testCreateAccount();
 };
 
@@ -97,7 +97,7 @@ void BankingTest::testReceiveAccount()
     QCOMPARE(account->isValid(), false);
 }
 
-void BankingTest::testReceiveAccounts()
+void BankingTest::testReceiveAccountsEmpty()
 {
     const auto banking = Banking::instance();
     QSignalSpy spy(banking, &Banking::accountsReceived);
@@ -105,9 +105,13 @@ void BankingTest::testReceiveAccounts()
     banking->receiveAccounts();
 
     QCOMPARE(spy.count(), 1);
+
+    QList<QVariant> arguments = spy.takeFirst();
+    auto accountList = qvariant_cast<AccountList>(arguments.at(0));
+    QVERIFY(accountList.isEmpty());
 }
 
-void BankingTest::testReceiveAccountIds()
+void BankingTest::testReceiveAccountIdsEmpty()
 {
     const auto banking = Banking::instance();
     QSignalSpy spy(banking, &Banking::accountIdsReceived);
@@ -115,6 +119,10 @@ void BankingTest::testReceiveAccountIds()
     banking->receiveAccountIds();
 
     QCOMPARE(spy.count(), 1);
+
+    QList<QVariant> arguments = spy.takeFirst();
+    auto accountIds = qvariant_cast<AccountIds>(arguments.at(0));
+    QVERIFY(accountIds.isEmpty());
 }
 
 void BankingTest::testCreateAccount()

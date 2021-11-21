@@ -1,4 +1,4 @@
-name: Ubuntu (CTests)
+name: Tests
 
 on:
   push:
@@ -13,6 +13,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-18.04
+
     steps:
       - name: Checking out the code
         uses: actions/checkout@v2
@@ -87,6 +88,7 @@ jobs:
           modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
           cached: ${{ steps.cache-qt.outputs.cache-hit }}
       - name: Install Qt SQL Cipher for Qt 5.15
+        shell: bash
         run: |
           git clone https://github.com/sjemens/qsqlcipher-qt5.git
           cd qsqlcipher-qt5
@@ -103,9 +105,9 @@ jobs:
         with:
           path: ~/.additional-dependencies
           key: ${{ runner.os }}-additional-dependencies-cache-v1
-
       - name: Installing additional dependencies
         if: steps.cache-additional-dependencies.outputs.cache-hit != 'true'
+        shell: bash
         run: |
           wget -c "https://www.aquamaniac.de/rdm/attachments/download/390/gwenhywfar-5.7.3.tar.gz"
           tar -xzf gwenhywfar-5.7.3.tar.gz
@@ -147,6 +149,9 @@ jobs:
           cd ../..
           rm -rf ktoblzcheck
       - name: CTest running
+        env:
+          CTEST_OUTPUT_ON_FAILURE: 1
+        shell: bash
         run: |
           export PATH="$PATH:$HOME/.additional-dependencies/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
