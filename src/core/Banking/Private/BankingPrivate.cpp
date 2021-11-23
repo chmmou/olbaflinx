@@ -269,7 +269,7 @@ QWidget *BankingPrivate::createSetupDialog(QWidget *parentWidget) const
 
     gwenSetupDialog = AB_Banking_CreateSetupDialog(abBanking);
 
-    auto *qt5Dlg = new QT5_GuiDialog(qtGui, gwenSetupDialog);
+    const auto qt5Dlg = new QT5_GuiDialog(qtGui, gwenSetupDialog);
     const bool success = qt5Dlg->setup(qApp->activeWindow());
 
     // That's real pain. A hack to get the widget for embedding into another widget / dialog...
@@ -291,7 +291,7 @@ QWidget *BankingPrivate::createSetupDialog(QWidget *parentWidget) const
     return nullptr;
 }
 
-void BankingPrivate::closeSetupDialog()
+void BankingPrivate::finalizeSetupDialog()
 {
     if (!mIsInitialized) {
         return;

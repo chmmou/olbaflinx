@@ -49,7 +49,7 @@ public:
     void receiveAccountIds();
 
     QWidget *createSetupDialog(QWidget *parentWidget) const;
-    void closeSetupDialog();
+    void finalizeSetupDialog();
 
 private:
     Banking *const q_ptr;

@@ -50,6 +50,8 @@ protected Q_SLOTS:
 private Q_SLOTS:
     void showPasswordChangeDialog();
     void deleteDataVault();
+    void backupDataVault();
+    void aboutDataVault();
 
 };
 

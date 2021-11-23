@@ -39,6 +39,8 @@
  */
 #define MinPasswordReqEx QRegularExpression("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!\"§$%&/()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>])[A-Za-z\\d!\"§$%&/()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>]{6,}$")
 
+#define StorageFileBackupDateTimeFormat "yyyyMMddhhmmsszzz"
+
 /**
  * Group & Key for settings
  */

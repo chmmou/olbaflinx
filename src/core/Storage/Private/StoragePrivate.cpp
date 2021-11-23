@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <QtCore/QDebug>
 
 #include <QtSql/QSqlField>
 #include <QtSql/QSqlQuery>
@@ -88,11 +89,11 @@ void StoragePrivate::setUser(const StorageUser *storageUser)
 
     QPointer<StorageUser> storageUserPtr(const_cast<StorageUser *>(storageUser));
     storageUserPtr.swap(mStorageUser);
-    storageUserPtr.clear();
-
-    delete storageUserPtr;
 
     Q_EMIT q_ptr->userChanged(mStorageUser);
+
+    storageUserPtr.clear();
+    delete storageUserPtr;
 }
 
 StorageConnection *StoragePrivate::storageConnection()
@@ -251,6 +252,8 @@ void StoragePrivate::prepareAccountQuery(QSqlQuery &preparedQuery, const Account
 
 StorageUser *StoragePrivate::storageUser() const
 {
+    qDebug() << "mStorageUser pointer is null: " << mStorageUser.isNull();
+
     return mStorageUser;
 }
 

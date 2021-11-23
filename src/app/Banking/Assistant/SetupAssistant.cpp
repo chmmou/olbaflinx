@@ -28,9 +28,11 @@ SetupAssistant::SetupAssistant(QWidget *parent)
 {
     setupUi(this);
 
+    verticalSpacerOptionPage->changeSize(1, 1, QSizePolicy::Fixed, QSizePolicy::Fixed);
+    optionPage->layout()->update();
+
     auto configWidget = Banking::instance()->createSetupDialog(this);
-    optionPage->setLayout(new QVBoxLayout());
-    optionPage->layout()->setContentsMargins(QMargins());
+    optionPage->layout()->setContentsMargins(QMargins(0, 0, 0, 0));
     optionPage->layout()->addWidget(configWidget);
 
     mWizardPages << welcomePage << optionPage;
@@ -40,5 +42,17 @@ SetupAssistant::~SetupAssistant()
 {
     qDeleteAll(mWizardPages);
     mWizardPages.clear();
+}
+
+void SetupAssistant::closeEvent(QCloseEvent *event)
+{
+    Banking::instance()->finalizeSetupDialog();
+    QDialog::closeEvent(event);
+}
+
+void SetupAssistant::done(int result)
+{
+    Banking::instance()->finalizeSetupDialog();
+    QWizard::done(result);
 }
 

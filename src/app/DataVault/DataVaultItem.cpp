@@ -14,8 +14,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#include <QtGui/QFont>
+#include <QtCore/QDateTime>
+#include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QPointer>
 
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
@@ -24,9 +26,6 @@
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QSpacerItem>
-
-#include <QtCore/QFile>
-#include <QtCore/QPointer>
 
 #include "DataVaultItem.h"
 
@@ -69,11 +68,10 @@ void DataVaultItem::showMenu()
 {
     auto buttonMenu = new QMenu(this);
 
-    buttonMenu->addAction(tr("Information"));
+    buttonMenu->addAction(tr("Information"), this, &DataVaultItem::aboutDataVault);
     buttonMenu->addAction(tr("Change Password"), this, &DataVaultItem::showPasswordChangeDialog);
     buttonMenu->addSeparator();
-    buttonMenu->addAction(tr("Compress"));
-    buttonMenu->addAction(tr("Backup"));
+    buttonMenu->addAction(tr("Backup"), this, &DataVaultItem::backupDataVault);
     buttonMenu->addAction(tr("Delete"), this, &DataVaultItem::deleteDataVault);
 
     connect(buttonMenu, &QMenu::aboutToHide, buttonMenu, &QMenu::deleteLater);
@@ -233,11 +231,47 @@ void DataVaultItem::showPasswordChangeDialog()
 
 void DataVaultItem::deleteDataVault()
 {
-    bool removed = true;
-    QFile vaultFile(vaultFilePath());
-    if (vaultFile.exists()) {
-        removed &= vaultFile.remove();
+    const QMessageBox::StandardButton result = QMessageBox::question(
+        this,
+        tr("Data Vault"),
+        tr("Are you sure you want to delete your data vault?\nThis can not be undone!")
+    );
+
+    if (result == QMessageBox::Yes) {
+        bool removed = true;
+        QFile vaultFile(vaultFilePath());
+        if (vaultFile.exists()) {
+            removed &= vaultFile.remove();
+        }
+
+        Q_EMIT vaultDeleted(removed, this, vaultFile.errorString());
+    }
+}
+
+void DataVaultItem::backupDataVault()
+{
+    const auto storage = Storage::instance();
+    QString storageBackupPath = storage->storagePath().append("/backup");
+    QDir backupDir(storageBackupPath);
+    if (!backupDir.exists()) {
+        backupDir.mkpath(storageBackupPath);
     }
 
-    Q_EMIT vaultDeleted(removed, this, vaultFile.errorString());
+    QFile storageFile(vaultFilePath());
+    if (storageFile.exists()) {
+        const QString timeStamp = QDateTime::currentDateTime()
+            .toString(StorageFileBackupDateTimeFormat);
+
+        QFileInfo info(vaultFilePath());
+        const QString storageBackupFile = storageBackupPath
+            .append("/%1.%2")
+            .arg(timeStamp, info.completeSuffix());
+
+        storageFile.copy(storageBackupFile);
+    }
+}
+
+void DataVaultItem::aboutDataVault()
+{
+    QMessageBox::information(this, tr("Data Vault"), tr("Not implemented yet!"));
 }

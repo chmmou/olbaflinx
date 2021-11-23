@@ -33,6 +33,10 @@ public:
     explicit SetupAssistant(QWidget *parent = nullptr);
     ~SetupAssistant() override;
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+    void done(int result) override;
+
 private:
     QList<QWizardPage *> mWizardPages;
 };
