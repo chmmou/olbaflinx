@@ -18,6 +18,7 @@
 #define OLBAFLINX_BANKINGPRIVATE_H
 
 #include <QtCore/QObject>
+#include <QtWidgets/QWidget>
 
 #include "core/Container.h"
 
@@ -47,7 +48,8 @@ public:
     void receiveAccounts();
     void receiveAccountIds();
 
-    bool createAccount() const;
+    QWidget *createSetupDialog(QWidget *parentWidget) const;
+    void closeSetupDialog();
 
 private:
     Banking *const q_ptr;

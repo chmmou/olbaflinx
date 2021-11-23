@@ -18,6 +18,7 @@
 #define OLBAFLINX_BANKING_H
 
 #include <QtCore/QObject>
+#include <QtWidgets/QWidget>
 #include <core/Banking/Private/BankingPrivate.h>
 
 
@@ -44,7 +45,8 @@ public:
     ) const;
     void deInitialize() const;
 
-    [[nodiscard]] bool createAccount() const;
+    [[nodiscard]] QWidget *createSetupDialog(QWidget *widget) const;
+
     [[nodiscard]] Account *account(quint32 uniqueId) const;
     void receiveAccounts();
     void receiveAccountIds();
@@ -52,6 +54,7 @@ public:
 Q_SIGNALS:
     void accountsReceived(const AccountList &accountList);
     void accountIdsReceived(const AccountIds &accountIds);
+    void progressStatus(qreal current, qreal total);
 
 private:
     QScopedPointer<BankingPrivate> const d_ptr;

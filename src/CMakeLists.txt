@@ -148,7 +148,7 @@ source_group("App Translations" FILES ${APP_TS_FILES})
 source_group("App Reource" FILES ${APP_RCS_FILE} ${RC_FILES})
 
 add_compile_definitions(QT_DEPRECATED_WARNINGS)
-add_compile_definitions(QT_DISABLE_DEPRECATED_BEFORE=0x050F00)
+add_compile_definitions(QT_DISABLE_DEPRECATED_BEFORE=0x050E20)
 
 if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_create_translation(APP_TR_FILES ${APP_FILES})
@@ -171,7 +171,7 @@ endif ()
 target_compile_definitions(
         ${CMAKE_PROJECT_NAME} PRIVATE
         QT_DEPRECATED_WARNINGS
-        QT_DISABLE_DEPRECATED_BEFORE=0x050F00
+        QT_DISABLE_DEPRECATED_BEFORE=0x050E20
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>")

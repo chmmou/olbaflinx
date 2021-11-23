@@ -50,6 +50,8 @@ private:
     void createVaultInfoSpacerItems();
     void addVaultInfo();
     void removeVaultInfo();
+
+private Q_SLOTS:
     void connectDataVaultForAdding();
     void connectDataVaultItemForOpen(const DataVaultItem *item);
     void connectDataVaultItemForDeletion(const DataVaultItem *item);

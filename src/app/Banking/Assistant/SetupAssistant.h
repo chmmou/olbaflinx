@@ -17,7 +17,9 @@
 #ifndef OLBAFLINX_SETUPASSISTANT_H
 #define OLBAFLINX_SETUPASSISTANT_H
 
+#include <QtCore/QList>
 #include <QtWidgets/QWizard>
+
 #include "ui_SetupAssistant.h"
 
 namespace olbaflinx::app::banking::assistant
@@ -31,7 +33,8 @@ public:
     explicit SetupAssistant(QWidget *parent = nullptr);
     ~SetupAssistant() override;
 
-    QWizardPage *wizardPageAt(int index) const;
+private:
+    QList<QWizardPage *> mWizardPages;
 };
 
 } // olbaflinx::app::banking

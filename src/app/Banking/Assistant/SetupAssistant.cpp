@@ -19,17 +19,26 @@
 
 #include "core/Banking/Banking.h"
 
+using namespace olbaflinx::core::banking;
 using namespace olbaflinx::app::banking::assistant;
 
 SetupAssistant::SetupAssistant(QWidget *parent)
-    : QWizard(parent)
+    : QWizard(parent),
+      mWizardPages({})
 {
     setupUi(this);
+
+    auto configWidget = Banking::instance()->createSetupDialog(this);
+    optionPage->setLayout(new QVBoxLayout());
+    optionPage->layout()->setContentsMargins(QMargins());
+    optionPage->layout()->addWidget(configWidget);
+
+    mWizardPages << welcomePage << optionPage;
 }
 
-SetupAssistant::~SetupAssistant() = default;
-
-QWizardPage *SetupAssistant::wizardPageAt(int index) const
+SetupAssistant::~SetupAssistant()
 {
-    return welcomePage;
+    qDeleteAll(mWizardPages);
+    mWizardPages.clear();
 }
+

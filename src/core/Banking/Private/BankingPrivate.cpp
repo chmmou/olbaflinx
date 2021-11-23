@@ -15,10 +15,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <QtWidgets/QPushButton>
+
 #include <gwenhywfar/gwenhywfar.h>
 #include <gwenhywfar/gui.h>
+#include <gwenhywfar/dialog_be.h>
 #include <gwenhywfar/dialog.h>
 #include <gwen-gui-qt5/qt5_gui.hpp>
+#include <gwen-gui-qt5/qt5_gui_dialog.hpp>
+#include <gwen-gui-qt5/qt5dialogbox.hpp>
 
 #include <aqbanking/gui/abgui.h>
 #include <aqbanking/types/account_spec.h>
@@ -41,6 +46,8 @@ using namespace olbaflinx::core::storage::account;
 
 GWEN_GUI *gwenGui;
 
+GWEN_DIALOG *gwenSetupDialog;
+
 QT5_Gui *qtGui;
 
 AB_BANKING *abBanking;
@@ -52,6 +59,7 @@ BankingPrivate::BankingPrivate(Banking *banking)
 {
     qtGui = nullptr;
     gwenGui = nullptr;
+    gwenSetupDialog = nullptr;
     abBanking = nullptr;
 }
 
@@ -93,12 +101,14 @@ bool BankingPrivate::initializeAqBanking(
 
     if (fintsRegistrationKey == nullptr) {
         const QByteArray local8BitKey = key.toLocal8Bit();
-        AB_Banking_RuntimeConfig_SetCharValue(
-            abBanking,
-            "fintsRegistrationKey",
-            local8BitKey.data()
-        );
+        fintsRegistrationKey = local8BitKey.data();
     }
+
+    AB_Banking_RuntimeConfig_SetCharValue(
+        abBanking,
+        "fintsRegistrationKey",
+        fintsRegistrationKey
+    );
 
     const QByteArray local8BitVersion = version.toLocal8Bit();
     AB_Banking_RuntimeConfig_SetCharValue(
@@ -180,10 +190,20 @@ void BankingPrivate::receiveAccounts()
         return;
     }
 
+    quint32 totalAccounts = AB_AccountSpec_List_GetCount(accountSpecList);
+    if (totalAccounts < 1) {
+        Q_EMIT q_ptr->accountsReceived(accountList);
+        return;
+    }
+
+    quint32 currentAccount = 0;
     AB_ACCOUNT_SPEC *accountSpec;
     while ((accountSpec = AB_AccountSpec_List_First(accountSpecList))) {
         AB_AccountSpec_List_Del(accountSpec);
         accountList.push_back(new Account(accountSpec));
+
+        currentAccount = accountList.size() / totalAccounts * 100;
+        Q_EMIT q_ptr->progressStatus(currentAccount, totalAccounts);
     }
 
     AB_AccountSpec_List_free(accountSpecList);
@@ -235,15 +255,51 @@ void BankingPrivate::receiveAccountIds()
     receiveAccounts();
 }
 
-bool BankingPrivate::createAccount() const
+QWidget *BankingPrivate::createSetupDialog(QWidget *parentWidget) const
 {
     if (!mIsInitialized) {
-        return false;
+        return nullptr;
     }
 
-    auto dialog = AB_Banking_CreateSetupDialog(abBanking);
-    int dlgResult = GWEN_Gui_ExecDialog(dialog, 0);
-    GWEN_Dialog_free(dialog);
+    const auto qt5GuiParentWidget = qtGui->getParentWidget();
+    if (qt5GuiParentWidget == nullptr && parentWidget != nullptr)
+        qtGui->pushParentWidget(parentWidget);
+    else
+        qtGui->popParentWidget();
 
-    return dlgResult == 1;
+    gwenSetupDialog = AB_Banking_CreateSetupDialog(abBanking);
+
+    auto *qt5Dlg = new QT5_GuiDialog(qtGui, gwenSetupDialog);
+    const bool success = qt5Dlg->setup(qApp->activeWindow());
+
+    // That's real pain. A hack to get the widget for embedding into another widget / dialog...
+    if (success) {
+        const auto qt5DlgBox = dynamic_cast<QT5_DialogBox *>(qt5Dlg->getMainWindow());
+        const QList<QPushButton *> buttons = qt5DlgBox->window()->findChildren<QPushButton *>();
+        for (const auto button: buttons) {
+            if (button->text() == "Close" || button->text() == "Help") {
+                button->setHidden(true);
+            }
+        }
+
+        // Qt 5 Doc says:
+        // QDialog and QMainWindow widgets are by default windows, even if a parent widget is
+        // specified in the constructor. This behavior is specified by the Qt::Window flag.
+        return qt5DlgBox->window();
+    }
+
+    return nullptr;
+}
+
+void BankingPrivate::closeSetupDialog()
+{
+    if (!mIsInitialized) {
+        return;
+    }
+
+    if (gwenSetupDialog != nullptr) {
+        GWEN_Dialog_EmitSignalToAll(gwenSetupDialog, GWEN_DialogEvent_TypeFini, "");
+        GWEN_Dialog_free(gwenSetupDialog);
+        gwenSetupDialog = nullptr;
+    }
 }

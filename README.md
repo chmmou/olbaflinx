@@ -18,7 +18,7 @@ tbd
 
 ## Build Introduction
 
-### Dependencies
+### Requirements
 
 [CMake](https://cmake.org/download/) >= 3.16
 
@@ -123,7 +123,7 @@ TBD
 - [ ] Get accounts, transactions, standing orders, electronic documents, ... (WiP)
 - [ ] Create / send transactions, standing orders, accounts,...
 - [ ] tbd ...
-- [ ] Switch to Qt 6 
+- [ ] Switch to Qt 6
 
 > WiP = Work In Progress
 
@@ -136,6 +136,10 @@ TBD
     - [aqbanking](https://www.aquamaniac.de/rdm/projects/aqbanking)
     - [libchipcard](https://www.aquamaniac.de/rdm/projects/libchipcard)
 - [KtoBlzCheck](https://sourceforge.net/projects/ktoblzcheck)
+
+## Maintainer
+
+The OlbaFlinx project is currently maintained by [Alexander Saal](https://github.com/chmmou). If you have any questions please don't hesitate to create an issue on this repo.
 
 ## License
 

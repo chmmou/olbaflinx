@@ -31,7 +31,7 @@
     <item>
      <widget class="QLabel" name="label_2">
       <property name="text">
-       <string>TextLabel</string>
+       <string>This setup assistant will guide you through the process of setting up an online banking account.</string>
       </property>
      </widget>
     </item>
@@ -57,58 +57,6 @@
    <property name="subTitle">
     <string>Option to select</string>
    </property>
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <item>
-     <widget class="QLabel" name="label">
-      <property name="text">
-       <string>TextLabel</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <spacer name="verticalSpacer">
-      <property name="orientation">
-       <enum>Qt::Vertical</enum>
-      </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Fixed</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>20</width>
-        <height>5</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item>
-     <widget class="QRadioButton" name="radioButton">
-      <property name="text">
-       <string>Import existing accounts</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QRadioButton" name="radioButton_2">
-      <property name="text">
-       <string>Create new account</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <spacer name="verticalSpacer_2">
-      <property name="orientation">
-       <enum>Qt::Vertical</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>20</width>
-        <height>104</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-   </layout>
   </widget>
  </widget>
  <resources/>

@@ -28,6 +28,7 @@
 
 #include "app/DataVault/DataVaultItem.h"
 #include "app/DataVault/DataVaultDialog.h"
+#include "app/Banking/Assistant/SetupAssistant.h"
 
 #include "core/Container.h"
 #include "core/Banking/Banking.h"
@@ -36,6 +37,7 @@
 
 using namespace olbaflinx::app;
 using namespace olbaflinx::app::banking;
+using namespace olbaflinx::app::banking::assistant;
 using namespace olbaflinx::app::datavault;
 
 using namespace olbaflinx::core;
@@ -65,7 +67,7 @@ void App::initialize()
     // ToDo Alexander Saal: Add own FinTS registration key
     bool initialized = Banking::instance()->initialize(
         SingleApplication::applicationName(),
-        "", // ToDo Alexander Saal: FinTS product registration: Status => Pending
+        "1", // ToDo Alexander Saal: FinTS product registration: Status => Pending
         SingleApplication::applicationVersion()
     );
 
@@ -99,7 +101,12 @@ void App::setupDataVault()
 
     pushButtonAddDataVaults->setShortcut(QKeySequence("Ctrl+N"));
 
-    connectDataVaultForAdding();
+    connect(
+        pushButtonAddDataVaults,
+        &QPushButton::clicked,
+        this,
+        &App::connectDataVaultForAdding
+    );
 
     auto storageFiles = Storage::instance()->setting(
         StorageSettingGroup,
@@ -207,64 +214,56 @@ void App::removeVaultInfo()
 
 void App::connectDataVaultForAdding()
 {
-    disconnect(pushButtonAddDataVaults, &QPushButton::clicked, nullptr, nullptr);
-    connect(
-        pushButtonAddDataVaults,
-        &QPushButton::clicked,
-        [=]()
-        {
-            auto newDataVaultDlg = new DataVaultDialog(this);
-            if (newDataVaultDlg->exec() == DataVaultDialog::Accepted) {
+    auto newDataVaultDlg = new DataVaultDialog(this);
+    if (newDataVaultDlg->exec() == DataVaultDialog::Accepted) {
 
-                const auto storageFile = QString("%1/%2.olbaflinx").arg(
-                    Storage::instance()->storagePath(),
-                    newDataVaultDlg->vaultName()
-                );
+        const auto storageFile = QString("%1/%2.olbaflinx").arg(
+            Storage::instance()->storagePath(),
+            newDataVaultDlg->vaultName()
+        );
 
-                const auto storagePassword = newDataVaultDlg->vaultPassword();
-                auto storageFiles = Storage::instance()->setting(
-                    StorageSettingGroup,
-                    StorageSettingGroupKey,
-                    QStringList()
-                ).toStringList();
+        const auto storagePassword = newDataVaultDlg->vaultPassword();
+        auto storageFiles = Storage::instance()->setting(
+            StorageSettingGroup,
+            StorageSettingGroupKey,
+            QStringList()
+        ).toStringList();
 
-                storageFiles << storageFile;
+        storageFiles << storageFile;
 
-                Storage::instance()->storeSetting(
-                    StorageSettingGroup,
-                    storageFiles,
-                    StorageSettingGroupKey
-                );
+        Storage::instance()->storeSetting(
+            StorageSettingGroup,
+            storageFiles,
+            StorageSettingGroupKey
+        );
 
-                disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
-                connect(
-                    Storage::instance(),
-                    &Storage::userChanged,
-                    [newDataVaultDlg, this](const StorageUser *user)
-                    {
-                        if (!Storage::instance()->isInitialized()) {
-                            Storage::instance()->initialize();
-                        }
+        disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
+        connect(
+            Storage::instance(),
+            &Storage::userChanged,
+            [newDataVaultDlg, this](const StorageUser *user)
+            {
+                if (!Storage::instance()->isInitialized()) {
+                    Storage::instance()->initialize();
+                }
 
-                        removeVaultInfo();
+                removeVaultInfo();
 
-                        addDataVault(newDataVaultDlg->vaultName(), user->filePath());
+                addDataVault(newDataVaultDlg->vaultName(), user->filePath());
 
-                        scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
-                        scrollAreaDataVaultsContentsLayout->update();
-                        scrollAreaDataVaultsContents->update();
-                        scrollAreaDataVaults->update();
-                    }
-                );
-
-                StorageUser storageUser;
-                storageUser.setPassword(storagePassword);
-                storageUser.setFilePath(storageFile);
-                Storage::instance()->setUser(&storageUser);
+                scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
+                scrollAreaDataVaultsContentsLayout->update();
+                scrollAreaDataVaultsContents->update();
+                scrollAreaDataVaults->update();
             }
-            newDataVaultDlg->deleteLater();
-        }
-    );
+        );
+
+        StorageUser storageUser;
+        storageUser.setPassword(storagePassword);
+        storageUser.setFilePath(storageFile);
+        Storage::instance()->setUser(&storageUser);
+    }
+    newDataVaultDlg->deleteLater();
 }
 
 void App::connectDataVaultItemForOpen(const DataVaultItem *item)
@@ -277,6 +276,7 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
         {
             disconnect(Storage::instance(), &Storage::errorOccurred, nullptr, nullptr);
             disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
+            disconnect(Storage::instance(), &Storage::accountReceived, nullptr, nullptr);
 
             connect(
                 Storage::instance(),
@@ -307,7 +307,22 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
                         return;
                     }
 
+                    connect(
+                        Storage::instance(),
+                        &Storage::accountReceived,
+                        [=](const AccountList &accounts)
+                        {
+                            if (accounts.isEmpty()) {
+                                const auto setupAssistant = new SetupAssistant(this);
+                                if (setupAssistant->exec() == SetupAssistant::Accepted) {
+
+                                }
+                            }
+                        }
+                    );
+
                     stackedWidgetMain->setCurrentIndex(1);
+                    Storage::instance()->receiveAccounts();
                 }
             );
 
