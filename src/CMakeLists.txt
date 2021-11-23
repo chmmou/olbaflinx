@@ -27,7 +27,6 @@ set(
         gwenhywfar::core
         gwenhywfar::gui-cpp
         gwenhywfar::gui-qt5
-        ${libchipcard-client_LIBRARIES}
 )
 
 set(
@@ -44,7 +43,6 @@ set(
         AQ_INCLUDES
         ${AQBANKING_INCLUDE_DIRS}
         ${GWENHYWFAR_INCLUDE_DIRS}
-        ${libchipcard-client_INCLUDE_DIRS}
 )
 
 include_directories(${AQ_INCLUDES})

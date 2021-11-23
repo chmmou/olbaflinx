@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checking out the code
@@ -21,6 +21,7 @@ jobs:
           path: olbaflinx
       - name: Install dependencies
         id: vars
+        shell: bash
         run: |
           echo ::set-output name=short_ref::${GITHUB_REF#refs/*/}
           sudo apt-get -qq update
@@ -64,7 +65,8 @@ jobs:
             doxygen \
             git \
             cmake \
-            ninja-build
+            ninja-build \
+            pkgconf
           sudo apt-get remove -y -qq gcc g++
           sudo apt install -y -qq gcc-9 g++-9
           sudo ln -s /usr/bin/g++-9 /usr/bin/g++
@@ -73,8 +75,8 @@ jobs:
         id: cache-qt
         uses: actions/cache@v1
         with:
-          path: ../Qt
-          key: ${{ runner.os }}-QtCache
+          path: ${{ github.workspace }}/../Qt5
+          key: ${{ runner.os }}-QtCache-v1
       - name: Install Qt
         uses: jurplel/install-qt-action@v2.14.0
         env:
@@ -84,66 +86,78 @@ jobs:
           version: 5.15.2
           target: desktop
           host: linux
+          dir: ${{ github.workspace }}/../Qt
+          set-env: true
           install-deps: true
           modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
           cached: ${{ steps.cache-qt.outputs.cache-hit }}
       - name: Install Qt SQL Cipher for Qt 5.15
         shell: bash
         run: |
+          rm -rf qsqlcipher-qt5
           git clone https://github.com/sjemens/qsqlcipher-qt5.git
           cd qsqlcipher-qt5
           git checkout v5.15-3
-          mkdir -p build && cd build
+          mkdir -p build
+          cd build
           qmake -recursive ../qsqlcipher.pro
           make
           make install
-          cd ..
+          cd ../..
           rm -rf qsqlcipher-qt5
       - name: Cache additional dependencies
         id: cache-additional-dependencies
         uses: actions/cache@v2
         with:
-          path: ~/.additional-dependencies
-          key: ${{ runner.os }}-additional-dependencies-cache-v1
+          path: ${{ github.workspace }}/../additional-dependencies
+          key: ${{ runner.os }}-additional-dependencies-cache-v3
       - name: Installing additional dependencies
         if: steps.cache-additional-dependencies.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          wget -c "https://www.aquamaniac.de/rdm/attachments/download/390/gwenhywfar-5.7.3.tar.gz"
-          tar -xzf gwenhywfar-5.7.3.tar.gz
-          cd gwenhywfar-5.7.3
-          ./configure --prefix=$HOME/.additional-dependencies --with-guis="qt5"
+          export AQ_INSTALL_PREFIX="$GITHUB_WORKSPACE/../additional-dependencies"
+          rm -rf gwenhywfar
+          git clone --recursive https://github.com/aqbanking/gwenhywfar.git gwenhywfar
+          cd gwenhywfar
+          git checkout 5.7.3
+          make -f Makefile.cvs
+          ./configure --prefix=$AQ_INSTALL_PREFIX --with-guis="qt5"
           make -j$(nproc) all
           make install
           cd ..
-          rm -rf gwenhywfar-5.7.3.tar.gz gwenhywfar-5.7.3
-          export PATH="$PATH:$HOME/.additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
-          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
-          wget -c "https://www.aquamaniac.de/rdm/attachments/download/386/aqbanking-6.3.2.tar.gz"
-          tar -xzf aqbanking-6.3.2.tar.gz
-          cd aqbanking-6.3.2
-          ./configure --prefix=$HOME/.additional-dependencies
+          rm -rf gwenhywfar
+          export PATH="$PATH:$GITHUB_WORKSPACE/../additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib"
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib/pkgconfig"
+          rm -rf libchipcard
+          git clone --recursive https://github.com/aqbanking/libchipcard.git libchipcard
+          cd libchipcard
+          git checkout 5.1.6
+          make -f Makefile.cvs
+          ./configure --prefix=$AQ_INSTALL_PREFIX
+          make -j$(nproc) all
+          make install
+          cd ..
+          rm -rf libchipcard
+          rm -rf aqbanking
+          git clone --recursive https://github.com/aqbanking/aqbanking.git aqbanking
+          cd aqbanking
+          git checkout 6.3.2
+          make -f Makefile.cvs
+          ./configure --prefix=$AQ_INSTALL_PREFIX
           make typedefs
           make types
           make -j$(nproc) all
           make install
           cd ..
-          rm -rf aqbanking-6.3.2.tar.gz aqbanking-6.3.2
-          wget -c "https://www.aquamaniac.de/rdm/attachments/download/382/libchipcard-5.1.6.tar.gz"
-          tar -xzf libchipcard-5.1.6.tar.gz
-          cd libchipcard-5.1.6
-          ./configure --prefix=$HOME/.additional-dependencies
-          make -j$(nproc) all
-          make install
-          cd ..
-          rm -rf libchipcard-5.1.6.tar.gz libchipcard-5.1.6
+          rm -rf aqbanking
+          rm -rf ktoblzcheck
           git clone https://git.code.sf.net/p/ktoblzcheck/code ktoblzcheck
           cd  ktoblzcheck
           git checkout 1.53
           mkdir cbuild
           cd cbuild
-          cmake -DCMAKE_INSTALL_PREFIX=$HOME/.additional-dependencies -DENABLE_BANKDATA_DOWNLOAD=ON -DBUILD_STATIC=OFF ..
+          cmake -DCMAKE_INSTALL_PREFIX=$AQ_INSTALL_PREFIX -DENABLE_BANKDATA_DOWNLOAD=ON -DBUILD_STATIC=OFF ..
           make -j$(nproc) all
           make install
           cd ../..
@@ -153,9 +167,9 @@ jobs:
           CTEST_OUTPUT_ON_FAILURE: 1
         shell: bash
         run: |
-          export PATH="$PATH:$HOME/.additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.additional-dependencies/lib"
-          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$HOME/.additional-dependencies/lib/pkgconfig"
+          export PATH="$PATH:$GITHUB_WORKSPACE/../additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib"
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib/pkgconfig"
           cd $GITHUB_WORKSPACE/olbaflinx
           mkdir cbuild
           cd cbuild

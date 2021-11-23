@@ -12,12 +12,8 @@ set(EXECUTABLE_OUTPUT_PATH "bin/")
 
 option(BUILD_TESTS "Build test" OFF)
 
-find_package(PkgConfig)
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
-
-# libchipcard use the PkgConfig
-pkg_check_modules(libchipcard-client REQUIRED IMPORTED_TARGET libchipcard-client>=${LIBCHIPCARD_MIN_VERSION})
 
 # Check if we have the required Qt5 plugin installed
 message(STATUS "Checking for qsqlcipher >= ${QT5_MIN_VERSION}")
