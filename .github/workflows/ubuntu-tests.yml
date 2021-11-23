@@ -75,8 +75,8 @@ jobs:
         id: cache-qt
         uses: actions/cache@v1
         with:
-          path: ${{ github.workspace }}/../Qt5
-          key: ${{ runner.os }}-QtCache-v1
+          path: ${{ github.workspace }}/.Qt5
+          key: ${{ runner.os }}-QtCache-v2
       - name: Install Qt
         uses: jurplel/install-qt-action@v2.14.0
         env:
@@ -86,7 +86,7 @@ jobs:
           version: 5.15.2
           target: desktop
           host: linux
-          dir: ${{ github.workspace }}/../Qt
+          dir: ${{ github.workspace }}/.Qt5
           set-env: true
           install-deps: true
           modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
@@ -109,13 +109,13 @@ jobs:
         id: cache-additional-dependencies
         uses: actions/cache@v2
         with:
-          path: ${{ github.workspace }}/../additional-dependencies
-          key: ${{ runner.os }}-additional-dependencies-cache-v3
+          path: ${{ github.workspace }}/.additional-dependencies
+          key: ${{ runner.os }}-additional-dependencies-cache-v4
       - name: Installing additional dependencies
         if: steps.cache-additional-dependencies.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          export AQ_INSTALL_PREFIX="$GITHUB_WORKSPACE/../additional-dependencies"
+          export AQ_INSTALL_PREFIX="$GITHUB_WORKSPACE/.additional-dependencies"
           rm -rf gwenhywfar
           git clone --recursive https://github.com/aqbanking/gwenhywfar.git gwenhywfar
           cd gwenhywfar
@@ -126,9 +126,9 @@ jobs:
           make install
           cd ..
           rm -rf gwenhywfar
-          export PATH="$PATH:$GITHUB_WORKSPACE/../additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib"
-          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib/pkgconfig"
+          export PATH="$PATH:$GITHUB_WORKSPACE/.additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib"
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib/pkgconfig"
           rm -rf libchipcard
           git clone --recursive https://github.com/aqbanking/libchipcard.git libchipcard
           cd libchipcard
@@ -167,12 +167,12 @@ jobs:
           CTEST_OUTPUT_ON_FAILURE: 1
         shell: bash
         run: |
-          export PATH="$PATH:$GITHUB_WORKSPACE/../additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib"
-          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/../additional-dependencies/lib/pkgconfig"
+          export PATH="$PATH:$GITHUB_WORKSPACE/.additional-dependencies/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib"
+          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib/pkgconfig"
           cd $GITHUB_WORKSPACE/olbaflinx
           mkdir cbuild
           cd cbuild
-          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON $GITHUB_WORKSPACE/olbaflinx
+          cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_TESTS=ON $GITHUB_WORKSPACE/olbaflinx
           make -j$(nproc) all
-          ctest --extra-verbose --rerun-failed --output-on-failure
+          ctest --rerun-failed --output-on-failure
