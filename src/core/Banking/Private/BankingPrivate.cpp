@@ -191,7 +191,7 @@ void BankingPrivate::receiveAccounts()
     }
 
     quint32 totalAccounts = AB_AccountSpec_List_GetCount(accountSpecList);
-    if (totalAccounts < 1) {
+    if (totalAccounts == 0) {
         Q_EMIT q_ptr->accountsReceived(accountList);
         return;
     }

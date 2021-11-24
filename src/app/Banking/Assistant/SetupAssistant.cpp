@@ -14,7 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 #include "SetupAssistant.h"
 
 #include "core/Banking/Banking.h"
@@ -23,25 +22,17 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::app::banking::assistant;
 
 SetupAssistant::SetupAssistant(QWidget *parent)
-    : QWizard(parent),
-      mWizardPages({})
+    : QWizard(parent)
 {
     setupUi(this);
 
     verticalSpacerOptionPage->changeSize(1, 1, QSizePolicy::Fixed, QSizePolicy::Fixed);
-    optionPage->layout()->update();
 
-    auto configWidget = Banking::instance()->createSetupDialog(this);
-    optionPage->layout()->setContentsMargins(QMargins(0, 0, 0, 0));
-    optionPage->layout()->addWidget(configWidget);
-
-    mWizardPages << welcomePage << optionPage;
+    optionPage->initialize();
 }
 
 SetupAssistant::~SetupAssistant()
 {
-    qDeleteAll(mWizardPages);
-    mWizardPages.clear();
 }
 
 void SetupAssistant::closeEvent(QCloseEvent *event)
@@ -55,4 +46,3 @@ void SetupAssistant::done(int result)
     Banking::instance()->finalizeSetupDialog();
     QWizard::done(result);
 }
-

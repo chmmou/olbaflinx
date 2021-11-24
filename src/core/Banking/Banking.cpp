@@ -39,7 +39,7 @@ bool Banking::initialize(const QString &name, const QString &key, const QString 
     return d_ptr->initializeAqBanking(name, key, version);
 }
 
-void Banking::deInitialize() const
+void Banking::deInitialize()
 {
     d_ptr->finalizeAqBanking();
 }

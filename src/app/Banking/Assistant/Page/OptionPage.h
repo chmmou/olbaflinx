@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
+ * Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,30 +14,33 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#ifndef OLBAFLINX_SETUPASSISTANT_H
-#define OLBAFLINX_SETUPASSISTANT_H
 
-#include <QtCore/QList>
-#include <QtWidgets/QWizard>
+#ifndef OLBAFLINX_OPTIONPAGE_H
+#define OLBAFLINX_OPTIONPAGE_H
 
-#include "ui_SetupAssistant.h"
+#include <QtWidgets/QWizardPage>
 
-namespace olbaflinx::app::banking::assistant
+#include "core/Container.h"
+
+using namespace olbaflinx::core;
+
+namespace olbaflinx::app::banking::assistant::page
 {
 
-class SetupAssistant: public QWizard, private Ui::UiSetupAssistant
+class OptionPage : public QWizardPage
 {
     Q_OBJECT
 
 public:
-    explicit SetupAssistant(QWidget *parent = nullptr);
-    ~SetupAssistant() override;
+    explicit OptionPage(QWidget *parent = nullptr);
+    ~OptionPage() override;
 
-protected:
-    void closeEvent(QCloseEvent *event) override;
-    void done(int result) override;
+    void initialize();
+    bool isComplete() const override;
+
+private Q_SLOTS:
+    void checkForAccounts(const AccountIds &accountIds);
 };
 
-} // olbaflinx::app::banking
-
-#endif // OLBAFLINX_SETUPASSISTANT_H
+}
+#endif // OLBAFLINX_OPTIONPAGE_H

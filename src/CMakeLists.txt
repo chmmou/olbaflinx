@@ -79,6 +79,7 @@ file(
         ${APP_DIR}/app/Components/*.cpp
         ${APP_DIR}/app/Banking/*.cpp
         ${APP_DIR}/app/Banking/Assistant/*.cpp
+        ${APP_DIR}/app/Banking/Assistant/Page/*.cpp
         ${APP_DIR}/app/DataVault/*.cpp
 )
 file(
@@ -94,7 +95,8 @@ file(
         ${APP_DIR}/app/*.h
         ${APP_DIR}/app/Components/*.h
         ${APP_DIR}/app/Banking/*.h
-        ${APP_DIR}/app/BankingAssistant/*.h
+        ${APP_DIR}/app/Banking/Assistant/*.h
+        ${APP_DIR}/app/Banking/Assistant/Page/*.h
         ${APP_DIR}/app/DataVault/*.h
 )
 include_directories(${APP_DIR})
@@ -102,6 +104,8 @@ include_directories(${APP_DIR}/core)
 include_directories(${APP_DIR}/app)
 include_directories(${APP_DIR}/app/Components)
 include_directories(${APP_DIR}/app/Banking)
+include_directories(${APP_DIR}/app/Banking/Assistant)
+include_directories(${APP_DIR}/app/Banking/Assistant/Page)
 include_directories(${APP_DIR}/app/DataVault)
 
 set(APP_UI_DIR ${APP_DIR}/uis)

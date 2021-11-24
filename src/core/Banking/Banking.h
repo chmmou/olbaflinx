@@ -43,12 +43,14 @@ public:
         const QString &key,
         const QString &version
     ) const;
-    void deInitialize() const;
+    void deInitialize();
 
     [[nodiscard]] QWidget *createSetupDialog(QWidget *widget) const;
     void finalizeSetupDialog();
 
     [[nodiscard]] Account *account(quint32 uniqueId) const;
+
+public Q_SLOTS:
     void receiveAccounts();
     void receiveAccountIds();
 
