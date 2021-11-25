@@ -17,8 +17,10 @@
 #include "SetupAssistant.h"
 
 #include "core/Banking/Banking.h"
+#include "core/Storage/Storage.h"
 
 using namespace olbaflinx::core::banking;
+using namespace olbaflinx::core::storage;
 using namespace olbaflinx::app::banking::assistant;
 
 SetupAssistant::SetupAssistant(QWidget *parent)
@@ -31,9 +33,7 @@ SetupAssistant::SetupAssistant(QWidget *parent)
     optionPage->initialize();
 }
 
-SetupAssistant::~SetupAssistant()
-{
-}
+SetupAssistant::~SetupAssistant() = default;
 
 void SetupAssistant::closeEvent(QCloseEvent *event)
 {
@@ -44,5 +44,15 @@ void SetupAssistant::closeEvent(QCloseEvent *event)
 void SetupAssistant::done(int result)
 {
     Banking::instance()->finalizeSetupDialog();
+
+    connect(
+        Banking::instance(),
+        &Banking::accountsReceived,
+        Storage::instance(),
+        &Storage::storeAccounts
+    );
+
+    Banking::instance()->receiveAccounts();
+
     QWizard::done(result);
 }

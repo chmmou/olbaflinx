@@ -20,9 +20,9 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 
-#include "Storage/Storage.h"
-
 #include "StoragePrivate.h"
+
+#include "core/Storage/Storage.h"
 
 using namespace olbaflinx::core::storage;
 
@@ -231,7 +231,7 @@ QMap<QString, QVariant> StoragePrivate::queryToAccountMap(const QSqlQuery &query
     return map;
 }
 
-void StoragePrivate::prepareAccountQuery(QSqlQuery &preparedQuery, const Account *account)
+void StoragePrivate::accountToQuery(const Account *account, QSqlQuery &preparedQuery)
 {
     preparedQuery.bindValue(":type", account->type());
     preparedQuery.bindValue(":unique_id", account->uniqueId());
@@ -252,8 +252,5 @@ void StoragePrivate::prepareAccountQuery(QSqlQuery &preparedQuery, const Account
 
 StorageUser *StoragePrivate::storageUser() const
 {
-    qDebug() << "mStorageUser pointer is null: " << mStorageUser.isNull();
-
     return mStorageUser;
 }
-

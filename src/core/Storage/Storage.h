@@ -65,16 +65,18 @@ public:
     QString storagePath() const;
     bool changePassword(const QString &oldPassword, const QString &newPassword);
 
-    void receiveAccount(quint32 accountId);
-    void receiveAccounts();
-    [[nodiscard]] bool storeAccounts(const AccountList &accounts);
-
     void storeSetting(const QString &key, const QVariant &value, const QString &group = QString());
     QVariant setting(
         const QString &key,
         const QString &group = QString(),
         const QVariant &defaultValue = QVariant()
     ) const;
+
+    void receiveAccount(quint32 accountId);
+
+public Q_SLOTS:
+    void receiveAccounts();
+    void storeAccounts(const AccountList &accounts);
 
 Q_SIGNALS:
     void userChanged(const StorageUser *storageUser);

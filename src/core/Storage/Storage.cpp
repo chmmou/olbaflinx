@@ -304,14 +304,14 @@ void Storage::receiveAccounts()
     accounts.clear();
 }
 
-bool Storage::storeAccounts(const AccountList &accounts)
+void Storage::storeAccounts(const AccountList &accounts)
 {
     if (accounts.empty()) {
         Q_EMIT errorOccurred(
             tr("Given accounts can't be empty"),
             Storage::AccountError
         );
-        return false;
+        return;
     }
 
     auto conn = d_ptr->storageConnection();
@@ -322,14 +322,13 @@ bool Storage::storeAccounts(const AccountList &accounts)
     bool success = true;
     for (const auto account: qAsConst(accounts)) {
         dbQuery.prepare(
-            "INSERT INTO accounts (type, unique_id, backend_name, owner_name, account_name, currency, memo, iban, bic, country, bank_code, bank_name, branch_id, account_number, sub_account_number) "
+            "REPLACE INTO accounts (type, unique_id, backend_name, owner_name, account_name, currency, memo, iban, bic, country, bank_code, bank_name, branch_id, account_number, sub_account_number) "
             "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, :currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, :branch_id, :account_number, :sub_account_number);"
         );
-        d_ptr->prepareAccountQuery(dbQuery, account);
-        success &= dbQuery.exec();
+        d_ptr->accountToQuery(account, dbQuery);
+        dbQuery.exec();
+        dbQuery.finish();
     }
-
-    return success;
 }
 
 void Storage::storeSetting(const QString &key, const QVariant &value, const QString &group)

@@ -25,8 +25,8 @@
 
 #include <QtSql/QSqlQuery>
 
-#include "Container.h"
-#include "Storage/Connection/StorageConnection.h"
+#include "core/Container.h"
+#include "core/Storage/Connection/StorageConnection.h"
 
 namespace olbaflinx::core::storage
 {
@@ -59,7 +59,7 @@ public:
     ) const;
 
     [[nodiscard]] QMap<QString, QVariant> queryToAccountMap(const QSqlQuery &query) const;
-    void prepareAccountQuery(QSqlQuery &preparedQuery, const Account *account);
+    void accountToQuery(const Account *account, QSqlQuery &preparedQuery);
 
     [[nodiscard]] StorageUser *storageUser() const;
 

@@ -313,10 +313,9 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
                         [=](const AccountList &accounts)
                         {
                             if (accounts.isEmpty()) {
-                                const auto setupAssistant = new SetupAssistant(this);
-                                if (setupAssistant->exec() == SetupAssistant::Accepted) {
-
-                                }
+                                const auto setupAssistant = new SetupAssistant();
+                                setupAssistant->exec();
+                                setupAssistant->deleteLater();
                             }
                         }
                     );
