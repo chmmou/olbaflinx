@@ -31,8 +31,7 @@ using namespace datavault;
 
 class App: public QMainWindow, private Ui::UiOlbaFlinx
 {
-
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit App(QWidget *parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());

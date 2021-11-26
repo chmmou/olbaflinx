@@ -56,11 +56,10 @@ void OptionPage::initialize()
     connect(accountTimer, &QTimer::timeout, Banking::instance(), &Banking::receiveAccountIds);
 
     accountTimerThread = new QThread(this);
-    accountTimer->moveToThread(accountTimerThread);
-
     connect(accountTimerThread, &QThread::finished, accountTimer, &QTimer::stop);
     connect(accountTimerThread, &QThread::started, accountTimer, qOverload<>(&QTimer::start));
 
+    accountTimer->moveToThread(accountTimerThread);
     accountTimerThread->start();
 }
 
@@ -75,7 +74,6 @@ void OptionPage::checkForAccounts(const AccountIds &accountIds)
     if (isOptionPageComplete) {
         accountTimerThread->quit();
         accountTimerThread->wait();
-        accountTimer->stop();
         Q_EMIT completeChanged();
     }
 }

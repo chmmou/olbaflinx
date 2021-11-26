@@ -45,11 +45,8 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage::account;
 
 GWEN_GUI *gwenGui;
-
 GWEN_DIALOG *gwenSetupDialog;
-
 QT5_Gui *qtGui;
-
 AB_BANKING *abBanking;
 
 BankingPrivate::BankingPrivate(Banking *banking)
@@ -93,21 +90,11 @@ bool BankingPrivate::initializeAqBanking(
     const QByteArray local8BitName = name.toLocal8Bit();
     abBanking = AB_Banking_new(local8BitName.data(), nullptr, 0);
 
-    const char *fintsRegistrationKey = AB_Banking_RuntimeConfig_GetCharValue(
-        abBanking,
-        "fintsRegistrationKey",
-        nullptr
-    );
-
-    if (fintsRegistrationKey == nullptr) {
-        const QByteArray local8BitKey = key.toLocal8Bit();
-        fintsRegistrationKey = local8BitKey.data();
-    }
-
+    const QByteArray local8BitKey = key.toLocal8Bit();
     AB_Banking_RuntimeConfig_SetCharValue(
         abBanking,
         "fintsRegistrationKey",
-        fintsRegistrationKey
+        local8BitKey.data()
     );
 
     const QByteArray local8BitVersion = version.toLocal8Bit();
@@ -201,6 +188,7 @@ void BankingPrivate::receiveAccounts()
     while ((accountSpec = AB_AccountSpec_List_First(accountSpecList))) {
         AB_AccountSpec_List_Del(accountSpec);
         accountList.push_back(new Account(accountSpec));
+
 
         currentAccount = accountList.size() / totalAccounts * 100;
         Q_EMIT q_ptr->progressStatus(currentAccount, totalAccounts);

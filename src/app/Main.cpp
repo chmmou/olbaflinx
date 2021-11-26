@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 #endif
 
     SingleApplication::setApplicationName("OlbaFlinx");
-    SingleApplication::setApplicationVersion("1.0.0");
+    SingleApplication::setApplicationVersion("1.0");
     SingleApplication::setOrganizationName("de.chm-projects.olbaflinx");
     SingleApplication::setOrganizationDomain("https://olbaflinx.chm-projects.de");
 

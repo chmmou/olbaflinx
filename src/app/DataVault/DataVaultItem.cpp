@@ -76,7 +76,7 @@ void DataVaultItem::showMenu()
 
     connect(buttonMenu, &QMenu::aboutToHide, buttonMenu, &QMenu::deleteLater);
 
-    // Retrieve a valid width of the menu. (It's not the same as using "pMenu->width()"!)
+    // Retrieve a valid width of the menu. (It's not the same as using "buttonMenu->width()"!)
     const int menuWidth = buttonMenu->sizeHint().width();
     const int x = pushButtonDataVaultMenu->width() - menuWidth;
     const int y = pushButtonDataVaultMenu->height();

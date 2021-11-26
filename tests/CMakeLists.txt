@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.17 FATAL_ERROR)
 project(OlbaFlinxTests LANGUAGES CXX)
 
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Test Core Sql REQUIRED)

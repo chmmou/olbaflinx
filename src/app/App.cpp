@@ -45,11 +45,8 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage;
 
 QLabel *vaultInfoLabel = nullptr;
-
 QSpacerItem *scrollAreaSpacerTop = nullptr;
-
 QSpacerItem *scrollAreaSpacerBottom = nullptr;
-
 QVBoxLayout *scrollAreaDataVaultsContentsLayout = nullptr;
 
 App::App(QWidget *parent, Qt::WindowFlags flags)
@@ -64,10 +61,9 @@ void App::initialize()
 {
     stackedWidgetMain->setCurrentIndex(0);
 
-    // ToDo Alexander Saal: Add own FinTS registration key
     bool initialized = Banking::instance()->initialize(
         SingleApplication::applicationName(),
-        "1", // ToDo Alexander Saal: FinTS product registration: Status => Pending
+        "3E1B97FF72A24783EC2215B12",
         SingleApplication::applicationVersion()
     );
 
@@ -84,7 +80,7 @@ void App::initialize()
 void App::closeEvent(QCloseEvent *event)
 {
     Banking::instance()->deInitialize();
-    QWidget::closeEvent(event);
+    QMainWindow::closeEvent(event);
 }
 
 void App::setupDataVault()
@@ -312,11 +308,14 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
                         &Storage::accountReceived,
                         [=](const AccountList &accounts)
                         {
-                            if (accounts.isEmpty()) {
-                                const auto setupAssistant = new SetupAssistant();
-                                setupAssistant->exec();
-                                setupAssistant->deleteLater();
+                            if (!accounts.isEmpty()) {
+                                treeWidgetAccounts->setAccounts(accounts);
+                                return;
                             }
+
+                            const auto setupAssistant = new SetupAssistant();
+                            setupAssistant->exec();
+                            setupAssistant->deleteLater();
                         }
                     );
 

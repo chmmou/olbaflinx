@@ -14,6 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <QtGui/QPixmap>
+
 #include "SetupAssistant.h"
 
 #include "core/Banking/Banking.h"
@@ -28,12 +30,27 @@ SetupAssistant::SetupAssistant(QWidget *parent)
 {
     setupUi(this);
 
+    setWizardStyle(QWizard::ModernStyle);
+
+    QPixmap logoPixmap(":/app/olbaflinx-logo");
+    logoPixmap = logoPixmap.scaled(
+        64,
+        64,
+        Qt::KeepAspectRatio,
+        Qt::SmoothTransformation
+    );
+
+    setPixmap(QWizard::LogoPixmap, logoPixmap);
+
     verticalSpacerOptionPage->changeSize(1, 1, QSizePolicy::Fixed, QSizePolicy::Fixed);
 
     optionPage->initialize();
 }
 
-SetupAssistant::~SetupAssistant() = default;
+SetupAssistant::~SetupAssistant()
+{
+    Banking::instance()->finalizeSetupDialog();
+}
 
 void SetupAssistant::closeEvent(QCloseEvent *event)
 {

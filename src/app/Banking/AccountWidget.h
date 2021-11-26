@@ -20,6 +20,10 @@
 
 #include <QtWidgets/QTreeWidget>
 
+#include "core/Container.h"
+
+using namespace olbaflinx::core;
+
 namespace olbaflinx::app::banking
 {
 
@@ -31,6 +35,8 @@ Q_OBJECT
 public:
     explicit AccountWidget(QWidget *parent = nullptr);
     ~AccountWidget() override;
+
+    void setAccounts(const AccountList &accounts);
 
 Q_SIGNALS:
 

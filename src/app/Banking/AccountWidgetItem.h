@@ -34,20 +34,17 @@ public:
     explicit AccountWidgetItem(QWidget *parent = nullptr);
     ~AccountWidgetItem() override;
 
-    void setAccountId(quint32 accountId);
-    [[nodiscard]] quint32 accountId() const;
+    void setId(quint32 accountId);
+    [[nodiscard]] quint32 id() const;
 
-    void setAccountName(const QString &accountName);
-    void setAccountType(const QString &accountType);
-    void setAccountImage(const QPixmap &accountImage);
+    void setName(const QString &accountName);
+    void setType(const QString &accountType);
+    void setBalance(const QString &accountType);
+    void setImage(const QPixmap &accountImage);
 
 
 private:
     quint32 mAccountId;
-    QString mAccountName;
-    QString mAccountType;
-    QPixmap mAccountImage;
-
 };
 
 } // olbflinx::app::banking

@@ -21,37 +21,34 @@ using namespace olbaflinx::app::banking;
 
 AccountWidgetItem::AccountWidgetItem(QWidget *parent)
     : QWidget(parent),
-      mAccountId(0),
-      mAccountName(""),
-      mAccountType(""),
-      mAccountImage(QPixmap())
+      mAccountId(0)
 {
     setupUi(this);
 }
 
 AccountWidgetItem::~AccountWidgetItem() = default;
 
-void AccountWidgetItem::setAccountId(quint32 accountId)
+void AccountWidgetItem::setId(quint32 accountId)
 {
     mAccountId = accountId;
 }
 
-quint32 AccountWidgetItem::accountId() const
+quint32 AccountWidgetItem::id() const
 {
     return mAccountId;
 }
 
-void AccountWidgetItem::setAccountName(const QString &accountName)
+void AccountWidgetItem::setName(const QString &accountName)
 {
-    mAccountName = accountName;
+    labelName->setText(accountName);
 }
 
-void AccountWidgetItem::setAccountType(const QString &accountType)
+void AccountWidgetItem::setType(const QString &accountType)
 {
-    mAccountType = accountType;
+    labelType->setText(accountType);
 }
 
-void AccountWidgetItem::setAccountImage(const QPixmap &accountImage)
+void AccountWidgetItem::setImage(const QPixmap &accountImage)
 {
-    mAccountImage = accountImage;
+    labelLogo->setPixmap(accountImage);
 }
