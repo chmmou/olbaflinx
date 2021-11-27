@@ -15,10 +15,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <QtGui/QPixmap>
+#include <QtWidgets/QMessageBox>
 
 #include "SetupAssistant.h"
 
 #include "core/Banking/Banking.h"
+#include "core/Container.h"
 #include "core/Storage/Storage.h"
 
 using namespace olbaflinx::core::banking;
@@ -39,37 +41,34 @@ SetupAssistant::SetupAssistant(QWidget *parent)
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation
     );
-
     setPixmap(QWizard::LogoPixmap, logoPixmap);
-
-    verticalSpacerOptionPage->changeSize(1, 1, QSizePolicy::Fixed, QSizePolicy::Fixed);
 
     optionPage->initialize();
 }
 
-SetupAssistant::~SetupAssistant()
-{
-    Banking::instance()->finalizeSetupDialog();
-}
-
-void SetupAssistant::closeEvent(QCloseEvent *event)
-{
-    Banking::instance()->finalizeSetupDialog();
-    QDialog::closeEvent(event);
-}
+SetupAssistant::~SetupAssistant() = default;
 
 void SetupAssistant::done(int result)
 {
-    Banking::instance()->finalizeSetupDialog();
+    const auto accountIds = optionPage->selectedAccounts();
+    if (accountIds.isEmpty()) {
+        QMessageBox::critical(
+            this,
+            tr("Setup Assistant"),
+            tr("You have not yet selected any accounts to import!")
+        );
+        return;
+    }
 
-    connect(
-        Banking::instance(),
-        &Banking::accountsReceived,
-        Storage::instance(),
-        &Storage::storeAccounts
-    );
+    AccountList accounts = {};
+    for (const quint32 uniqueId: accountIds) {
+        accounts << Banking::instance()->account(uniqueId);
+    }
 
-    Banking::instance()->receiveAccounts();
+    Storage::instance()->storeAccounts(accounts);
+
+    qDeleteAll(accounts);
+    accounts.clear();
 
     QWizard::done(result);
 }

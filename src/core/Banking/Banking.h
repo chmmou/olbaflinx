@@ -45,8 +45,7 @@ public:
     ) const;
     void deInitialize();
 
-    [[nodiscard]] QWidget *createSetupDialog(QWidget *widget) const;
-    void finalizeSetupDialog();
+    int showSetupDialog(QWidget *widget) const;
 
     [[nodiscard]] Account *account(quint32 uniqueId) const;
 

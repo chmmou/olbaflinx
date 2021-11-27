@@ -16,7 +16,7 @@
  */
 #include <QtCore/QTimer>
 #include <QtCore/QThread>
-#include <QtWidgets/QLayout>
+#include <QtCore/QDebug>
 
 #include "core/Banking/Banking.h"
 
@@ -26,37 +26,37 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::app::banking::assistant::page;
 
 QTimer *accountTimer = nullptr;
+
 QThread *accountTimerThread = nullptr;
+
 bool isOptionPageComplete = false;
 
 OptionPage::OptionPage(QWidget *parent)
     : QWizardPage(parent)
-{}
+{
+    setupUi(this);
+}
 
 OptionPage::~OptionPage()
 {
-    delete accountTimer;
+    accountTimer->stop();
 
     accountTimerThread->quit();
     accountTimerThread->wait();
     accountTimerThread->deleteLater();
+
+    accountTimer->deleteLater();
 }
 
 void OptionPage::initialize()
 {
     connect(Banking::instance(), &Banking::accountIdsReceived, this, &OptionPage::checkForAccounts);
 
-    auto configWidget = Banking::instance()->createSetupDialog(this);
-
-    layout()->setContentsMargins(QMargins(0, 0, 0, 0));
-    layout()->addWidget(configWidget);
-
     accountTimer = new QTimer(nullptr);
     accountTimer->setInterval(750);
     connect(accountTimer, &QTimer::timeout, Banking::instance(), &Banking::receiveAccountIds);
 
     accountTimerThread = new QThread(this);
-    connect(accountTimerThread, &QThread::finished, accountTimer, &QTimer::stop);
     connect(accountTimerThread, &QThread::started, accountTimer, qOverload<>(&QTimer::start));
 
     accountTimer->moveToThread(accountTimerThread);
@@ -65,16 +65,61 @@ void OptionPage::initialize()
 
 bool OptionPage::isComplete() const
 {
-    return isOptionPageComplete;
+    return isOptionPageComplete && treeWidgetAccounts->topLevelItemCount() > 0;
+}
+
+AccountIds OptionPage::selectedAccounts() const
+{
+    AccountIds accountIds = {};
+    const auto selectedItems = treeWidgetAccounts->selectedItems();
+    for (const auto item: selectedItems) {
+        const quint32 id = item->data(0, Qt::UserRole).toUInt();
+        accountIds << id;
+        qDebug() << id;
+    }
+
+    return accountIds;
 }
 
 void OptionPage::checkForAccounts(const AccountIds &accountIds)
 {
     isOptionPageComplete = !accountIds.empty();
     if (isOptionPageComplete) {
+        accountTimer->stop();
         accountTimerThread->quit();
         accountTimerThread->wait();
-        Q_EMIT completeChanged();
     }
 }
 
+void OptionPage::showSetupDialog()
+{
+    int result = Banking::instance()->showSetupDialog(this);
+    if (result == 1) { // Ok
+        disconnect(Banking::instance(), &Banking::accountsReceived, nullptr, nullptr);
+        connect(
+            Banking::instance(),
+            &Banking::accountsReceived,
+            [=](const AccountList &accounts)
+            {
+                treeWidgetAccounts->clear();
+                for (const auto account: accounts) {
+                    if (account->isValid()) {
+                        const auto item = new QTreeWidgetItem;
+                        item->setText(0, account->toString());
+                        item->setData(
+                            0,
+                            Qt::UserRole,
+                            account->uniqueId()
+                        );
+                        treeWidgetAccounts->addTopLevelItem(item);
+
+                    }
+                }
+
+                Q_EMIT completeChanged();
+            }
+        );
+
+        Banking::instance()->receiveAccounts();
+    }
+}

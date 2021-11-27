@@ -16,22 +16,18 @@
  */
 
 #include <QtCore/QMetaType>
+#include <QtCore/QList>
 
 #include "Account.h"
 
 using namespace olbaflinx::core::storage::account;
 
-int metaDataTypeId = 0;
-
 Account::Account(const AB_ACCOUNT_SPEC *accountSpec)
     : abAccountSpec(AB_AccountSpec_dup(accountSpec))
-{
-    metaDataTypeId = qRegisterMetaType<olbaflinx::core::storage::account::Account *>();
-}
+{}
+
 Account::~Account()
 {
-    QMetaType::unregisterType(metaDataTypeId);
-
     if (abAccountSpec != nullptr) {
         AB_AccountSpec_free(abAccountSpec);
     }
@@ -174,6 +170,17 @@ bool Account::isValid() const
     return type() != AB_AccountType_Invalid && type() != AB_AccountType_Unspecified;
 }
 
+QString Account::toString() const
+{
+    return QString("%1: (%2 - %3 - %4) - %5").arg(
+        accountName(),
+        iban(),
+        bankCode(),
+        accountNumber(),
+        ownerName()
+    );
+}
+
 Account *Account::create(const QMap<QString, QVariant> &row)
 {
     auto accountSpec = AB_AccountSpec_new();
@@ -239,4 +246,3 @@ Account *Account::create(const QMap<QString, QVariant> &row)
 
     return account;
 }
-

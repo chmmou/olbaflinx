@@ -58,6 +58,7 @@ public:
         const AB_TRANSACTION_COMMAND &cmd
     ) const;
     [[nodiscard]] bool isValid() const;
+    [[nodiscard]] QString toString() const;
     [[nodiscard]] static Account *create(const QMap<QString, QVariant> &row);
 
 private:
@@ -67,5 +68,6 @@ private:
 }
 
 Q_DECLARE_METATYPE(olbaflinx::core::storage::account::Account *)
+Q_DECLARE_METATYPE(const olbaflinx::core::storage::account::Account *)
 
 #endif // OLBAFLINX_ACCOUNT_H

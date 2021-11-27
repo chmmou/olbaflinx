@@ -38,14 +38,14 @@ AccountWidget::~AccountWidget()
 
 void AccountWidget::setAccounts(const AccountList &accounts)
 {
-    for (const auto account : accounts) {
+    if (accounts.isEmpty()) {
+        return;
+    }
 
+    // ToDo Alexander Saal: Add AccountWidgetItem as item widget
+    for (const auto account: accounts) {
         const auto accountItem = new QTreeWidgetItem();
-        const auto accountWidget = new AccountWidgetItem;
-        accountWidget->setId(account->uniqueId());
-        accountWidget->setName(account->accountName());
-
+        accountItem->setText(0, account->toString());
         addTopLevelItem(accountItem);
-        setItemWidget(accountItem, 0, accountWidget);
     }
 }

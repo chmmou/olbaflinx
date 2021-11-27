@@ -45,8 +45,9 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage::account;
 
 GWEN_GUI *gwenGui;
-GWEN_DIALOG *gwenSetupDialog;
+
 QT5_Gui *qtGui;
+
 AB_BANKING *abBanking;
 
 BankingPrivate::BankingPrivate(Banking *banking)
@@ -56,7 +57,6 @@ BankingPrivate::BankingPrivate(Banking *banking)
 {
     qtGui = nullptr;
     gwenGui = nullptr;
-    gwenSetupDialog = nullptr;
     abBanking = nullptr;
 }
 
@@ -243,51 +243,23 @@ void BankingPrivate::receiveAccountIds()
     receiveAccounts();
 }
 
-QWidget *BankingPrivate::createSetupDialog(QWidget *parentWidget) const
+int BankingPrivate::showSetupDialog(QWidget *parentWidget) const
 {
     if (!mIsInitialized) {
-        return nullptr;
+        return AB_ERROR_NOT_INIT;
     }
 
     const auto qt5GuiParentWidget = qtGui->getParentWidget();
-    if (qt5GuiParentWidget == nullptr && parentWidget != nullptr)
+    if (qt5GuiParentWidget == nullptr && parentWidget != nullptr) {
         qtGui->pushParentWidget(parentWidget);
-    else
+    }
+    else if (qt5GuiParentWidget != nullptr) {
         qtGui->popParentWidget();
-
-    gwenSetupDialog = AB_Banking_CreateSetupDialog(abBanking);
-
-    const auto qt5Dlg = new QT5_GuiDialog(qtGui, gwenSetupDialog);
-    const bool success = qt5Dlg->setup(qApp->activeWindow());
-
-    // That's real pain. A hack to get the widget for embedding into another widget / dialog...
-    if (success) {
-        const auto qt5DlgBox = dynamic_cast<QT5_DialogBox *>(qt5Dlg->getMainWindow());
-        const QList<QPushButton *> buttons = qt5DlgBox->window()->findChildren<QPushButton *>();
-        for (const auto button: buttons) {
-            if (button->text() == "Close" || button->text() == "Help") {
-                button->setHidden(true);
-            }
-        }
-
-        // Qt 5 Doc says:
-        // QDialog and QMainWindow widgets are by default windows, even if a parent widget is
-        // specified in the constructor. This behavior is specified by the Qt::Window flag.
-        return qt5DlgBox->window();
     }
 
-    return nullptr;
-}
+    auto setupDialog = AB_Banking_CreateSetupDialog(abBanking);
+    int result = GWEN_Gui_ExecDialog(setupDialog, 0);
+    GWEN_Dialog_free(setupDialog);
 
-void BankingPrivate::finalizeSetupDialog()
-{
-    if (!mIsInitialized) {
-        return;
-    }
-
-    if (gwenSetupDialog != nullptr) {
-        GWEN_Dialog_EmitSignalToAll(gwenSetupDialog, GWEN_DialogEvent_TypeFini, "");
-        GWEN_Dialog_free(gwenSetupDialog);
-        gwenSetupDialog = nullptr;
-    }
+    return result;
 }

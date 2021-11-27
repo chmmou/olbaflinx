@@ -27,14 +27,13 @@ namespace olbaflinx::app::banking::assistant
 
 class SetupAssistant: public QWizard, private Ui::UiSetupAssistant
 {
-    Q_OBJECT
+Q_OBJECT
 
 public:
     explicit SetupAssistant(QWidget *parent = nullptr);
     ~SetupAssistant() override;
 
 protected:
-    void closeEvent(QCloseEvent *event) override;
     void done(int result) override;
 };
 

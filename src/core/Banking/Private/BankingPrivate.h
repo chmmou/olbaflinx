@@ -48,8 +48,7 @@ public:
     void receiveAccounts();
     void receiveAccountIds();
 
-    QWidget *createSetupDialog(QWidget *parentWidget) const;
-    void finalizeSetupDialog();
+    int showSetupDialog(QWidget *parentWidget) const;
 
 private:
     Banking *const q_ptr;

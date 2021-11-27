@@ -45,8 +45,11 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage;
 
 QLabel *vaultInfoLabel = nullptr;
+
 QSpacerItem *scrollAreaSpacerTop = nullptr;
+
 QSpacerItem *scrollAreaSpacerBottom = nullptr;
+
 QVBoxLayout *scrollAreaDataVaultsContentsLayout = nullptr;
 
 App::App(QWidget *parent, Qt::WindowFlags flags)
@@ -308,14 +311,13 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
                         &Storage::accountReceived,
                         [=](const AccountList &accounts)
                         {
-                            if (!accounts.isEmpty()) {
-                                treeWidgetAccounts->setAccounts(accounts);
-                                return;
+                            if (accounts.isEmpty()) {
+                                const auto setupAssistant = new SetupAssistant();
+                                setupAssistant->exec();
+                                setupAssistant->deleteLater();
                             }
 
-                            const auto setupAssistant = new SetupAssistant();
-                            setupAssistant->exec();
-                            setupAssistant->deleteLater();
+                            treeWidgetAccounts->setAccounts(accounts);
                         }
                     );
 

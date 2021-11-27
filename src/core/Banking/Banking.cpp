@@ -44,14 +44,9 @@ void Banking::deInitialize()
     d_ptr->finalizeAqBanking();
 }
 
-QWidget *Banking::createSetupDialog(QWidget *widget) const
+int Banking::showSetupDialog(QWidget *widget) const
 {
-    return d_ptr->createSetupDialog(widget);
-}
-
-void Banking::finalizeSetupDialog()
-{
-    return d_ptr->finalizeSetupDialog();
+    return d_ptr->showSetupDialog(widget);
 }
 
 Account *Banking::account(quint32 uniqueId) const

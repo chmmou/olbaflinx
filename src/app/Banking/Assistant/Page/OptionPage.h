@@ -20,6 +20,8 @@
 
 #include <QtWidgets/QWizardPage>
 
+#include "ui_OptionPage.h"
+
 #include "core/Container.h"
 
 using namespace olbaflinx::core;
@@ -27,9 +29,9 @@ using namespace olbaflinx::core;
 namespace olbaflinx::app::banking::assistant::page
 {
 
-class OptionPage : public QWizardPage
+class OptionPage: public QWizardPage, private Ui::UiOptionPage
 {
-    Q_OBJECT
+Q_OBJECT
 
 public:
     explicit OptionPage(QWidget *parent = nullptr);
@@ -38,8 +40,13 @@ public:
     void initialize();
     bool isComplete() const override;
 
+    [[nodiscard]] AccountIds selectedAccounts() const;
+
 private Q_SLOTS:
     void checkForAccounts(const AccountIds &accountIds);
+
+public Q_SLOTS:
+    void showSetupDialog();
 };
 
 }
