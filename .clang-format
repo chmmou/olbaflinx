@@ -10,8 +10,8 @@
 ---
 # Webkit style was loosely based on the Qt style
 BasedOnStyle: WebKit
-
-Standard: c++11
+Language: Cpp
+Standard: Cpp11
 
 # Column width is limited to 100 in accordance with Qt Coding Style.
 # https://wiki.qt.io/Qt_Coding_Style
@@ -36,6 +36,7 @@ BreakBeforeBinaryOperators: NonAssignment
 # Braces are usually attached, but not after functions or class declarations.
 BreakBeforeBraces: Custom
 BraceWrapping:
+    AfterCaseLabel: false
     AfterClass: true
     AfterControlStatement: Never
     AfterEnum: false
