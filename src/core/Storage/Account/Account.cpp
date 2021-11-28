@@ -185,60 +185,35 @@ Account *Account::create(const QMap<QString, QVariant> &row)
 {
     auto accountSpec = AB_AccountSpec_new();
 
+    const QString backendName = row["backendName"].toString();
+    const QString ownerName = row["ownerName"].toString();
+    const QString accountName = row["accountName"].toString();
+    const QString currency = row["currency"].toString();
+    const QString memo = row["memo"].toString();
+    const QString iban = row["iban"].toString();
+    const QString bic = row["bic"].toString();
+    const QString country = row["country"].toString();
+    const QString bankCode = row["bankCode"].toString();
+    const QString bankName = row["bankName"].toString();
+    const QString branchId = row["branchId"].toString();
+    const QString accountNumber = row["accountNumber"].toString();
+    const QString subAccountNumber = row["subAccountNumber"].toString();
+
     AB_AccountSpec_SetType(accountSpec, row["type"].toInt());
-    AB_AccountSpec_SetUniqueId(accountSpec, row["unique_id"].toInt());
-    AB_AccountSpec_SetBackendName(
-        accountSpec,
-        row["backend_name"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetOwnerName(
-        accountSpec,
-        row["owner_name"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetAccountName(
-        accountSpec,
-        row["account_name"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetCurrency(
-        accountSpec,
-        row["currency"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetMemo(
-        accountSpec,
-        row["memo"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetIban(
-        accountSpec,
-        row["iban"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetBic(
-        accountSpec,
-        row["bic"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetCountry(
-        accountSpec,
-        row["country"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetBankCode(
-        accountSpec,
-        row["bank_code"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetBankName(
-        accountSpec,
-        row["bank_name"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetBranchId(
-        accountSpec,
-        row["branch_id"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetAccountNumber(
-        accountSpec,
-        row["account_number"].toString().toLocal8Bit().constData()
-    );
-    AB_AccountSpec_SetSubAccountNumber(
-        accountSpec,
-        row["sub_account_number"].toString().toLocal8Bit().constData()
-    );
+    AB_AccountSpec_SetUniqueId(accountSpec, row["uniqueId"].toInt());
+    AB_AccountSpec_SetBackendName(accountSpec, backendName.toLocal8Bit().constData());
+    AB_AccountSpec_SetOwnerName(accountSpec, ownerName.toLocal8Bit().constData());
+    AB_AccountSpec_SetAccountName(accountSpec, accountName.toLocal8Bit().constData());
+    AB_AccountSpec_SetCurrency(accountSpec, currency.toLocal8Bit().constData());
+    AB_AccountSpec_SetMemo(accountSpec, memo.toLocal8Bit().constData());
+    AB_AccountSpec_SetIban(accountSpec, iban.toLocal8Bit().constData());
+    AB_AccountSpec_SetBic(accountSpec, bic.toLocal8Bit().constData());
+    AB_AccountSpec_SetCountry(accountSpec, country.toLocal8Bit().constData());
+    AB_AccountSpec_SetBankCode(accountSpec, bankCode.toLocal8Bit().constData());
+    AB_AccountSpec_SetBankName(accountSpec, bankName.toLocal8Bit().constData());
+    AB_AccountSpec_SetBranchId(accountSpec, branchId.toLocal8Bit().constData());
+    AB_AccountSpec_SetAccountNumber(accountSpec, accountNumber.toLocal8Bit().constData());
+    AB_AccountSpec_SetSubAccountNumber(accountSpec, subAccountNumber.toLocal8Bit().constData());
 
     const auto account = new Account(accountSpec);
 
