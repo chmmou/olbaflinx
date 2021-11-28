@@ -268,7 +268,7 @@ void Storage::receiveAccount(const quint32 accountId)
     AccountList accounts;
     accounts << Account::create(map);
 
-    Q_EMIT accountReceived(accounts);
+    Q_EMIT accountsReceived(accounts);
 
     qDeleteAll(accounts);
     accounts.clear();
@@ -298,7 +298,7 @@ void Storage::receiveAccounts()
     }
     dbQuery.finish();
 
-    Q_EMIT accountReceived(accounts);
+    Q_EMIT accountsReceived(accounts);
 
     qDeleteAll(accounts);
     accounts.clear();

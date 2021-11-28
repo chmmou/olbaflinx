@@ -14,7 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <QtCore/QDebug>
 #include <QtCore/QFileInfo>
 #include <QtGui/QKeySequence>
 #include <QtWidgets/QVBoxLayout>
@@ -275,7 +274,7 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
         {
             disconnect(Storage::instance(), &Storage::errorOccurred, nullptr, nullptr);
             disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
-            disconnect(Storage::instance(), &Storage::accountReceived, nullptr, nullptr);
+            disconnect(Storage::instance(), &Storage::accountsReceived, nullptr, nullptr);
 
             connect(
                 Storage::instance(),
@@ -308,7 +307,7 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
 
                     connect(
                         Storage::instance(),
-                        &Storage::accountReceived,
+                        &Storage::accountsReceived,
                         [=](const AccountList &accounts)
                         {
                             if (accounts.isEmpty()) {

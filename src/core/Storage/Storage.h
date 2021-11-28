@@ -81,7 +81,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     void userChanged(const StorageUser *storageUser);
     void errorOccurred(const QString &message, const Storage::ErrorType errorType);
-    void accountReceived(const AccountList &accounts);
+    void accountsReceived(const AccountList &accounts);
 
 private:
     QScopedPointer<StoragePrivate> const d_ptr;

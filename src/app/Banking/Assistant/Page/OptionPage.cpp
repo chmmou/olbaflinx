@@ -50,11 +50,11 @@ OptionPage::~OptionPage()
 
 void OptionPage::initialize()
 {
-    connect(Banking::instance(), &Banking::accountIdsReceived, this, &OptionPage::checkForAccounts);
+    connect(Banking::instance(), &Banking::accountsReceived, this, &OptionPage::checkForAccounts);
 
     accountTimer = new QTimer(nullptr);
     accountTimer->setInterval(750);
-    connect(accountTimer, &QTimer::timeout, Banking::instance(), &Banking::receiveAccountIds);
+    connect(accountTimer, &QTimer::timeout, Banking::instance(), &Banking::receiveAccounts);
 
     accountTimerThread = new QThread(this);
     connect(accountTimerThread, &QThread::started, accountTimer, qOverload<>(&QTimer::start));
@@ -81,13 +81,15 @@ AccountIds OptionPage::selectedAccounts() const
     return accountIds;
 }
 
-void OptionPage::checkForAccounts(const AccountIds &accountIds)
+void OptionPage::checkForAccounts(const AccountList &accounts)
 {
-    isOptionPageComplete = !accountIds.empty();
+    isOptionPageComplete = !accounts.empty();
     if (isOptionPageComplete) {
         accountTimer->stop();
         accountTimerThread->quit();
         accountTimerThread->wait();
+
+        setupAccounts(accounts);
     }
 }
 
@@ -95,31 +97,31 @@ void OptionPage::showSetupDialog()
 {
     int result = Banking::instance()->showSetupDialog(this);
     if (result == 1) { // Ok
-        disconnect(Banking::instance(), &Banking::accountsReceived, nullptr, nullptr);
-        connect(
-            Banking::instance(),
-            &Banking::accountsReceived,
-            [=](const AccountList &accounts)
-            {
-                treeWidgetAccounts->clear();
-                for (const auto account: accounts) {
-                    if (account->isValid()) {
-                        const auto item = new QTreeWidgetItem;
-                        item->setText(0, account->toString());
-                        item->setData(
-                            0,
-                            Qt::UserRole,
-                            account->uniqueId()
-                        );
-                        treeWidgetAccounts->addTopLevelItem(item);
-
-                    }
-                }
-
-                Q_EMIT completeChanged();
-            }
-        );
-
+        disconnect(Banking::instance(), &Banking::accountsReceived, this, nullptr);
+        connect(Banking::instance(), &Banking::accountsReceived, this, &OptionPage::setupAccounts);
         Banking::instance()->receiveAccounts();
     }
+}
+
+void OptionPage::setupAccounts(const AccountList &accounts)
+{
+    if (accounts.isEmpty()) {
+        return;
+    }
+
+    treeWidgetAccounts->clear();
+    for (const auto account: accounts) {
+        if (account->isValid()) {
+            const auto item = new QTreeWidgetItem;
+            item->setText(0, account->toString());
+            item->setData(
+                0,
+                Qt::UserRole,
+                account->uniqueId()
+            );
+            treeWidgetAccounts->addTopLevelItem(item);
+        }
+    }
+
+    Q_EMIT completeChanged();
 }

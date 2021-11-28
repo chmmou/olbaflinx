@@ -50,6 +50,11 @@ SetupAssistant::~SetupAssistant() = default;
 
 void SetupAssistant::done(int result)
 {
+    if (result == SetupAssistant::Rejected) {
+        QWizard::done(result);
+        return;
+    }
+
     const auto accountIds = optionPage->selectedAccounts();
     if (accountIds.isEmpty()) {
         QMessageBox::critical(

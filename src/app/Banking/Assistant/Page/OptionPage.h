@@ -28,7 +28,6 @@ using namespace olbaflinx::core;
 
 namespace olbaflinx::app::banking::assistant::page
 {
-
 class OptionPage: public QWizardPage, private Ui::UiOptionPage
 {
 Q_OBJECT
@@ -43,11 +42,12 @@ public:
     [[nodiscard]] AccountIds selectedAccounts() const;
 
 private Q_SLOTS:
-    void checkForAccounts(const AccountIds &accountIds);
+    void checkForAccounts(const AccountList &accounts);
+    void setupAccounts(const AccountList &accounts);
 
 public Q_SLOTS:
     void showSetupDialog();
 };
-
 }
+
 #endif // OLBAFLINX_OPTIONPAGE_H
