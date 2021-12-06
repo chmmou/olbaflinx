@@ -250,6 +250,11 @@ void StoragePrivate::accountToQuery(const Account *account, QSqlQuery &preparedQ
     preparedQuery.bindValue(":sub_account_number", account->subAccountNumber());
 }
 
+void StoragePrivate::transactionToQuery(const Transaction *transaction, QSqlQuery &preparedQuery)
+{
+
+}
+
 StorageUser *StoragePrivate::storageUser() const
 {
     return mStorageUser;

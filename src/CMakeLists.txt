@@ -75,9 +75,12 @@ file(
         ${APP_DIR}/core/Storage/Account/*.cpp
         ${APP_DIR}/core/Storage/Connection/*.cpp
         ${APP_DIR}/core/Storage/Private/*.cpp
+        ${APP_DIR}/core/Storage/Transaction/*.cpp
         ${APP_DIR}/app/*.cpp
         ${APP_DIR}/app/Components/*.cpp
+        ${APP_DIR}/app/Components/Sql/*.cpp
         ${APP_DIR}/app/Banking/*.cpp
+        ${APP_DIR}/app/Banking/Tabs/*.cpp
         ${APP_DIR}/app/Banking/Assistant/*.cpp
         ${APP_DIR}/app/Banking/Assistant/Page/*.cpp
         ${APP_DIR}/app/DataVault/*.cpp
@@ -92,18 +95,25 @@ file(
         ${APP_DIR}/core/Banking/Private/*.h
         ${APP_DIR}/core/Storage/Connection/*.h
         ${APP_DIR}/core/Storage/Private/*.h
+        ${APP_DIR}/core/Storage/Transaction/*.h
         ${APP_DIR}/app/*.h
         ${APP_DIR}/app/Components/*.h
+        ${APP_DIR}/app/Components/Sql/*.h
         ${APP_DIR}/app/Banking/*.h
+        ${APP_DIR}/app/Banking/Tabs/*.h
         ${APP_DIR}/app/Banking/Assistant/*.h
         ${APP_DIR}/app/Banking/Assistant/Page/*.h
         ${APP_DIR}/app/DataVault/*.h
 )
+
+# Include directories for include UIs
 include_directories(${APP_DIR})
 include_directories(${APP_DIR}/core)
 include_directories(${APP_DIR}/app)
 include_directories(${APP_DIR}/app/Components)
+include_directories(${APP_DIR}/app/Components/Sql)
 include_directories(${APP_DIR}/app/Banking)
+include_directories(${APP_DIR}/app/Banking/Tabs)
 include_directories(${APP_DIR}/app/Banking/Assistant)
 include_directories(${APP_DIR}/app/Banking/Assistant/Page)
 include_directories(${APP_DIR}/app/DataVault)

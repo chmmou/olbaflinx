@@ -54,6 +54,16 @@ FilterWidget::FilterWidget(QWidget *parent, Qt::WindowFlags f)
     cbxTimePeriod->addItem(tr("Year: Before last"), 2);
 }
 
+QDate FilterWidget::fromDate() const
+{
+    return dateEditFrom->date();
+}
+
+QDate FilterWidget::toDate() const
+{
+    return dateEditTo->date();
+}
+
 FilterWidget::~FilterWidget() = default;
 
 void FilterWidget::slotTimePeriodChanged(const int timePeriod)

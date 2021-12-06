@@ -77,6 +77,7 @@ public:
 public Q_SLOTS:
     void receiveAccounts();
     void storeAccounts(const AccountList &accounts);
+    void storeTransactions(const TransactionList &transactions);
 
 Q_SIGNALS:
     void userChanged(const StorageUser *storageUser);

@@ -32,6 +32,9 @@ public:
     explicit FilterWidget(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
     ~FilterWidget() override;
 
+    QDate fromDate() const;
+    QDate toDate() const;
+
 Q_SIGNALS:
     void dateTimePeriodChanged(const QDate &from, const QDate &to);
     void dateChanged(const QDate &date);

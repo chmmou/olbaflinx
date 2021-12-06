@@ -39,6 +39,7 @@ public:
     void setAccounts(const AccountList &accounts);
 
 Q_SIGNALS:
+    void accountChanged(const quint32 accountId);
 
 private Q_SLOTS:
 

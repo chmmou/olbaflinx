@@ -320,7 +320,7 @@ void Storage::storeAccounts(const AccountList &accounts)
     dbQuery.exec(d_ptr->pragmaKey());
 
     bool success = true;
-    for (const auto account: qAsConst(accounts)) {
+    for (const auto account: accounts) {
         dbQuery.prepare(
             "REPLACE INTO accounts (type, unique_id, backend_name, owner_name, account_name, currency, memo, iban, bic, country, bank_code, bank_name, branch_id, account_number, sub_account_number) "
             "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, :currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, :branch_id, :account_number, :sub_account_number);"
@@ -329,6 +329,34 @@ void Storage::storeAccounts(const AccountList &accounts)
         dbQuery.exec();
         dbQuery.finish();
     }
+}
+
+void Storage::storeTransactions(const TransactionList &transactions)
+{
+    if (transactions.empty()) {
+        Q_EMIT errorOccurred(
+            tr("Given transaction can't be empty"),
+            Storage::TransactionError
+        );
+        return;
+    }
+
+    auto conn = d_ptr->storageConnection();
+
+    QSqlQuery dbQuery(conn->database());
+    dbQuery.exec(d_ptr->pragmaKey());
+/*
+    bool success = true;
+    for (const auto transation: transactions) {
+        dbQuery.prepare(
+            "REPLACE INTO accounts (type, unique_id, backend_name, owner_name, account_name, currency, memo, iban, bic, country, bank_code, bank_name, branch_id, account_number, sub_account_number) "
+            "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, :currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, :branch_id, :account_number, :sub_account_number);"
+        );
+        d_ptr->transactionToQuery(transation, dbQuery);
+        dbQuery.exec();
+        dbQuery.finish();
+    }
+*/
 }
 
 void Storage::storeSetting(const QString &key, const QVariant &value, const QString &group)

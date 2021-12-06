@@ -36,13 +36,21 @@ Q_OBJECT
     friend class Singleton<Banking>;
 
 public:
+    enum ErrorType
+    {
+        InitializedError,
+        AccountError,
+        TransactionError,
+
+        // Last
+        UnknownError = -1
+    };
+    Q_ENUM(ErrorType)
+
     ~Banking() override;
 
-    [[nodiscard]] bool initialize(
-        const QString &name,
-        const QString &key,
-        const QString &version
-    ) const;
+    [[nodiscard]] bool initialize(const QString &name, const QString &key,
+                                  const QString &version) const;
     void deInitialize();
 
     int showSetupDialog(QWidget *widget) const;
@@ -53,9 +61,15 @@ public Q_SLOTS:
     void receiveAccounts();
     void receiveAccountIds();
 
+    void receiveTransactions(const Account *account, const QDate &from, const QDate &to);
+
 Q_SIGNALS:
     void accountsReceived(const AccountList &accountList);
     void accountIdsReceived(const AccountIds &accountIds);
+    void transactionsReceived(const TransactionList &transactionList,
+                              const QString &balance = QString());
+
+    void errorOccurred(const QString &message, const Banking::ErrorType errorType);
     void progressStatus(qreal current, qreal total);
 
 private:

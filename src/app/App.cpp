@@ -36,6 +36,7 @@
 
 using namespace olbaflinx::app;
 using namespace olbaflinx::app::banking;
+using namespace olbaflinx::app::banking::tabs;
 using namespace olbaflinx::app::banking::assistant;
 using namespace olbaflinx::app::datavault;
 
@@ -62,6 +63,13 @@ App::~App() = default;
 void App::initialize()
 {
     stackedWidgetMain->setCurrentIndex(0);
+
+    connect(
+        treeWidgetAccounts,
+        &AccountWidget::accountChanged,
+        tabTransactions,
+        &TransactionTab::accountChanged
+    );
 
     bool initialized = Banking::instance()->initialize(
         SingleApplication::applicationName(),
@@ -256,10 +264,11 @@ void App::connectDataVaultForAdding()
             }
         );
 
-        StorageUser storageUser;
-        storageUser.setPassword(storagePassword);
-        storageUser.setFilePath(storageFile);
-        Storage::instance()->setUser(&storageUser);
+        const auto storageUser = new StorageUser;
+        storageUser->setPassword(storagePassword);
+        storageUser->setFilePath(storageFile);
+
+        Storage::instance()->setUser(storageUser);
     }
     newDataVaultDlg->deleteLater();
 }
@@ -325,10 +334,11 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
                 }
             );
 
-            StorageUser storageUser;
-            storageUser.setPassword(password);
-            storageUser.setFilePath(filePath);
-            Storage::instance()->setUser(&storageUser);
+            const auto storageUser = new StorageUser;
+            storageUser->setPassword(password);
+            storageUser->setFilePath(filePath);
+
+            Storage::instance()->setUser(storageUser);
         }
     );
 }

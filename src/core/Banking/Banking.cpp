@@ -63,3 +63,8 @@ void Banking::receiveAccountIds()
 {
     d_ptr->receiveAccountIds();
 }
+
+void Banking::receiveTransactions(const Account *account, const QDate &from, const QDate &to)
+{
+    d_ptr->receiveTransactions(account, from, to);
+}

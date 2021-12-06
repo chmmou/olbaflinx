@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <QtCore/QTimer>
+
 #include "AccountWidget.h"
 #include "AccountWidgetItem.h"
 
@@ -46,6 +48,18 @@ void AccountWidget::setAccounts(const AccountList &accounts)
     for (const auto account: accounts) {
         const auto accountItem = new QTreeWidgetItem();
         accountItem->setText(0, account->toString());
+        accountItem->setData(0, Qt::UserRole, account->uniqueId());
         addTopLevelItem(accountItem);
     }
+
+    disconnect(this, &QTreeWidget::itemClicked, nullptr, nullptr);
+    connect(
+        this,
+        &QTreeWidget::itemClicked,
+        [=](QTreeWidgetItem *item, int column)
+        {
+            // ToDo Alexander Saal: Get AccountWidgetItem and than account uniqueId
+            Q_EMIT accountChanged(item->data(column, Qt::UserRole).toUInt());
+        }
+    );
 }

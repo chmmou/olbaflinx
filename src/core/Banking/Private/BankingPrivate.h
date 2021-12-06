@@ -20,6 +20,10 @@
 #include <QtCore/QObject>
 #include <QtWidgets/QWidget>
 
+#include <aqbanking/types/imexporter_accountinfo.h>
+#include <aqbanking/types/transaction.h>
+#include <gwenhywfar/gwendate.h>
+
 #include "core/Container.h"
 
 namespace olbaflinx::core::banking
@@ -48,15 +52,21 @@ public:
     void receiveAccounts();
     void receiveAccountIds();
 
+    void receiveTransactions(const Account *account, const QDate &from, const QDate &to);
+
     int showSetupDialog(QWidget *parentWidget) const;
 
 private:
     Banking *const q_ptr;
     bool mIsInitialized;
 
+    AB_IMEXPORTER_ACCOUNTINFO *abImExporterAccountInfo(
+        AB_TRANSACTION_COMMAND cmd,
+        quint32 uniqueId,
+        GWEN_DATE *from,
+        GWEN_DATE *to
+    );
 };
-
 }
-
 
 #endif // OLBAFLINX_BANKINGPRIVATE_H

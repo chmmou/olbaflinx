@@ -183,8 +183,8 @@ void DataVaultItem::showPasswordChangeDialog()
             connect(
                 Storage::instance(),
                 &Storage::errorOccurred,
-                [&passwordChangeDlg, dlgTitle]
-                    (const QString &message, const Storage::ErrorType errorType)
+                &passwordChangeDlg,
+                [&passwordChangeDlg, dlgTitle](const QString &message, const Storage::ErrorType errorType)
                 {
                     if (errorType == Storage::PasswordError) {
                         QMessageBox::critical(
@@ -199,6 +199,7 @@ void DataVaultItem::showPasswordChangeDialog()
             connect(
                 Storage::instance(),
                 &Storage::userChanged,
+                &passwordChangeDlg,
                 [&passwordChangeDlg, currPassword, newPassword](const StorageUser *)
                 {
                     const bool success = Storage::instance()->changePassword(

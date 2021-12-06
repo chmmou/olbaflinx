@@ -243,6 +243,92 @@ void BankingPrivate::receiveAccountIds()
     receiveAccounts();
 }
 
+void BankingPrivate::receiveTransactions(const Account *account, const QDate &from, const QDate &to)
+{
+    TransactionList transactionList = TransactionList();
+
+    if (!mIsInitialized) {
+        Q_EMIT q_ptr->transactionsReceived(transactionList);
+        return;
+    }
+
+    const quint32 uniqueId = account->uniqueId();
+    if (uniqueId <= 0 || !account->isValid()) {
+        Q_EMIT q_ptr->errorOccurred(
+            tr("The given account id is invalid and or the account is invalid"),
+            Banking::AccountError
+        );
+        return;
+    }
+
+    if (!account->transactionLimitsForCommand(AB_Transaction_CommandGetTransactions)) {
+        Q_EMIT q_ptr->errorOccurred(
+            tr("The transaction limit for the specified account is not supported!"),
+            Banking::TransactionError
+        );
+        return;
+    }
+
+    if (from > to) {
+        Q_EMIT q_ptr->errorOccurred(
+            tr("The from date is higher than the current date!"),
+            Banking::TransactionError
+        );
+        return;
+    }
+
+    const auto fd = from.toString(QString(GwenDateFormat)).toLocal8Bit();
+    const auto cd = to.toString(QString(GwenDateFormat)).toLocal8Bit();
+
+    GWEN_DATE *gwenFromDate = GWEN_Date_fromString(fd.constData());
+    GWEN_DATE *gwenToDate = GWEN_Date_fromString(cd.constData());
+
+    AB_IMEXPORTER_ACCOUNTINFO *accountInfo = abImExporterAccountInfo(
+        AB_Transaction_CommandGetTransactions,
+        uniqueId,
+        gwenFromDate,
+        gwenToDate
+    );
+
+    QString balance = QString();
+
+    while (accountInfo) {
+
+        AB_BALANCE_LIST *balanceList = AB_ImExporterAccountInfo_GetBalanceList(accountInfo);
+        AB_BALANCE *abBalance = AB_Balance_List_GetLatestByType(balanceList, AB_Balance_TypeBooked);
+        if (abBalance) {
+            auto balanceValue = AB_Balance_GetValue(abBalance);
+            GWEN_BUFFER *valueBuffer = GWEN_Buffer_new(nullptr, 256, 0, 1);
+            AB_Value_toHumanReadableString(balanceValue, valueBuffer, 2, 0);
+            balance = QString::fromUtf8(GWEN_Buffer_GetStart(valueBuffer));
+            GWEN_Buffer_Reset(valueBuffer);
+        }
+        AB_Balance_List_free(balanceList);
+
+        AB_TRANSACTION_LIST *abList = AB_ImExporterAccountInfo_GetTransactionList(accountInfo);
+        AB_TRANSACTION *abTransaction;
+        while ((abTransaction = AB_Transaction_List_First(abList))) {
+            AB_Transaction_List_Del(abTransaction);
+            transactionList.push_back(new Transaction(abTransaction));
+            //accountTransaction = AB_Transaction_List_Next(accountTransaction);
+        }
+        AB_Transaction_List_free(abList);
+
+        accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
+    }
+
+    GWEN_Date_free(gwenFromDate);
+    GWEN_Date_free(gwenToDate);
+    AB_ImExporterAccountInfo_free(accountInfo);
+
+    Q_EMIT q_ptr->transactionsReceived(transactionList, balance);
+
+    qDeleteAll(transactionList);
+    transactionList.clear();
+    balance.clear();
+
+}
+
 int BankingPrivate::showSetupDialog(QWidget *parentWidget) const
 {
     if (!mIsInitialized) {
@@ -262,4 +348,34 @@ int BankingPrivate::showSetupDialog(QWidget *parentWidget) const
     GWEN_Dialog_free(setupDialog);
 
     return result;
+}
+
+AB_IMEXPORTER_ACCOUNTINFO *BankingPrivate::abImExporterAccountInfo(
+    AB_TRANSACTION_COMMAND cmd,
+    quint32 uniqueId,
+    GWEN_DATE *from,
+    GWEN_DATE *to
+)
+{
+    AB_TRANSACTION_LIST2 *transactionList = AB_Transaction_List2_new();
+    AB_TRANSACTION *transaction = AB_Transaction_new();
+
+    AB_Transaction_SetCommand(transaction, cmd);
+    AB_Transaction_SetUniqueAccountId(transaction, uniqueId);
+
+    if (from && to) {
+        AB_Transaction_SetFirstDate(transaction, from);
+        AB_Transaction_SetLastDate(transaction, to);
+    }
+
+    if (to) {
+        AB_Transaction_SetLastDate(transaction, to);
+    }
+
+    AB_Transaction_List2_PushBack(transactionList, transaction);
+
+    AB_IMEXPORTER_CONTEXT *imExporterCtx = AB_ImExporterContext_new();
+    AB_Banking_SendCommands(abBanking, transactionList, imExporterCtx);
+
+    return AB_ImExporterContext_GetFirstAccountInfo(imExporterCtx);
 }

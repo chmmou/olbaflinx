@@ -124,6 +124,7 @@ TBD
 - [ ] Create / send transactions, standing orders, accounts,...
 - [ ] tbd ...
 - [ ] Switch to Qt 6
+- [ ] Nice UI
 
 > WiP = Work In Progress
 

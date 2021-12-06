@@ -60,6 +60,7 @@ public:
 
     [[nodiscard]] QMap<QString, QVariant> queryToAccountMap(const QSqlQuery &query) const;
     void accountToQuery(const Account *account, QSqlQuery &preparedQuery);
+    void transactionToQuery(const Transaction *transaction, QSqlQuery &preparedQuery);
 
     [[nodiscard]] StorageUser *storageUser() const;
 

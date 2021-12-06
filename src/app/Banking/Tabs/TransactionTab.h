@@ -21,24 +21,26 @@
 
 #include "ui_Transaction.h"
 
-namespace olbaflinx::app::banking
+namespace olbaflinx::app::banking::tabs
 {
-
 class TransactionTab: public QWidget, private Ui::UiTransaction
 {
-
 Q_OBJECT
 
 public:
     explicit TransactionTab(QWidget *parent = nullptr);
     ~TransactionTab() override;
 
+public Q_SLOTS:
+    void accountChanged(const quint32 accountId);
+
 private Q_SLOTS:
     void searchTextChanged(const QString &searchText, bool isRegularExpression);
     void dateTimePeriodChanged(const QDate &from, const QDate &to);
     void dateChanged(const QDate &date);
+    void receiveTransactions();
+    void refreshTransactions();
 };
-
 } // olbaflinx::app::transaction
 
 #endif //OLBAFLINX_TRANSACTION_TAB_H

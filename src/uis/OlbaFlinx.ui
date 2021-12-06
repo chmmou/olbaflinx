@@ -192,7 +192,7 @@
           <property name="documentMode">
            <bool>false</bool>
           </property>
-          <widget class="olbaflinx::app::banking::TransactionTab" name="tabTransactions">
+          <widget class="olbaflinx::app::banking::tabs::TransactionTab" name="tabTransactions">
            <attribute name="title">
             <string>Transactions</string>
            </attribute>
@@ -224,7 +224,7 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>olbaflinx::app::banking::TransactionTab</class>
+   <class>olbaflinx::app::banking::tabs::TransactionTab</class>
    <extends>QWidget</extends>
    <header>TransactionTab.h</header>
    <container>1</container>

@@ -23,6 +23,7 @@
 #include <QtCore/QRegularExpression>
 
 #include "Storage/Account/Account.h"
+#include "Storage/Transaction/Transaction.h"
 
 /**
  * Password regular expression
@@ -47,10 +48,14 @@
 #define StorageSettingGroup "Vaults"
 #define StorageSettingGroupKey "Paths"
 
+#define MaxDateForTransactionsWithoutPin -28
+#define GwenDateFormat "yyyyMMdd"
+
 namespace olbaflinx::core
 {
 
 using namespace storage::account;
+using namespace storage::transaction;
 
 template<class T>
 class SignalBlocker
@@ -96,12 +101,13 @@ private:
 };
 
 typedef QList<const Account *> AccountList;
-
+typedef QList<const Transaction *> TransactionList;
 typedef QList<quint32> AccountIds;
 
 }
 
 Q_DECLARE_METATYPE(olbaflinx::core::AccountList)
+Q_DECLARE_METATYPE(olbaflinx::core::TransactionList)
 Q_DECLARE_METATYPE(olbaflinx::core::AccountIds)
 Q_DECLARE_METATYPE(olbaflinx::core::StorageUser *)
 Q_DECLARE_METATYPE(const olbaflinx::core::StorageUser *)
