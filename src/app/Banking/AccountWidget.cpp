@@ -62,4 +62,10 @@ void AccountWidget::setAccounts(const AccountList &accounts)
             Q_EMIT accountChanged(item->data(column, Qt::UserRole).toUInt());
         }
     );
+
+    const auto item = topLevelItem(0);
+    if (item != nullptr) {
+        setCurrentItem(item, 0);
+        Q_EMIT itemClicked(item, 0);
+    }
 }

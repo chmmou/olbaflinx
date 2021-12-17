@@ -71,6 +71,7 @@ file(
         ${APP_DIR}/core/*.cpp
         ${APP_DIR}/core/Banking/*.cpp
         ${APP_DIR}/core/Banking/Private/*.cpp
+        ${APP_DIR}/core/Logger/*.cpp
         ${APP_DIR}/core/Storage/*.cpp
         ${APP_DIR}/core/Storage/Account/*.cpp
         ${APP_DIR}/core/Storage/Connection/*.cpp
@@ -84,6 +85,7 @@ file(
         ${APP_DIR}/app/Banking/Assistant/*.cpp
         ${APP_DIR}/app/Banking/Assistant/Page/*.cpp
         ${APP_DIR}/app/DataVault/*.cpp
+        ${APP_DIR}/app/StackPages/*.cpp
 )
 file(
         GLOB_RECURSE
@@ -93,6 +95,7 @@ file(
         ${APP_DIR}/core/Storage/Account/*.h
         ${APP_DIR}/core/Banking/*.h
         ${APP_DIR}/core/Banking/Private/*.h
+        ${APP_DIR}/core/Logger/*.h
         ${APP_DIR}/core/Storage/Connection/*.h
         ${APP_DIR}/core/Storage/Private/*.h
         ${APP_DIR}/core/Storage/Transaction/*.h
@@ -104,6 +107,7 @@ file(
         ${APP_DIR}/app/Banking/Assistant/*.h
         ${APP_DIR}/app/Banking/Assistant/Page/*.h
         ${APP_DIR}/app/DataVault/*.h
+        ${APP_DIR}/app/StackPages/*.h
 )
 
 # Include directories for include UIs
@@ -117,6 +121,7 @@ include_directories(${APP_DIR}/app/Banking/Tabs)
 include_directories(${APP_DIR}/app/Banking/Assistant)
 include_directories(${APP_DIR}/app/Banking/Assistant/Page)
 include_directories(${APP_DIR}/app/DataVault)
+include_directories(${APP_DIR}/app/StackPages)
 
 set(APP_UI_DIR ${APP_DIR}/uis)
 file(GLOB APP_UI_FILES ${APP_UI_DIR}/*.ui)

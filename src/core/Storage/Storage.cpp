@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <QtCore/QDebug>
 #include <QtCore/QFile>
 #include <QtCore/QStringList>
 #include <QtCore/QSettings>
@@ -293,7 +294,7 @@ void Storage::receiveAccounts()
     }
 
     while (dbQuery.next()) {
-        const QMap<QString, QVariant> map = d_ptr->queryToAccountMap(dbQuery);
+        const QMap<QString, QVariant> map = d_ptr->queryToMap(dbQuery, StoragePrivate::AccountMap);
         accounts << Account::create(map);
     }
     dbQuery.finish();
@@ -302,6 +303,63 @@ void Storage::receiveAccounts()
 
     qDeleteAll(accounts);
     accounts.clear();
+}
+
+void Storage::receiveTransactions(quint32 accountId)
+{
+    TransactionList transactions = {};
+
+    const auto conn = d_ptr->storageConnection();
+
+    QSqlQuery dbQuery(conn->database());
+    bool success = dbQuery.exec(d_ptr->pragmaKey());
+
+    dbQuery.prepare("SELECT * from transactions WHERE account_id = :account_id;");
+    dbQuery.bindValue(":account_id", accountId);
+    success &= dbQuery.exec();
+
+    if (!success) {
+        Q_EMIT errorOccurred(
+            dbQuery.lastError().text(),
+            Storage::TransactionError
+        );
+        return;
+    }
+
+    while (dbQuery.next()) {
+        const QMap<QString, QVariant> map = d_ptr->queryToMap(dbQuery, StoragePrivate::TransactionMap);
+        transactions << Transaction::create(map);
+    }
+    dbQuery.finish();
+
+    Q_EMIT transactionsReceived(transactions);
+}
+
+bool Storage::addBalanceToAccount(qint32 balance, quint32 accountId)
+{
+    auto conn = d_ptr->storageConnection();
+
+    QSqlQuery dbQuery(conn->database());
+    dbQuery.exec(d_ptr->pragmaKey());
+
+    if (accountId < 1) {
+        return false;
+    }
+
+    bool success = true;
+    const bool exists = d_ptr->accountExists(accountId, dbQuery);
+
+    if (exists) {
+        dbQuery.prepare("UPDATE accounts SET balance = :balance WHERE unique_id = :unique_id");
+        dbQuery.bindValue(":balance", balance);
+        dbQuery.bindValue(":unique_id", accountId);
+
+        success &= dbQuery.exec();
+
+        dbQuery.finish();
+    }
+
+    return success;
 }
 
 void Storage::storeAccounts(const AccountList &accounts)
@@ -319,19 +377,21 @@ void Storage::storeAccounts(const AccountList &accounts)
     QSqlQuery dbQuery(conn->database());
     dbQuery.exec(d_ptr->pragmaKey());
 
-    bool success = true;
     for (const auto account: accounts) {
         dbQuery.prepare(
             "REPLACE INTO accounts (type, unique_id, backend_name, owner_name, account_name, currency, memo, iban, bic, country, bank_code, bank_name, branch_id, account_number, sub_account_number) "
             "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, :currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, :branch_id, :account_number, :sub_account_number);"
         );
-        d_ptr->accountToQuery(account, dbQuery);
+        dbQuery = d_ptr->accountToQuery(account, dbQuery);
         dbQuery.exec();
         dbQuery.finish();
     }
+
+    checkIntegrity();
+    compress();
 }
 
-void Storage::storeTransactions(const TransactionList &transactions)
+void Storage::storeTransactions(const quint32 &accountId, const TransactionList &transactions)
 {
     if (transactions.empty()) {
         Q_EMIT errorOccurred(
@@ -342,21 +402,33 @@ void Storage::storeTransactions(const TransactionList &transactions)
     }
 
     auto conn = d_ptr->storageConnection();
+    bool success = true;
 
     QSqlQuery dbQuery(conn->database());
-    dbQuery.exec(d_ptr->pragmaKey());
-/*
-    bool success = true;
+    success &= dbQuery.exec(d_ptr->pragmaKey());
+
     for (const auto transation: transactions) {
         dbQuery.prepare(
-            "REPLACE INTO accounts (type, unique_id, backend_name, owner_name, account_name, currency, memo, iban, bic, country, bank_code, bank_name, branch_id, account_number, sub_account_number) "
-            "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, :currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, :branch_id, :account_number, :sub_account_number);"
+            "REPLACE INTO transactions (account_id, `type`, sub_type, command, status, unique_account_id, unique_id, ref_unique_id, id_for_application, string_id_for_application, session_id, group_id, fi_id, local_iban, local_bic, local_country, local_bank_code, local_branch_id, local_account_number, local_suffix, local_name, remote_country, remote_bank_code, remote_branch_id, remote_account_number, remote_suffix, remote_iban, remote_bic, remote_name, `date`, valuta_date, value, currency, fees, transaction_code, transaction_text, transaction_key, text_key, primanota, purpose, `category`, customer_reference, bank_reference, end_to_end_reference, creditor_scheme_id, originator_id, mandate_id, mandate_date, mandate_debitor_name, original_creditor_scheme_id, original_mandate_id, original_creditor_name, `sequence`, charge, remote_addr_street, remote_addr_zipcode, remote_addr_city, remote_addr_phone, period, `cycle`, execution_day, first_date, last_date, next_date, unit_id, unit_id_name_space, ticker_symbol, units, unit_price_value, unit_price_date, commission_value, memo, `hash`) "
+            "VALUES (:account_id, :type, :sub_type, :command, :status, :unique_account_id, :unique_id, :ref_unique_id, :id_for_application, :string_id_for_application, :session_id, :group_id, :fi_id, :local_iban, :local_bic, :local_country, :local_bank_code, :local_branch_id, :local_account_number, :local_suffix, :local_name, :remote_country, :remote_bank_code, :remote_branch_id, :remote_account_number, :remote_suffix, :remote_iban, :remote_bic, :remote_name, :date, :valuta_date, :value, :currency, :fees, :transaction_code, :transaction_text, :transaction_key, :text_key, :primanota, :purpose, :category, :customer_reference, :bank_reference, :end_to_end_reference, :creditor_scheme_id, :originator_id, :mandate_id, :mandate_date, :mandate_debitor_name, :original_creditor_scheme_id, :original_mandate_id, :original_creditor_name, :sequence, :charge, :remote_addr_street, :remote_addr_zipcode, :remote_addr_city, :remote_addr_phone, :period, :cycle, :execution_day, :first_date, :last_date, :next_date, :unit_id, :unit_id_name_space, :ticker_symbol, :units, :unit_price_value, :unit_price_date, :commission_value, :memo, :hash);"
         );
-        d_ptr->transactionToQuery(transation, dbQuery);
-        dbQuery.exec();
+        dbQuery = d_ptr->transactionToQuery(accountId, transation, dbQuery);
+        success &= dbQuery.exec();
+
+        if (!success) {
+            Q_EMIT errorOccurred(
+                dbQuery.lastError().text(),
+                Storage::TransactionError
+            );
+            dbQuery.finish();
+            return;
+        }
+
         dbQuery.finish();
     }
-*/
+
+    checkIntegrity();
+    compress();
 }
 
 void Storage::storeSetting(const QString &key, const QVariant &value, const QString &group)
@@ -392,4 +464,3 @@ QVariant Storage::setting(
 
     return value;
 }
-

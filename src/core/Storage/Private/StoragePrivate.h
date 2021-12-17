@@ -46,6 +46,12 @@ public:
     explicit StoragePrivate(Storage *storage);
     ~StoragePrivate() override;
 
+    enum QueryToMapType {
+        AccountMap,
+        TransactionMap,
+        StandingOrderMap,
+    };
+
     void setUser(const StorageUser *storageUser);
 
     [[nodiscard]] StorageConnection *storageConnection();
@@ -58,13 +64,21 @@ public:
         const QString &password
     ) const;
 
-    [[nodiscard]] QMap<QString, QVariant> queryToAccountMap(const QSqlQuery &query) const;
-    void accountToQuery(const Account *account, QSqlQuery &preparedQuery);
-    void transactionToQuery(const Transaction *transaction, QSqlQuery &preparedQuery);
+    [[nodiscard]] QMap<QString, QVariant> queryToMap(
+        const QSqlQuery &query,
+        const QueryToMapType &mapType
+    ) const;
+
+    QSqlQuery accountToQuery(const Account *account, QSqlQuery &preparedQuery);
+    QSqlQuery transactionToQuery(const quint32 &accountId, const Transaction *transaction, QSqlQuery &preparedQuery);
 
     [[nodiscard]] StorageUser *storageUser() const;
 
 private:
+    [[nodiscard]] QMap<QString, QVariant> queryToAccountMap(const QSqlQuery &query) const;
+    [[nodiscard]] QMap<QString, QVariant> queryToTransactionMap(const QSqlQuery &query) const;
+    bool accountExists(const quint32 &accountId, QSqlQuery &query) const;
+
     Storage *const q_ptr;
     StorageConnection *mConnection;
     QPointer<StorageUser> mStorageUser;

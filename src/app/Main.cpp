@@ -19,8 +19,10 @@
 
 #include "app/App.h"
 #include "core/SingleApplication/SingleApplication.h"
+#include "core/Logger/Logger.h"
 
 using namespace olbaflinx::app;
+using namespace olbaflinx::core::logger;
 
 int main(int argc, char *argv[])
 {
@@ -28,7 +30,9 @@ int main(int argc, char *argv[])
     SingleApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 
 #if QT_VERSION > QT_VERSION_CHECK(5, 14, 0)
-    SingleApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+    SingleApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough
+    );
 #endif
 
     SingleApplication::setApplicationName("OlbaFlinx");
@@ -43,6 +47,8 @@ int main(int argc, char *argv[])
         a.exit(0);
     }
 
+    Logger::instance()->enable();
+
     App *app = new App();
     app->initialize();
     app->setVisible(true);
@@ -50,6 +56,8 @@ int main(int argc, char *argv[])
     const int result = a.exec();
 
     delete app;
+
+    Logger::instance()->disable();
 
     return result;
 }

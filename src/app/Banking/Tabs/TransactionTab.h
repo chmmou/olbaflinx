@@ -20,12 +20,16 @@
 #include <QtWidgets/QWidget>
 
 #include "ui_Transaction.h"
+#include "core/Container.h"
 
 namespace olbaflinx::app::banking::tabs
 {
+
+using namespace olbaflinx::core;
+
 class TransactionTab: public QWidget, private Ui::UiTransaction
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit TransactionTab(QWidget *parent = nullptr);
@@ -38,9 +42,10 @@ private Q_SLOTS:
     void searchTextChanged(const QString &searchText, bool isRegularExpression);
     void dateTimePeriodChanged(const QDate &from, const QDate &to);
     void dateChanged(const QDate &date);
-    void receiveTransactions();
+    void receiveStorageTransactions();
+    void receiveOnlineTransactions();
     void refreshTransactions();
 };
-} // olbaflinx::app::transaction
+}
 
 #endif //OLBAFLINX_TRANSACTION_TAB_H

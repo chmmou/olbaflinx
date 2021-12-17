@@ -73,9 +73,7 @@ AccountIds OptionPage::selectedAccounts() const
     AccountIds accountIds = {};
     const auto selectedItems = treeWidgetAccounts->selectedItems();
     for (const auto item: selectedItems) {
-        const quint32 id = item->data(0, Qt::UserRole).toUInt();
-        accountIds << id;
-        qDebug() << id;
+        accountIds << item->data(0, Qt::UserRole).toUInt();
     }
 
     return accountIds;

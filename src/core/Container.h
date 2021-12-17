@@ -22,8 +22,9 @@
 #include <QtCore/QList>
 #include <QtCore/QRegularExpression>
 
-#include "Storage/Account/Account.h"
-#include "Storage/Transaction/Transaction.h"
+#include "core/Storage/Account/Account.h"
+#include "core/Storage/Transaction/Transaction.h"
+#include "core/Logger/Logger.h"
 
 /**
  * Password regular expression
@@ -50,6 +51,9 @@
 
 #define MaxDateForTransactionsWithoutPin -28
 #define GwenDateFormat "yyyyMMdd"
+
+#define LOG(msg) \
+    olbaflinx::core::logger::Logger::instance()->log(msg); \
 
 namespace olbaflinx::core
 {
@@ -98,6 +102,16 @@ public:
 private:
     QString mPassword;
     QString mFilePath;
+};
+
+struct CoreWorkerInfo {
+    QDate fromDate;
+    QDate toDate;
+    quint32 accountId = 0;
+
+    [[nodiscard]] bool isValid() const {
+        return fromDate.isValid() && toDate.isValid() && accountId != 0;
+    }
 };
 
 typedef QList<const Account *> AccountList;

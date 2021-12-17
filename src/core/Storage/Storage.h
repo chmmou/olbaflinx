@@ -73,16 +73,19 @@ public:
     ) const;
 
     void receiveAccount(quint32 accountId);
+    void receiveTransactions(quint32 accountId = 0);
+    bool addBalanceToAccount(qint32 balance, quint32 accountId);
 
 public Q_SLOTS:
     void receiveAccounts();
     void storeAccounts(const AccountList &accounts);
-    void storeTransactions(const TransactionList &transactions);
+    void storeTransactions(const quint32 &accountId, const TransactionList &transactions);
 
 Q_SIGNALS:
     void userChanged(const StorageUser *storageUser);
     void errorOccurred(const QString &message, const Storage::ErrorType errorType);
     void accountsReceived(const AccountList &accounts);
+    void transactionsReceived(const TransactionList &transactions);
 
 private:
     QScopedPointer<StoragePrivate> const d_ptr;

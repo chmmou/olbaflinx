@@ -310,7 +310,7 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
         while ((abTransaction = AB_Transaction_List_First(abList))) {
             AB_Transaction_List_Del(abTransaction);
             transactionList.push_back(new Transaction(abTransaction));
-            //accountTransaction = AB_Transaction_List_Next(accountTransaction);
+            abTransaction = AB_Transaction_List_Next(abTransaction);
         }
         AB_Transaction_List_free(abList);
 

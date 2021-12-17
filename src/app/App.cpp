@@ -32,6 +32,7 @@
 #include "core/Container.h"
 #include "core/Banking/Banking.h"
 #include "core/Storage/Storage.h"
+#include "core/Logger/Logger.h"
 #include "core/SingleApplication/SingleApplication.h"
 
 using namespace olbaflinx::app;
@@ -43,6 +44,7 @@ using namespace olbaflinx::app::datavault;
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage;
+using namespace olbaflinx::core::logger;
 
 QLabel *vaultInfoLabel = nullptr;
 
@@ -89,7 +91,10 @@ void App::initialize()
 
 void App::closeEvent(QCloseEvent *event)
 {
+    LOG("Close Event: De-Initialize backend API ...");
     Banking::instance()->deInitialize();
+    LOG("Close Event: De-Initialize backend API ... [done]");
+
     QMainWindow::closeEvent(event);
 }
 

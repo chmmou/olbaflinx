@@ -19,6 +19,7 @@
 #define OLBAFLINX_TRANSACTION_H
 
 #include <QtCore/QDate>
+#include <QtCore/QMap>
 #include <QtCore/QMetaType>
 
 #include <aqbanking/types/transaction.h>
@@ -119,6 +120,7 @@ public:
 
 private:
     QDate gwenDateToQDate(const GWEN_DATE *gwenDate) const;
+    static GWEN_DATE *qDateToGwenDate(const QDate &qDate);
     AB_TRANSACTION *abTransaction;
 };
 }
