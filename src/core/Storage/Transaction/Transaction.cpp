@@ -213,7 +213,12 @@ QDate Transaction::valutaDate() const
 
 qreal Transaction::value() const
 {
-    return AB_Value_GetValueAsDouble(AB_Transaction_GetValue(abTransaction));
+    const auto value = AB_Transaction_GetValue(abTransaction);
+    if (value == nullptr) {
+        return 0.0;
+    }
+
+    return AB_Value_GetValueAsDouble(value);
 }
 
 QString Transaction::currency() const
@@ -223,7 +228,12 @@ QString Transaction::currency() const
 
 qreal Transaction::fees() const
 {
-    return AB_Value_GetValueAsDouble(AB_Transaction_GetFees(abTransaction));
+    const auto fees = AB_Transaction_GetFees(abTransaction);
+    if (fees == nullptr) {
+        return 0.0;
+    }
+
+    return AB_Value_GetValueAsDouble(fees);
 }
 
 int Transaction::transactionCode() const
@@ -393,12 +403,22 @@ QString Transaction::tickerSymbol() const
 
 qreal Transaction::units() const
 {
-    return AB_Value_GetValueAsDouble(AB_Transaction_GetUnits(abTransaction));
+    const auto units = AB_Transaction_GetUnits(abTransaction);
+    if (units == nullptr) {
+        return 0.0;
+    }
+
+    return AB_Value_GetValueAsDouble(units);
 }
 
 qreal Transaction::unitPriceValue() const
 {
-    return AB_Value_GetValueAsDouble(AB_Transaction_GetUnitPriceValue(abTransaction));
+    const auto unitPriceValue = AB_Transaction_GetUnitPriceValue(abTransaction);
+    if (unitPriceValue == nullptr) {
+        return 0.0;
+    }
+
+    return AB_Value_GetValueAsDouble(unitPriceValue);
 }
 
 QDate Transaction::unitPriceDate() const
@@ -408,7 +428,12 @@ QDate Transaction::unitPriceDate() const
 
 qreal Transaction::commissionValue() const
 {
-    return AB_Value_GetValueAsDouble(AB_Transaction_GetCommissionValue(abTransaction));
+    const auto commissionValue = AB_Transaction_GetCommissionValue(abTransaction);
+    if (commissionValue == nullptr) {
+        return 0.0;
+    }
+
+    return AB_Value_GetValueAsDouble(commissionValue);
 }
 
 QString Transaction::memo() const
