@@ -248,10 +248,10 @@ QSqlQuery StoragePrivate::accountToQuery(const Account *account, QSqlQuery &prep
 QSqlQuery StoragePrivate::transactionToQuery(const quint32 &accountId, const Transaction *transaction, QSqlQuery &preparedQuery)
 {
     preparedQuery.bindValue(":account_id", accountId);
-    preparedQuery.bindValue(":type", transaction->type());
-    preparedQuery.bindValue(":sub_type", transaction->subType());
-    preparedQuery.bindValue(":command", transaction->command());
-    preparedQuery.bindValue(":status", transaction->status());
+    preparedQuery.bindValue(":type", (qint32) transaction->type());
+    preparedQuery.bindValue(":sub_type", (qint32) transaction->subType());
+    preparedQuery.bindValue(":command", (qint32) transaction->command());
+    preparedQuery.bindValue(":status", (qint32) transaction->status());
     preparedQuery.bindValue(":unique_account_id", transaction->uniqueAccountId());
     preparedQuery.bindValue(":unique_id", transaction->uniqueId());
     preparedQuery.bindValue(":ref_unique_id", transaction->refUniqueId());
@@ -299,13 +299,13 @@ QSqlQuery StoragePrivate::transactionToQuery(const quint32 &accountId, const Tra
     preparedQuery.bindValue(":original_creditor_scheme_id", transaction->originalCreditorSchemeId());
     preparedQuery.bindValue(":original_mandate_id", transaction->originalMandateId());
     preparedQuery.bindValue(":original_creditor_name", transaction->originalCreditorName());
-    preparedQuery.bindValue(":sequence", transaction->sequence());
-    preparedQuery.bindValue(":charge", transaction->charge());
+    preparedQuery.bindValue(":sequence", (qint32) transaction->sequence());
+    preparedQuery.bindValue(":charge", (qint32) transaction->charge());
     preparedQuery.bindValue(":remote_addr_street", transaction->remoteAddrStreet());
     preparedQuery.bindValue(":remote_addr_zipcode", transaction->remoteAddrZipcode());
     preparedQuery.bindValue(":remote_addr_city", transaction->remoteAddrCity());
     preparedQuery.bindValue(":remote_addr_phone", transaction->remoteAddrPhone());
-    preparedQuery.bindValue(":period", transaction->period());
+    preparedQuery.bindValue(":period", (qint32) transaction->period());
     preparedQuery.bindValue(":cycle", transaction->cycle());
     preparedQuery.bindValue(":execution_day", transaction->executionDay());
     preparedQuery.bindValue(":first_date", transaction->firstDate());

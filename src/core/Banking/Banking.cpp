@@ -68,3 +68,8 @@ void Banking::receiveTransactions(const Account *account, const QDate &from, con
 {
     d_ptr->receiveTransactions(account, from, to);
 }
+
+void Banking::receiveStandingOrders(const Account *account)
+{
+    //d_ptr->receiveStandingOrders(account);
+}

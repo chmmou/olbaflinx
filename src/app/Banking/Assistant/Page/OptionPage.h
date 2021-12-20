@@ -39,7 +39,7 @@ public:
     void initialize();
     bool isComplete() const override;
 
-    [[nodiscard]] AccountIds selectedAccounts() const;
+    [[nodiscard]] AccountIds selectedAccountIds() const;
 
 private Q_SLOTS:
     void checkForAccounts(const AccountList &accounts);

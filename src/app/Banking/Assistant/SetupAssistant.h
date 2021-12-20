@@ -20,7 +20,10 @@
 #include <QtCore/QList>
 #include <QtWidgets/QWizard>
 
+#include "core/Container.h"
 #include "ui_SetupAssistant.h"
+
+using namespace olbaflinx::core;
 
 namespace olbaflinx::app::banking::assistant
 {
@@ -35,6 +38,10 @@ public:
 
 protected:
     void done(int result) override;
+
+Q_SIGNALS:
+    void selectedAccountsReceived(const AccountList &selectedAccounts);
+
 };
 
 } // olbaflinx::app::banking

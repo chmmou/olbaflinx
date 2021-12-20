@@ -451,6 +451,11 @@ QString Transaction::toString() const
     return "";
 }
 
+bool Transaction::isStandingOrder() const
+{
+    return type() == AB_Transaction_TypeStandingOrder;
+}
+
 Transaction *Transaction::create(const QMap<QString, QVariant> &row)
 {
     auto abTransaction = AB_Transaction_new();

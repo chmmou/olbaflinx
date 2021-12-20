@@ -115,10 +115,10 @@ CREATE TABLE IF NOT EXISTS transactions
     value                       double,
     currency                    varchar,
     fees                        double,
-    transaction_code            int,
+    transaction_code            integer,
     transaction_text            varchar,
     transaction_key             varchar,
-    text_key                    int,
+    text_key                    integer,
     primanota                   varchar,
     purpose                     text,
     `category`                  varchar,
@@ -162,6 +162,13 @@ CREATE INDEX IF NOT EXISTS transactions_unique_id_index on transactions (unique_
 CREATE INDEX IF NOT EXISTS transactions_ref_unique_id_index on transactions (ref_unique_id asc);
 CREATE INDEX IF NOT EXISTS transactions_id_for_application_index on transactions (id_for_application asc);
 CREATE INDEX IF NOT EXISTS transactions_category_index on transactions (category asc);
+CREATE INDEX IF NOT EXISTS transactions_date_index on transactions (`date` desc);
+CREATE INDEX IF NOT EXISTS transactions_valuta_date_index on transactions (valuta_date desc);
+CREATE INDEX IF NOT EXISTS transactions_mandate_date_index on transactions (mandate_date desc);
+CREATE INDEX IF NOT EXISTS transactions_first_date_index on transactions (first_date desc);
+CREATE INDEX IF NOT EXISTS transactions_last_date_index on transactions (last_date desc);
+CREATE INDEX IF NOT EXISTS transactions_next_date_index on transactions (next_date desc);
+CREATE INDEX IF NOT EXISTS transactions_unit_price_date_index on transactions (unit_price_date desc);
 
 CREATE TABLE IF NOT EXISTS migrations
 (

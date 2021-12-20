@@ -116,6 +116,7 @@ public:
     [[nodiscard]] QString hash() const;
 
     [[nodiscard]] QString toString() const;
+    [[nodiscard]] bool isStandingOrder() const;
     [[nodiscard]] static Transaction *create(const QMap<QString, QVariant> &row);
 
 private:

@@ -55,7 +55,7 @@ void SetupAssistant::done(int result)
         return;
     }
 
-    const auto accountIds = optionPage->selectedAccounts();
+    const auto accountIds = optionPage->selectedAccountIds();
     if (accountIds.isEmpty()) {
         QMessageBox::critical(
             this,
@@ -70,7 +70,7 @@ void SetupAssistant::done(int result)
         accounts << Banking::instance()->account(uniqueId);
     }
 
-    Storage::instance()->storeAccounts(accounts);
+    Q_EMIT selectedAccountsReceived(accounts);
 
     qDeleteAll(accounts);
     accounts.clear();

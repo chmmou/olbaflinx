@@ -26,6 +26,8 @@ using namespace olbaflinx::core::logger;
 
 int main(int argc, char *argv[])
 {
+    Logger::instance()->enable();
+
     SingleApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     SingleApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 
@@ -46,8 +48,6 @@ int main(int argc, char *argv[])
         a.sendMessage(a.arguments().join(' ').toUtf8());
         a.exit(0);
     }
-
-    Logger::instance()->enable();
 
     App *app = new App();
     app->initialize();

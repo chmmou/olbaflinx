@@ -62,6 +62,7 @@ public Q_SLOTS:
     void receiveAccountIds();
 
     void receiveTransactions(const Account *account, const QDate &from, const QDate &to);
+    void receiveStandingOrders(const Account *account);
 
 Q_SIGNALS:
     void accountsReceived(const AccountList &accountList);

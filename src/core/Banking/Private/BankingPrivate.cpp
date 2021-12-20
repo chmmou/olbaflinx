@@ -306,13 +306,17 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
         AB_Balance_List_free(balanceList);
 
         AB_TRANSACTION_LIST *abList = AB_ImExporterAccountInfo_GetTransactionList(accountInfo);
-        AB_TRANSACTION *abTransaction;
-        while ((abTransaction = AB_Transaction_List_First(abList))) {
-            AB_Transaction_List_Del(abTransaction);
-            transactionList.push_back(new Transaction(abTransaction));
-            abTransaction = AB_Transaction_List_Next(abTransaction);
+        if (abList) {
+
+            AB_TRANSACTION *abTransaction;
+            while ((abTransaction = AB_Transaction_List_First(abList))) {
+                AB_Transaction_List_Del(abTransaction);
+                transactionList.push_back(new Transaction(abTransaction));
+            }
+
+            AB_Transaction_List_free(abList);
+
         }
-        AB_Transaction_List_free(abList);
 
         accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
     }
@@ -367,8 +371,7 @@ AB_IMEXPORTER_ACCOUNTINFO *BankingPrivate::abImExporterAccountInfo(
         AB_Transaction_SetFirstDate(transaction, from);
         AB_Transaction_SetLastDate(transaction, to);
     }
-
-    if (to) {
+    else if (to) {
         AB_Transaction_SetLastDate(transaction, to);
     }
 

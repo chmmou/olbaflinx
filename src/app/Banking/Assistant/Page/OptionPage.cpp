@@ -26,9 +26,7 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::app::banking::assistant::page;
 
 QTimer *accountTimer = nullptr;
-
 QThread *accountTimerThread = nullptr;
-
 bool isOptionPageComplete = false;
 
 OptionPage::OptionPage(QWidget *parent)
@@ -68,7 +66,7 @@ bool OptionPage::isComplete() const
     return isOptionPageComplete && treeWidgetAccounts->topLevelItemCount() > 0;
 }
 
-AccountIds OptionPage::selectedAccounts() const
+AccountIds OptionPage::selectedAccountIds() const
 {
     AccountIds accountIds = {};
     const auto selectedItems = treeWidgetAccounts->selectedItems();

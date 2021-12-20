@@ -326,6 +326,16 @@ void App::connectDataVaultItemForOpen(const DataVaultItem *item)
                         {
                             if (accounts.isEmpty()) {
                                 const auto setupAssistant = new SetupAssistant();
+                                disconnect(setupAssistant, &SetupAssistant::selectedAccountsReceived, nullptr, nullptr);
+                                connect(
+                                    setupAssistant,
+                                    &SetupAssistant::selectedAccountsReceived,
+                                    [=](const AccountList &selectedAccounts)
+                                    {
+                                        Storage::instance()->storeAccounts(selectedAccounts);
+                                        treeWidgetAccounts->setAccounts(selectedAccounts);
+                                    }
+                                );
                                 setupAssistant->exec();
                                 setupAssistant->deleteLater();
                             }

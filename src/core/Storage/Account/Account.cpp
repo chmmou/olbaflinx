@@ -17,6 +17,7 @@
 
 #include <QtCore/QMetaType>
 #include <QtCore/QList>
+#include <QtCore/QObject>
 
 #include "Account.h"
 
@@ -172,12 +173,11 @@ bool Account::isValid() const
 
 QString Account::toString() const
 {
-    return QString("%1: (%2 - %3 - %4) - %5").arg(
-        accountName(),
-        iban(),
-        bankCode(),
+    return QObject::tr("Account %1 [%2] - %3 - %4").arg(
         accountNumber(),
-        ownerName()
+        bankName(),
+        ownerName(),
+        accountName()
     );
 }
 
