@@ -1,19 +1,20 @@
 cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
+option(BUILD_TESTS "Build test" OFF)
+
 project(olbaflinx VERSION 1.0.0 LANGUAGES CXX)
 
 set(GWENHYWFAR_MIN_VERSION 5.7.0)
 set(GWENGUI_CPP_MIN_VERSION 5.7.0)
 set(GWENGUI_QT5_MIN_VERSION 5.7.0)
-set(AQBANKING_MIN_VERSION 6.3.0)
+set(AQBANKING_MIN_VERSION 6.4.0)
 set(QT5_MIN_VERSION 5.15.2)
 set(KTOBLZCHECK_MIN_VERSION 1.53.0)
 set(LIBCHIPCARD_MIN_VERSION 5.1.6)
 set(EXECUTABLE_OUTPUT_PATH "bin/")
 
-option(BUILD_TESTS "Build test" OFF)
-
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets LinguistTools Sql Svg Network REQUIRED)
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Network REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Network REQUIRED)
+find_package(PkgConfig REQUIRED)
 
 # Check if we have the required Qt5 plugin installed
 message(STATUS "Checking for qsqlcipher >= ${QT5_MIN_VERSION}")
@@ -68,6 +69,9 @@ if (NOT AQBANKING_FOUND)
 else ()
     message(STATUS "\tFound aqbanking >= ${aqbanking_VERSION}")
 endif ()
+
+pkg_check_modules(LibChipCardc REQUIRED IMPORTED_TARGET libchipcard-client>=${LIBCHIPCARD_MIN_VERSION})
+pkg_check_modules(LibChipCards REQUIRED IMPORTED_TARGET libchipcard-server>=${LIBCHIPCARD_MIN_VERSION})
 
 add_subdirectory(src)
 

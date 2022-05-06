@@ -1,5 +1,5 @@
 /**
-* Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
+* Copyright (C) 2022, Alexander Saal <developer@olbaflinx.chm-projects.de>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -13,14 +13,33 @@
 *
 * You should have received a copy of the GNU General Public License
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+*/
 
-#include "PageDataVault.h"
+#ifndef OLBAFLINX_PAGEBANKING_H
+#define OLBAFLINX_PAGEBANKING_H
 
-using namespace olbaflinx::app::banking::stackpages;
+#include <QtCore/QScopedPointer>
+#include <QtWidgets/QMainWindow>
+#include <QtWidgets/QWidget>
 
-PageDataVault::PageDataVault(QWidget *parent)
-    : QWidget{parent}
+namespace olbaflinx::app::pages {
+
+class PageBasePrivate;
+class PageBanking : public QWidget
 {
+    Q_OBJECT
 
-}
+public:
+    explicit PageBanking(QWidget *parent = Q_NULLPTR);
+    ~PageBanking() override;
+
+    void initialize(QMainWindow *mainWindow);
+
+private:
+    friend class PageBasePrivate;
+    QScopedPointer<PageBasePrivate> d_ptr;
+};
+
+} // namespace pages
+
+#endif //OLBAFLINX_PAGEBANKING_H

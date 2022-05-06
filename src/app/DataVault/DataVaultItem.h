@@ -22,13 +22,11 @@
 
 #include "ui_DataVaultItem.h"
 
-namespace olbaflinx::app::datavault
-{
+namespace olbaflinx::app::datavault {
 
-class DataVaultItem: public QWidget, private Ui::UiDataVaultItem
+class DataVaultItem : public QWidget, private Ui::UiDataVaultItem
 {
-
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit DataVaultItem(QWidget *parent = nullptr);
@@ -52,9 +50,8 @@ private Q_SLOTS:
     void deleteDataVault();
     void backupDataVault();
     void aboutDataVault();
-
 };
 
-}
+} // namespace olbaflinx::app::datavault
 
 #endif // OLBAFLINX_DATAVAULTITEM_H

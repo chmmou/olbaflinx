@@ -16,43 +16,27 @@
  */
 #include <QtCore/QFileInfo>
 #include <QtGui/QKeySequence>
-#include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QScrollArea>
-#include <QtWidgets/QSpacerItem>
 #include <QtWidgets/QSizePolicy>
+#include <QtWidgets/QSpacerItem>
+#include <QtWidgets/QVBoxLayout>
 
 #include "App.h"
 
-#include "app/DataVault/DataVaultItem.h"
-#include "app/DataVault/DataVaultDialog.h"
-#include "app/Banking/Assistant/SetupAssistant.h"
-
-#include "core/Container.h"
 #include "core/Banking/Banking.h"
-#include "core/Storage/Storage.h"
+#include "core/Container.h"
 #include "core/Logger/Logger.h"
 #include "core/SingleApplication/SingleApplication.h"
 
 using namespace olbaflinx::app;
-using namespace olbaflinx::app::banking;
-using namespace olbaflinx::app::banking::tabs;
-using namespace olbaflinx::app::banking::assistant;
-using namespace olbaflinx::app::datavault;
+using namespace olbaflinx::app::pages;
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::logger;
-
-QLabel *vaultInfoLabel = nullptr;
-
-QSpacerItem *scrollAreaSpacerTop = nullptr;
-
-QSpacerItem *scrollAreaSpacerBottom = nullptr;
-
-QVBoxLayout *scrollAreaDataVaultsContentsLayout = nullptr;
 
 App::App(QWidget *parent, Qt::WindowFlags flags)
     : QMainWindow(parent, flags)
@@ -64,335 +48,29 @@ App::~App() = default;
 
 void App::initialize()
 {
-    stackedWidgetMain->setCurrentIndex(0);
-
-    connect(
-        treeWidgetAccounts,
-        &AccountWidget::accountChanged,
-        tabTransactions,
-        &TransactionTab::accountChanged
-    );
-
-    bool initialized = Banking::instance()->initialize(
-        SingleApplication::applicationName(),
-        "3E1B97FF72A24783EC2215B12",
-        SingleApplication::applicationVersion()
-    );
+    bool initialized = Banking::instance()->initialize(SingleApplication::applicationName(),
+                                                       "3E1B97FF72A24783EC2215B12",
+                                                       SingleApplication::applicationVersion());
 
     if (!initialized) {
-        QMessageBox::critical(
-            this,
-            SingleApplication::applicationName(),
-            tr("Banking backend can't be initialized"));
+        QMessageBox::critical(this,
+                              SingleApplication::applicationName(),
+                              tr("Banking backend can't be initialized"));
     }
 
-    setupDataVault();
+    connect(pageDataVaults, &PageDataVaults::vaultOpen, this, &App::openVault);
+
+    pageDataVaults->initialize(this);
+    pageBanking->initialize(this);
+}
+
+void App::openVault()
+{
+    stackedWidgetMain->setCurrentIndex(1);
 }
 
 void App::closeEvent(QCloseEvent *event)
 {
-    LOG("Close Event: De-Initialize backend API ...");
     Banking::instance()->deInitialize();
-    LOG("Close Event: De-Initialize backend API ... [done]");
-
     QMainWindow::closeEvent(event);
-}
-
-void App::setupDataVault()
-{
-    createVaultInfoLabel();
-    createVaultInfoSpacerItems();
-
-    scrollAreaDataVaultsContentsLayout = new QVBoxLayout(scrollAreaDataVaultsContents);
-
-    scrollAreaDataVaults->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scrollAreaDataVaults->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollAreaDataVaults->setFrameShape(QScrollArea::NoFrame);
-    scrollAreaDataVaults->setFrameShadow(QScrollArea::Plain);
-
-    pushButtonAddDataVaults->setShortcut(QKeySequence("Ctrl+N"));
-
-    connect(
-        pushButtonAddDataVaults,
-        &QPushButton::clicked,
-        this,
-        &App::connectDataVaultForAdding
-    );
-
-    auto storageFiles = Storage::instance()->setting(
-        StorageSettingGroup,
-        StorageSettingGroupKey,
-        QStringList()
-    ).toStringList();
-
-    if (storageFiles.isEmpty()) {
-        removeVaultInfo();
-        addVaultInfo();
-    }
-    else {
-        removeVaultInfo();
-
-        for (const auto &file: qAsConst(storageFiles)) {
-            addDataVault(QFileInfo(file).baseName(), file);
-        }
-
-        scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
-        scrollAreaDataVaultsContentsLayout->update();
-
-        storageFiles.clear();
-    }
-}
-
-void App::addDataVault(const QString &title, const QString &fileName)
-{
-    auto dataVaultItem = new DataVaultItem();
-    dataVaultItem->setVaultTitle(title);
-    dataVaultItem->setVaultFilePath(fileName);
-
-    QFileInfo fi(fileName);
-    const QString vaultItemCreationDateTimeString = fi.lastModified().toString("dd.MM.yyyy hh:mm");
-    const QString vaultItemMessageString = tr("Created on %1").arg(vaultItemCreationDateTimeString);
-
-    dataVaultItem->setVaultFileInfo(vaultItemMessageString);
-
-    connectDataVaultItemForOpen(dataVaultItem);
-    connectDataVaultItemForDeletion(dataVaultItem);
-
-    scrollAreaDataVaultsContentsLayout->addWidget(dataVaultItem);
-}
-
-void App::createVaultInfoLabel()
-{
-    vaultInfoLabel = new QLabel();
-    vaultInfoLabel->setTextFormat(Qt::RichText);
-    vaultInfoLabel->setAlignment(Qt::AlignCenter);
-    vaultInfoLabel->setText(
-        tr(
-            "<h1>Welcome to OlbaFlinx</h1>"
-            "<p>Click the plus sign or type Ctrl+N to create a new data vault.</p>"
-            "<p>You can create as many vaults as you like, each with its own password, e.g. for different user</p>"
-        )
-    );
-}
-
-void App::createVaultInfoSpacerItems()
-{
-    scrollAreaSpacerTop = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
-    scrollAreaSpacerBottom = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
-}
-
-void App::addVaultInfo()
-{
-    scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerTop);
-    scrollAreaDataVaultsContentsLayout->addWidget(vaultInfoLabel);
-    scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
-    scrollAreaDataVaultsContentsLayout->update();
-    scrollAreaDataVaultsContents->update();
-    scrollAreaDataVaults->update();
-}
-
-void App::removeVaultInfo()
-{
-    int indexOf = scrollAreaDataVaultsContentsLayout->indexOf(scrollAreaSpacerTop);
-    if (indexOf >= 0) {
-        auto item = scrollAreaDataVaultsContentsLayout->takeAt(indexOf);
-        delete item;
-
-        scrollAreaSpacerTop = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
-    }
-
-    indexOf = scrollAreaDataVaultsContentsLayout->indexOf(vaultInfoLabel);
-    if (indexOf >= 0) {
-        auto item = scrollAreaDataVaultsContentsLayout->takeAt(indexOf);
-        delete item->widget();
-        delete item;
-
-        createVaultInfoLabel();
-    }
-
-    indexOf = scrollAreaDataVaultsContentsLayout->indexOf(scrollAreaSpacerBottom);
-    if (indexOf >= 0) {
-        auto item = scrollAreaDataVaultsContentsLayout->takeAt(indexOf);
-        delete item;
-
-        scrollAreaSpacerBottom = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
-    }
-
-    scrollAreaDataVaultsContentsLayout->update();
-    scrollAreaDataVaultsContents->update();
-    scrollAreaDataVaults->update();
-}
-
-void App::connectDataVaultForAdding()
-{
-    auto newDataVaultDlg = new DataVaultDialog(this);
-    if (newDataVaultDlg->exec() == DataVaultDialog::Accepted) {
-
-        const auto storageFile = QString("%1/%2.olbaflinx").arg(
-            Storage::instance()->storagePath(),
-            newDataVaultDlg->vaultName()
-        );
-
-        const auto storagePassword = newDataVaultDlg->vaultPassword();
-        auto storageFiles = Storage::instance()->setting(
-            StorageSettingGroup,
-            StorageSettingGroupKey,
-            QStringList()
-        ).toStringList();
-
-        storageFiles << storageFile;
-
-        Storage::instance()->storeSetting(
-            StorageSettingGroup,
-            storageFiles,
-            StorageSettingGroupKey
-        );
-
-        disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
-        connect(
-            Storage::instance(),
-            &Storage::userChanged,
-            [newDataVaultDlg, this](const StorageUser *user)
-            {
-                if (!Storage::instance()->isInitialized()) {
-                    Storage::instance()->initialize();
-                }
-
-                removeVaultInfo();
-
-                addDataVault(newDataVaultDlg->vaultName(), user->filePath());
-
-                scrollAreaDataVaultsContentsLayout->addItem(scrollAreaSpacerBottom);
-                scrollAreaDataVaultsContentsLayout->update();
-                scrollAreaDataVaultsContents->update();
-                scrollAreaDataVaults->update();
-            }
-        );
-
-        const auto storageUser = new StorageUser;
-        storageUser->setPassword(storagePassword);
-        storageUser->setFilePath(storageFile);
-
-        Storage::instance()->setUser(storageUser);
-    }
-    newDataVaultDlg->deleteLater();
-}
-
-void App::connectDataVaultItemForOpen(const DataVaultItem *item)
-{
-    disconnect(item, &DataVaultItem::vaultOpened, nullptr, nullptr);
-    connect(
-        item,
-        &DataVaultItem::vaultOpened,
-        [=](const QString &filePath, const QString &password)
-        {
-            disconnect(Storage::instance(), &Storage::errorOccurred, nullptr, nullptr);
-            disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
-            disconnect(Storage::instance(), &Storage::accountsReceived, nullptr, nullptr);
-
-            connect(
-                Storage::instance(),
-                &Storage::errorOccurred,
-                [=](const QString &message, const Storage::ErrorType errorType)
-                {
-                    if (errorType == Storage::PasswordError) {
-                        QMessageBox::critical(
-                            this,
-                            tr("Data Vault"),
-                            message
-                        );
-                    }
-                }
-            );
-
-            connect(
-                Storage::instance(),
-                &Storage::userChanged,
-                [=](const StorageUser *)
-                {
-                    if (!Storage::instance()->isInitialized()) {
-                        QMessageBox::critical(
-                            this,
-                            tr("Error"),
-                            tr("Your data vault is corrupted and or not readable.")
-                        );
-                        return;
-                    }
-
-                    connect(
-                        Storage::instance(),
-                        &Storage::accountsReceived,
-                        [=](const AccountList &accounts)
-                        {
-                            if (accounts.isEmpty()) {
-                                const auto setupAssistant = new SetupAssistant();
-                                disconnect(setupAssistant, &SetupAssistant::selectedAccountsReceived, nullptr, nullptr);
-                                connect(
-                                    setupAssistant,
-                                    &SetupAssistant::selectedAccountsReceived,
-                                    [=](const AccountList &selectedAccounts)
-                                    {
-                                        Storage::instance()->storeAccounts(selectedAccounts);
-                                        treeWidgetAccounts->setAccounts(selectedAccounts);
-                                    }
-                                );
-                                setupAssistant->exec();
-                                setupAssistant->deleteLater();
-                            }
-
-                            treeWidgetAccounts->setAccounts(accounts);
-                        }
-                    );
-
-                    stackedWidgetMain->setCurrentIndex(1);
-                    Storage::instance()->receiveAccounts();
-                }
-            );
-
-            const auto storageUser = new StorageUser;
-            storageUser->setPassword(password);
-            storageUser->setFilePath(filePath);
-
-            Storage::instance()->setUser(storageUser);
-        }
-    );
-}
-
-void App::connectDataVaultItemForDeletion(const DataVaultItem *item)
-{
-    disconnect(item, &DataVaultItem::vaultDeleted, nullptr, nullptr);
-    connect(
-        item,
-        &DataVaultItem::vaultDeleted,
-        [=](bool success, DataVaultItem *item)
-        {
-            if (success) {
-
-                auto storageFiles = Storage::instance()->setting(
-                    StorageSettingGroup,
-                    StorageSettingGroupKey,
-                    QStringList()
-                ).toStringList();
-
-                if (storageFiles.contains(item->vaultFilePath(), Qt::CaseSensitive)) {
-                    storageFiles.removeOne(item->vaultFilePath());
-                }
-
-                Storage::instance()->storeSetting(
-                    StorageSettingGroup,
-                    storageFiles,
-                    StorageSettingGroupKey
-                );
-
-                if (storageFiles.isEmpty()) {
-                    removeVaultInfo();
-                    addVaultInfo();
-                }
-
-                scrollAreaDataVaultsContentsLayout->removeWidget(item);
-                item->deleteLater();
-                storageFiles.clear();
-            }
-        }
-    );
 }

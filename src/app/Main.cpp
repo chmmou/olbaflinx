@@ -18,8 +18,8 @@
 #include <QtCore/QTranslator>
 
 #include "app/App.h"
-#include "core/SingleApplication/SingleApplication.h"
 #include "core/Logger/Logger.h"
+#include "core/SingleApplication/SingleApplication.h"
 
 using namespace olbaflinx::app;
 using namespace olbaflinx::core::logger;
@@ -33,8 +33,7 @@ int main(int argc, char *argv[])
 
 #if QT_VERSION > QT_VERSION_CHECK(5, 14, 0)
     SingleApplication::setHighDpiScaleFactorRoundingPolicy(
-        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough
-    );
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 #endif
 
     SingleApplication::setApplicationName("OlbaFlinx");
@@ -61,4 +60,3 @@ int main(int argc, char *argv[])
 
     return result;
 }
-

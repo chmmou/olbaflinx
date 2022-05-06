@@ -60,7 +60,7 @@ create table IF NOT EXISTS accounts
     branch_id          varchar,
     account_number     varchar,
     sub_account_number varchar,
-    balance            integer
+    balance            double
 );
 CREATE INDEX IF NOT EXISTS accounts_unique_id_index on accounts (unique_id asc);
 CREATE INDEX IF NOT EXISTS accounts_iban_index on accounts (iban asc);

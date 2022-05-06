@@ -15,8 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <QtCore/QMetaType>
 #include <QtCore/QList>
+#include <QtCore/QMetaType>
 #include <QtCore/QObject>
 
 #include "Account.h"
@@ -24,8 +24,8 @@
 using namespace olbaflinx::core::storage::account;
 
 Account::Account(const AB_ACCOUNT_SPEC *accountSpec)
-    : abAccountSpec(AB_AccountSpec_dup(accountSpec))
-{}
+    : abAccountSpec(accountSpec ? AB_AccountSpec_dup(accountSpec) : Q_NULLPTR)
+{ }
 
 Account::~Account()
 {
@@ -44,41 +44,41 @@ QString Account::typeString() const
 {
     QString typeString;
     switch (type()) {
-        case AB_AccountType_Invalid:
-            typeString = QObject::tr("Invalid");
-            break;
-        case AB_AccountType_Unknown:
-            typeString = QObject::tr("Unknown");
-            break;
-        case AB_AccountType_Bank:
-            typeString = QObject::tr("Bank");
-            break;
-        case AB_AccountType_CreditCard:
-            typeString = QObject::tr("Credit Card"); // Kreditkarte (Kreditkarten Konto?)
-            break;
-        case AB_AccountType_Checking:
-            typeString = QObject::tr("Checking"); // Gehaltskonto?
-            break;
-        case AB_AccountType_Savings:
-            typeString = QObject::tr("Savings"); // Sparkonto
-            break;
-        case AB_AccountType_Investment:
-            typeString = QObject::tr("Investment"); // Anlagen
-            break;
-        case AB_AccountType_Cash:
-            typeString = QObject::tr("Cash"); // Bargeld
-            break;
-        case AB_AccountType_MoneyMarket:
-            typeString = QObject::tr("Money Market"); // Kapitalmarkt?
-            break;
-        case AB_AccountType_Credit:
-            typeString = QObject::tr("Credit"); // Guthaben Konto?
-            break;
-        case AB_AccountType_Unspecified:
-            typeString = QObject::tr("Unspecified");
-            break;
-        default:
-            typeString = "";
+    case AB_AccountType_Invalid:
+        typeString = QObject::tr("Invalid");
+        break;
+    case AB_AccountType_Unknown:
+        typeString = QObject::tr("Unknown");
+        break;
+    case AB_AccountType_Bank:
+        typeString = QObject::tr("Bank");
+        break;
+    case AB_AccountType_CreditCard:
+        typeString = QObject::tr("Credit Card"); // Kreditkarte (Kreditkarten Konto?)
+        break;
+    case AB_AccountType_Checking:
+        typeString = QObject::tr("Checking"); // Gehaltskonto?
+        break;
+    case AB_AccountType_Savings:
+        typeString = QObject::tr("Savings"); // Sparkonto
+        break;
+    case AB_AccountType_Investment:
+        typeString = QObject::tr("Investment"); // Anlagen
+        break;
+    case AB_AccountType_Cash:
+        typeString = QObject::tr("Cash"); // Bargeld
+        break;
+    case AB_AccountType_MoneyMarket:
+        typeString = QObject::tr("Money Market"); // Kapitalmarkt?
+        break;
+    case AB_AccountType_Credit:
+        typeString = QObject::tr("Credit"); // Guthaben Konto?
+        break;
+    case AB_AccountType_Unspecified:
+        typeString = QObject::tr("Unspecified");
+        break;
+    default:
+        typeString = "";
     }
 
     return typeString;
@@ -160,8 +160,7 @@ Account::TransactionLimitsList *Account::transactionLimitsList() const
 }
 
 Account::TransactionLimits *Account::transactionLimitsForCommand(
-    const AB_TRANSACTION_COMMAND &cmd
-) const
+    const AB_TRANSACTION_COMMAND &cmd) const
 {
     return AB_AccountSpec_GetTransactionLimitsForCommand(abAccountSpec, cmd);
 }
@@ -173,12 +172,8 @@ bool Account::isValid() const
 
 QString Account::toString() const
 {
-    return QObject::tr("Account %1 [%2] - %3 - %4").arg(
-        accountNumber(),
-        bankName(),
-        ownerName(),
-        accountName()
-    );
+    return QObject::tr("Account %1 [%2] - %3 - %4")
+        .arg(accountNumber(), bankName(), ownerName(), accountName());
 }
 
 Account *Account::create(const QMap<QString, QVariant> &row)

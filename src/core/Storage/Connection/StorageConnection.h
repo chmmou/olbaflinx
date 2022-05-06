@@ -21,12 +21,11 @@
 #include <QtCore/QObject>
 #include <QtSql/QSqlDatabase>
 
-namespace olbaflinx::core::storage::connection
-{
+namespace olbaflinx::core::storage::connection {
 
-class StorageConnection: public QObject
+class StorageConnection : public QObject
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit StorageConnection(const QString &fileName,
@@ -41,13 +40,16 @@ public:
     bool isValid();
     bool isOpen();
 
+    bool begindTransaction();
+    bool commitTransaction();
+    bool rollbackTransaction();
+
     const QString lastErrorMessage();
 
 protected:
     QString connectionName;
-
 };
 
-}
+} // namespace olbaflinx::core::storage::connection
 
 #endif //OLBAFLINX_STORAGECONNECTION_H

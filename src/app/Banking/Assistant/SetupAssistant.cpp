@@ -21,7 +21,6 @@
 
 #include "core/Banking/Banking.h"
 #include "core/Container.h"
-#include "core/Storage/Storage.h"
 
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage;
@@ -35,12 +34,7 @@ SetupAssistant::SetupAssistant(QWidget *parent)
     setWizardStyle(QWizard::ModernStyle);
 
     QPixmap logoPixmap(":/app/olbaflinx-logo");
-    logoPixmap = logoPixmap.scaled(
-        64,
-        64,
-        Qt::KeepAspectRatio,
-        Qt::SmoothTransformation
-    );
+    logoPixmap = logoPixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     setPixmap(QWizard::LogoPixmap, logoPixmap);
 
     optionPage->initialize();
@@ -57,23 +51,21 @@ void SetupAssistant::done(int result)
 
     const auto accountIds = optionPage->selectedAccountIds();
     if (accountIds.isEmpty()) {
-        QMessageBox::critical(
-            this,
-            tr("Setup Assistant"),
-            tr("You have not yet selected any accounts to import!")
-        );
+        QMessageBox::critical(this,
+                              tr("Setup Assistant"),
+                              tr("You have not yet selected any accounts to import!"));
         return;
     }
 
-    AccountList accounts = {};
-    for (const quint32 uniqueId: accountIds) {
-        accounts << Banking::instance()->account(uniqueId);
+    AccountList_ accounts_ = {};
+    for (const quint32 uniqueId : accountIds) {
+        accounts_.append(Banking::instance()->account(uniqueId));
     }
 
-    Q_EMIT selectedAccountsReceived(accounts);
+    Q_EMIT accountsReceived(accounts_);
 
-    qDeleteAll(accounts);
-    accounts.clear();
+    qDeleteAll(accounts_);
+    accounts_.clear();
 
     QWizard::done(result);
 }

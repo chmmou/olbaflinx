@@ -23,8 +23,8 @@
 using namespace olbaflinx::core::storage::connection;
 
 StorageConnection::StorageConnection(const QString &fileName, const QString &driver, QObject *parent)
-    : QObject(parent),
-      connectionName(QString())
+    : QObject(parent)
+    , connectionName(QString())
 {
     if (fileName.isEmpty()) {
         return;
@@ -57,6 +57,33 @@ bool StorageConnection::isValid()
 bool StorageConnection::isOpen()
 {
     return isValid() && database().isOpen();
+}
+
+bool StorageConnection::begindTransaction()
+{
+    if (isOpen()) {
+        return database().transaction();
+    }
+
+    return false;
+}
+
+bool StorageConnection::commitTransaction()
+{
+    if (isOpen()) {
+        return database().commit();
+    }
+
+    return false;
+}
+
+bool StorageConnection::rollbackTransaction()
+{
+    if (isOpen()) {
+        return database().rollback();
+    }
+
+    return false;
 }
 
 const QString StorageConnection::lastErrorMessage()

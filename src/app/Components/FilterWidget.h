@@ -21,12 +21,11 @@
 
 #include "ui_FilterWidget.h"
 
-namespace olbaflinx::app::components
-{
+namespace olbaflinx::app::components {
 
-class FilterWidget: public QWidget, private Ui::UiFilterWidget
+class FilterWidget : public QWidget, private Ui::UiFilterWidget
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit FilterWidget(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
@@ -49,9 +48,8 @@ public Q_SLOTS:
 
 private:
     bool mUseSearchTextAsRegEx;
-
 };
 
-} // olbaflinx::app::components
+} // namespace olbaflinx::app::components
 
 #endif //OLBAFLINX_FILTERWIDGET_H

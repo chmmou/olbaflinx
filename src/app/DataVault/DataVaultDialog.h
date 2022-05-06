@@ -22,13 +22,11 @@
 
 #include "ui_DataVaultDialog.h"
 
-namespace olbaflinx::app::datavault
-{
+namespace olbaflinx::app::datavault {
 
-class DataVaultDialog: public QDialog, private Ui::UiDataVaultDialog
+class DataVaultDialog : public QDialog, private Ui::UiDataVaultDialog
 {
-
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit DataVaultDialog(QWidget *parent = nullptr);
@@ -39,9 +37,8 @@ public:
 
 public Q_SLOTS:
     void accept() override;
-
 };
 
-}
+} // namespace olbaflinx::app::datavault
 
 #endif // OLBAFLINX_DATAVAULTDIALOG_H

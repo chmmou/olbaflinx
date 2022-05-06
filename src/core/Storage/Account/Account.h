@@ -25,8 +25,7 @@
 #include <aqbanking/types/account_spec.h>
 #include <aqbanking/types/transactionlimits.h>
 
-namespace olbaflinx::core::storage::account
-{
+namespace olbaflinx::core::storage::account {
 
 class Account
 {
@@ -34,7 +33,7 @@ class Account
     typedef AB_TRANSACTION_LIMITS_LIST TransactionLimitsList;
 
 public:
-    explicit Account(const AB_ACCOUNT_SPEC *accountSpec);
+    explicit Account(const AB_ACCOUNT_SPEC *accountSpec = Q_NULLPTR);
     ~Account();
 
     [[nodiscard]] qint32 type() const;
@@ -55,8 +54,7 @@ public:
     [[nodiscard]] QString subAccountNumber() const;
     [[nodiscard]] TransactionLimitsList *transactionLimitsList() const;
     [[nodiscard]] TransactionLimits *transactionLimitsForCommand(
-        const AB_TRANSACTION_COMMAND &cmd
-    ) const;
+        const AB_TRANSACTION_COMMAND &cmd) const;
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] QString toString() const;
     [[nodiscard]] static Account *create(const QMap<QString, QVariant> &row);
@@ -65,7 +63,7 @@ private:
     AB_ACCOUNT_SPEC *abAccountSpec;
 };
 
-}
+} // namespace olbaflinx::core::storage::account
 
 Q_DECLARE_METATYPE(olbaflinx::core::storage::account::Account *)
 Q_DECLARE_METATYPE(const olbaflinx::core::storage::account::Account *)

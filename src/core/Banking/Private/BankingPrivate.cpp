@@ -14,23 +14,39 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 #include <QtWidgets/QPushButton>
 
-#include <gwenhywfar/gwenhywfar.h>
-#include <gwenhywfar/gui.h>
-#include <gwenhywfar/dialog_be.h>
+#ifdef signals
+#undef signals
+#define _signals \
+public \
+    __attribute__((annotate("qt_signal")))
+#endif
+
+#ifdef slots
+#undef slots
+#define _slots __attribute__((annotate("qt_slot")))
+#endif
+
 #include <gwenhywfar/dialog.h>
+#include <gwenhywfar/dialog_be.h>
+#include <gwenhywfar/gui.h>
+#include <gwenhywfar/gwenhywfar.h>
+
 #include <gwen-gui-qt5/qt5_gui.hpp>
 #include <gwen-gui-qt5/qt5_gui_dialog.hpp>
 #include <gwen-gui-qt5/qt5dialogbox.hpp>
 
-#include <aqbanking/gui/abgui.h>
-#include <aqbanking/types/account_spec.h>
 #include <aqbanking/banking.h>
 #include <aqbanking/banking_dialogs.h>
 #include <aqbanking/banking_online.h>
 #include <aqbanking/error.h>
+#include <aqbanking/gui/abgui.h>
+#include <aqbanking/types/account_spec.h>
+
+#ifdef USE_LIBCHIPCARD
+#include <chipcard/client.h>
+#endif
 
 #include "Banking/Banking.h"
 #include "BankingPrivate.h"
@@ -50,10 +66,14 @@ QT5_Gui *qtGui;
 
 AB_BANKING *abBanking;
 
+#ifdef USE_LIBCHIPCARD
+LC_CLIENT *libChipCardClient;
+#endif
+
 BankingPrivate::BankingPrivate(Banking *banking)
-    : QObject(nullptr),
-      q_ptr(banking),
-      mIsInitialized(false)
+    : QObject(nullptr)
+    , q_ptr(banking)
+    , mIsInitialized(false)
 {
     qtGui = nullptr;
     gwenGui = nullptr;
@@ -65,11 +85,9 @@ BankingPrivate::~BankingPrivate()
     finalizeAqBanking();
 }
 
-bool BankingPrivate::initializeAqBanking(
-    const QString &name,
-    const QString &key,
-    const QString &version
-)
+bool BankingPrivate::initializeAqBanking(const QString &name,
+                                         const QString &key,
+                                         const QString &version)
 {
     if (name.isEmpty() || key.isEmpty() || version.isEmpty()) {
         return false;
@@ -91,18 +109,12 @@ bool BankingPrivate::initializeAqBanking(
     abBanking = AB_Banking_new(local8BitName.data(), nullptr, 0);
 
     const QByteArray local8BitKey = key.toLocal8Bit();
-    AB_Banking_RuntimeConfig_SetCharValue(
-        abBanking,
-        "fintsRegistrationKey",
-        local8BitKey.data()
-    );
+    AB_Banking_RuntimeConfig_SetCharValue(abBanking, "fintsRegistrationKey", local8BitKey.data());
 
     const QByteArray local8BitVersion = version.toLocal8Bit();
-    AB_Banking_RuntimeConfig_SetCharValue(
-        abBanking,
-        "fintsApplicationVersionString",
-        local8BitVersion.data()
-    );
+    AB_Banking_RuntimeConfig_SetCharValue(abBanking,
+                                          "fintsApplicationVersionString",
+                                          local8BitVersion.data());
 
     int rv = AB_Banking_Init(abBanking);
     if (rv != AB_SUCCESS) {
@@ -112,6 +124,14 @@ bool BankingPrivate::initializeAqBanking(
     AB_Gui_Extend(gwenGui, abBanking);
 
     mIsInitialized = ((abBanking != nullptr) && (gwenGui != nullptr));
+
+#ifdef USE_LIBCHIPCARD
+    libChipCardClient
+        = LC_Client_new(SingleApplication::applicationName().toLocal8Bit().constData(),
+                        SingleApplication::applicationVersion().toLocal8Bit().constData());
+
+    LC_Client_Init(libChipCardClient);
+#endif
 
     return mIsInitialized;
 }
@@ -131,6 +151,14 @@ void BankingPrivate::finalizeAqBanking()
         GWEN_Gui_free(gwenGui);
         GWEN_Fini();
     }
+
+#ifdef USE_LIBCHIPCARD
+    if (libChipCardClient != nullptr) {
+        LC_Client_Fini(libChipCardClient);
+        LC_Client_free(libChipCardClient);
+        libChipCardClient = nullptr;
+    }
+#endif
 
     qtGui = nullptr;
     gwenGui = nullptr;
@@ -189,21 +217,17 @@ void BankingPrivate::receiveAccounts()
         AB_AccountSpec_List_Del(accountSpec);
         accountList.push_back(new Account(accountSpec));
 
-
         currentAccount = accountList.size() / totalAccounts * 100;
         Q_EMIT q_ptr->progressStatus(currentAccount, totalAccounts);
     }
 
     AB_AccountSpec_List_free(accountSpecList);
 
-    std::sort(
-        accountList.begin(),
-        accountList.end(),
-        [=](const Account *first, const Account *second)
-        {
-            return first->accountName() < second->accountName();
-        }
-    );
+    std::sort(accountList.begin(),
+              accountList.end(),
+              [=](const Account *first, const Account *second) {
+                  return first->accountName() < second->accountName();
+              });
 
     Q_EMIT q_ptr->accountsReceived(accountList);
 
@@ -216,29 +240,24 @@ void BankingPrivate::receiveAccounts()
 void BankingPrivate::receiveAccountIds()
 {
     disconnect(q_ptr, &Banking::accountsReceived, nullptr, nullptr);
-    connect(
-        q_ptr,
-        &Banking::accountsReceived,
-        [=](const AccountList &accounts)
-        {
-            if (accounts.empty()) {
-                Q_EMIT q_ptr->accountIdsReceived(AccountIds());
-                return;
-            }
-
-            AccountIds accountIds = AccountIds();
-
-            for (const auto account: qAsConst(accounts)) {
-                accountIds.push_back(account->uniqueId());
-            }
-
-            std::sort(accountIds.begin(), accountIds.end());
-
-            Q_EMIT q_ptr->accountIdsReceived(accountIds);
-
-            accountIds.clear();
+    connect(q_ptr, &Banking::accountsReceived, [=](const AccountList &accounts) {
+        if (accounts.empty()) {
+            Q_EMIT q_ptr->accountIdsReceived(AccountIds());
+            return;
         }
-    );
+
+        AccountIds accountIds = AccountIds();
+
+        for (const auto account : qAsConst(accounts)) {
+            accountIds.push_back(account->uniqueId());
+        }
+
+        std::sort(accountIds.begin(), accountIds.end());
+
+        Q_EMIT q_ptr->accountIdsReceived(accountIds);
+
+        accountIds.clear();
+    });
 
     receiveAccounts();
 }
@@ -254,26 +273,22 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
 
     const quint32 uniqueId = account->uniqueId();
     if (uniqueId <= 0 || !account->isValid()) {
-        Q_EMIT q_ptr->errorOccurred(
-            tr("The given account id is invalid and or the account is invalid"),
-            Banking::AccountError
-        );
+        Q_EMIT q_ptr
+            ->errorOccurred(tr("The given account id is invalid and or the account is invalid"),
+                            Banking::AccountError);
         return;
     }
 
     if (!account->transactionLimitsForCommand(AB_Transaction_CommandGetTransactions)) {
-        Q_EMIT q_ptr->errorOccurred(
-            tr("The transaction limit for the specified account is not supported!"),
-            Banking::TransactionError
-        );
+        Q_EMIT q_ptr
+            ->errorOccurred(tr("The transaction limit for the specified account is not supported!"),
+                            Banking::TransactionError);
         return;
     }
 
     if (from > to) {
-        Q_EMIT q_ptr->errorOccurred(
-            tr("The from date is higher than the current date!"),
-            Banking::TransactionError
-        );
+        Q_EMIT q_ptr->errorOccurred(tr("The from date is higher than the current date!"),
+                                    Banking::TransactionError);
         return;
     }
 
@@ -283,17 +298,15 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
     GWEN_DATE *gwenFromDate = GWEN_Date_fromString(fd.constData());
     GWEN_DATE *gwenToDate = GWEN_Date_fromString(cd.constData());
 
-    AB_IMEXPORTER_ACCOUNTINFO *accountInfo = abImExporterAccountInfo(
-        AB_Transaction_CommandGetTransactions,
-        uniqueId,
-        gwenFromDate,
-        gwenToDate
-    );
+    AB_IMEXPORTER_ACCOUNTINFO *accountInfo
+        = abImExporterAccountInfo(AB_Transaction_CommandGetTransactions,
+                                  uniqueId,
+                                  gwenFromDate,
+                                  gwenToDate);
 
     QString balance = QString();
 
     while (accountInfo) {
-
         AB_BALANCE_LIST *balanceList = AB_ImExporterAccountInfo_GetBalanceList(accountInfo);
         AB_BALANCE *abBalance = AB_Balance_List_GetLatestByType(balanceList, AB_Balance_TypeBooked);
         if (abBalance) {
@@ -307,7 +320,6 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
 
         AB_TRANSACTION_LIST *abList = AB_ImExporterAccountInfo_GetTransactionList(accountInfo);
         if (abList) {
-
             AB_TRANSACTION *abTransaction;
             while ((abTransaction = AB_Transaction_List_First(abList))) {
                 AB_Transaction_List_Del(abTransaction);
@@ -315,7 +327,6 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
             }
 
             AB_Transaction_List_free(abList);
-
         }
 
         accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
@@ -330,7 +341,6 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
     qDeleteAll(transactionList);
     transactionList.clear();
     balance.clear();
-
 }
 
 int BankingPrivate::showSetupDialog(QWidget *parentWidget) const
@@ -342,8 +352,7 @@ int BankingPrivate::showSetupDialog(QWidget *parentWidget) const
     const auto qt5GuiParentWidget = qtGui->getParentWidget();
     if (qt5GuiParentWidget == nullptr && parentWidget != nullptr) {
         qtGui->pushParentWidget(parentWidget);
-    }
-    else if (qt5GuiParentWidget != nullptr) {
+    } else if (qt5GuiParentWidget != nullptr) {
         qtGui->popParentWidget();
     }
 
@@ -354,12 +363,10 @@ int BankingPrivate::showSetupDialog(QWidget *parentWidget) const
     return result;
 }
 
-AB_IMEXPORTER_ACCOUNTINFO *BankingPrivate::abImExporterAccountInfo(
-    AB_TRANSACTION_COMMAND cmd,
-    quint32 uniqueId,
-    GWEN_DATE *from,
-    GWEN_DATE *to
-)
+AB_IMEXPORTER_ACCOUNTINFO *BankingPrivate::abImExporterAccountInfo(AB_TRANSACTION_COMMAND cmd,
+                                                                   quint32 uniqueId,
+                                                                   GWEN_DATE *from,
+                                                                   GWEN_DATE *to)
 {
     AB_TRANSACTION_LIST2 *transactionList = AB_Transaction_List2_new();
     AB_TRANSACTION *transaction = AB_Transaction_new();
@@ -370,8 +377,7 @@ AB_IMEXPORTER_ACCOUNTINFO *BankingPrivate::abImExporterAccountInfo(
     if (from && to) {
         AB_Transaction_SetFirstDate(transaction, from);
         AB_Transaction_SetLastDate(transaction, to);
-    }
-    else if (to) {
+    } else if (to) {
         AB_Transaction_SetLastDate(transaction, to);
     }
 

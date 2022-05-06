@@ -14,9 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <QtCore/QTimer>
-#include <QtCore/QThread>
 #include <QtCore/QDebug>
+#include <QtCore/QThread>
+#include <QtCore/QTimer>
 
 #include "core/Banking/Banking.h"
 
@@ -70,7 +70,7 @@ AccountIds OptionPage::selectedAccountIds() const
 {
     AccountIds accountIds = {};
     const auto selectedItems = treeWidgetAccounts->selectedItems();
-    for (const auto item: selectedItems) {
+    for (const auto item : selectedItems) {
         accountIds << item->data(0, Qt::UserRole).toUInt();
     }
 
@@ -106,15 +106,11 @@ void OptionPage::setupAccounts(const AccountList &accounts)
     }
 
     treeWidgetAccounts->clear();
-    for (const auto account: accounts) {
+    for (const auto account : accounts) {
         if (account->isValid()) {
             const auto item = new QTreeWidgetItem;
             item->setText(0, account->toString());
-            item->setData(
-                0,
-                Qt::UserRole,
-                account->uniqueId()
-            );
+            item->setData(0, Qt::UserRole, account->uniqueId());
             treeWidgetAccounts->addTopLevelItem(item);
         }
     }

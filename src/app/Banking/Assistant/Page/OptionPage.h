@@ -26,11 +26,11 @@
 
 using namespace olbaflinx::core;
 
-namespace olbaflinx::app::banking::assistant::page
+namespace olbaflinx::app::banking::assistant::page {
+
+class OptionPage : public QWizardPage, private Ui::UiOptionPage
 {
-class OptionPage: public QWizardPage, private Ui::UiOptionPage
-{
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit OptionPage(QWidget *parent = nullptr);
@@ -48,6 +48,6 @@ private Q_SLOTS:
 public Q_SLOTS:
     void showSetupDialog();
 };
-}
+} // namespace olbaflinx::app::banking::assistant::page
 
 #endif // OLBAFLINX_OPTIONPAGE_H

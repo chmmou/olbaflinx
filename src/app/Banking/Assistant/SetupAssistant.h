@@ -25,12 +25,11 @@
 
 using namespace olbaflinx::core;
 
-namespace olbaflinx::app::banking::assistant
-{
+namespace olbaflinx::app::banking::assistant {
 
-class SetupAssistant: public QWizard, private Ui::UiSetupAssistant
+class SetupAssistant : public QWizard, private Ui::UiSetupAssistant
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit SetupAssistant(QWidget *parent = nullptr);
@@ -40,10 +39,9 @@ protected:
     void done(int result) override;
 
 Q_SIGNALS:
-    void selectedAccountsReceived(const AccountList &selectedAccounts);
-
+    void accountsReceived(const AccountList_ &selectedAccounts);
 };
 
-} // olbaflinx::app::banking
+} // namespace olbaflinx::app::banking::assistant
 
 #endif // OLBAFLINX_SETUPASSISTANT_H

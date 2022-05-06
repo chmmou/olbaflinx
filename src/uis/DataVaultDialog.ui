@@ -6,14 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>450</width>
-    <height>345</height>
+    <width>530</width>
+    <height>360</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>450</width>
-    <height>345</height>
+    <width>530</width>
+    <height>360</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -252,7 +252,7 @@
    <item>
     <widget class="QLabel" name="labelVaultPasswordDescriptionBottom">
      <property name="text">
-      <string>The password is known only to you and cannot be reset. If you forget the password, you will not be able to access the data vault.</string>
+      <string>The password is known only to you and can be reset if necessary. If you forget the password, you will not be able to access the data vault.</string>
      </property>
      <property name="textFormat">
       <enum>Qt::PlainText</enum>

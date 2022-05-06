@@ -14,11 +14,25 @@ set(
         ${Qt${QT_VERSION_MAJOR}Core_LIBRARIES}
         ${Qt${QT_VERSION_MAJOR}Gui_LIBRARIES}
         ${Qt${QT_VERSION_MAJOR}Widgets_LIBRARIES}
+        ${Qt${QT_VERSION_MAJOR}Concurrent_LIBRARIES}
         ${Qt${QT_VERSION_MAJOR}Network_LIBRARIES}
         ${Qt${QT_VERSION_MAJOR}Sql_LIBRARIES}
         ${Qt${QT_VERSION_MAJOR}Svg_LIBRARIES}
         SingleApplication::SingleApplication
 )
+
+set(
+        QT_INCLUDES
+        ${Qt${QT_VERSION_MAJOR}Core_INCLUDE_DIRS}
+        ${Qt${QT_VERSION_MAJOR}Gui_INCLUDE_DIRS}
+        ${Qt${QT_VERSION_MAJOR}Widgets_INCLUDE_DIRS}
+        ${Qt${QT_VERSION_MAJOR}Concurrent_INCLUDE_DIRS}
+        ${Qt${QT_VERSION_MAJOR}Network_INCLUDE_DIRS}
+        ${Qt${QT_VERSION_MAJOR}Sql_INCLUDE_DIRS}
+        ${Qt${QT_VERSION_MAJOR}Svg_INCLUDE_DIRS}
+)
+
+message(STATUS ${QX_DIR})
 
 set(
         AQ_LIBS
@@ -27,22 +41,15 @@ set(
         gwenhywfar::core
         gwenhywfar::gui-cpp
         gwenhywfar::gui-qt5
-)
-
-set(
-        QT_INCLUDES
-        ${Qt${QT_VERSION_MAJOR}Core_INCLUDE_DIRS}
-        ${Qt${QT_VERSION_MAJOR}Gui_INCLUDE_DIRS}
-        ${Qt${QT_VERSION_MAJOR}Widgets_INCLUDE_DIRS}
-        ${Qt${QT_VERSION_MAJOR}Network_INCLUDE_DIRS}
-        ${Qt${QT_VERSION_MAJOR}Sql_INCLUDE_DIRS}
-        ${Qt${QT_VERSION_MAJOR}Svg_INCLUDE_DIRS}
+        PkgConfig::LibChipCardc
+        PkgConfig::LibChipCards
 )
 
 set(
         AQ_INCLUDES
         ${AQBANKING_INCLUDE_DIRS}
         ${GWENHYWFAR_INCLUDE_DIRS}
+        ${LibChipCards_INCLUDE_DIRS}
 )
 
 include_directories(${AQ_INCLUDES})
@@ -77,15 +84,15 @@ file(
         ${APP_DIR}/core/Storage/Connection/*.cpp
         ${APP_DIR}/core/Storage/Private/*.cpp
         ${APP_DIR}/core/Storage/Transaction/*.cpp
+
         ${APP_DIR}/app/*.cpp
         ${APP_DIR}/app/Components/*.cpp
-        ${APP_DIR}/app/Components/Sql/*.cpp
         ${APP_DIR}/app/Banking/*.cpp
-        ${APP_DIR}/app/Banking/Tabs/*.cpp
         ${APP_DIR}/app/Banking/Assistant/*.cpp
         ${APP_DIR}/app/Banking/Assistant/Page/*.cpp
         ${APP_DIR}/app/DataVault/*.cpp
-        ${APP_DIR}/app/StackPages/*.cpp
+        ${APP_DIR}/app/Pages/*.cpp
+        ${APP_DIR}/app/Pages/Tabs*.cpp
 )
 file(
         GLOB_RECURSE
@@ -99,15 +106,15 @@ file(
         ${APP_DIR}/core/Storage/Connection/*.h
         ${APP_DIR}/core/Storage/Private/*.h
         ${APP_DIR}/core/Storage/Transaction/*.h
+
         ${APP_DIR}/app/*.h
         ${APP_DIR}/app/Components/*.h
-        ${APP_DIR}/app/Components/Sql/*.h
         ${APP_DIR}/app/Banking/*.h
-        ${APP_DIR}/app/Banking/Tabs/*.h
         ${APP_DIR}/app/Banking/Assistant/*.h
         ${APP_DIR}/app/Banking/Assistant/Page/*.h
         ${APP_DIR}/app/DataVault/*.h
-        ${APP_DIR}/app/StackPages/*.h
+        ${APP_DIR}/app/Pages/*.h
+        ${APP_DIR}/app/Pages/Tabs*.h
 )
 
 # Include directories for include UIs
@@ -115,13 +122,12 @@ include_directories(${APP_DIR})
 include_directories(${APP_DIR}/core)
 include_directories(${APP_DIR}/app)
 include_directories(${APP_DIR}/app/Components)
-include_directories(${APP_DIR}/app/Components/Sql)
 include_directories(${APP_DIR}/app/Banking)
-include_directories(${APP_DIR}/app/Banking/Tabs)
 include_directories(${APP_DIR}/app/Banking/Assistant)
 include_directories(${APP_DIR}/app/Banking/Assistant/Page)
 include_directories(${APP_DIR}/app/DataVault)
-include_directories(${APP_DIR}/app/StackPages)
+include_directories(${APP_DIR}/app/Pages)
+include_directories(${APP_DIR}/app/Pages/Tabs)
 
 set(APP_UI_DIR ${APP_DIR}/uis)
 file(GLOB APP_UI_FILES ${APP_UI_DIR}/*.ui)
@@ -189,10 +195,11 @@ target_compile_definitions(
         ${CMAKE_PROJECT_NAME} PRIVATE
         QT_DEPRECATED_WARNINGS
         QT_DISABLE_DEPRECATED_BEFORE=0x050E20
+        USE_LIBCHIPCARD
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>")
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${QT_LIBS} ${AQ_LIBS})
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${QT_LIBS} ${AQ_LIBS} ${QX_LIBRARIES})
 
 if (APPLE)
     set_target_properties(

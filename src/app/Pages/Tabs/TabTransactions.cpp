@@ -1,5 +1,5 @@
 /**
-* Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
+* Copyright (C) 2022, Alexander Saal <developer@olbaflinx.chm-projects.de>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -15,24 +15,14 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef OLBAFLINX_PAGEDATAVAULT_H
-#define OLBAFLINX_PAGEDATAVAULT_H
+#include "TabTransactions.h"
 
-#include <QWidget>
+using namespace olbaflinx::app::pages::tabs;
 
-namespace olbaflinx::app::banking::stackpages
+TabTransactions::TabTransactions(QWidget *parent)
+    : QWidget(parent)
 {
-class PageDataVault : public QWidget
-{
-    Q_OBJECT
-
-public:
-    explicit PageDataVault(QWidget *parent = nullptr);
-
-Q_SIGNALS:
-    void vaultOpend();
-
-};
+    setupUi(this);
 }
 
-#endif // OLBAFLINX_PAGEDATAVAULT_H
+TabTransactions::~TabTransactions() { }

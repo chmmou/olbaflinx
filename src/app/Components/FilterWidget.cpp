@@ -18,8 +18,8 @@
 #include <QtCore/QDate>
 #include <QtCore/QDebug>
 #include <QtCore/QLocale>
-#include <QtCore/QSignalBlocker>
 #include <QtCore/QRegExp>
+#include <QtCore/QSignalBlocker>
 
 #include "Container.h"
 #include "FilterWidget.h"
@@ -28,8 +28,8 @@ using namespace olbaflinx::core;
 using namespace olbaflinx::app::components;
 
 FilterWidget::FilterWidget(QWidget *parent, Qt::WindowFlags f)
-    : QWidget(parent, f),
-      mUseSearchTextAsRegEx(false)
+    : QWidget(parent, f)
+    , mUseSearchTextAsRegEx(false)
 {
     setupUi(this);
 
@@ -74,41 +74,39 @@ void FilterWidget::slotTimePeriodChanged(const int timePeriod)
     const int itemData = cbxTimePeriod->itemData(timePeriod).toInt();
 
     switch (timePeriod) {
-        case 1:
-        case 2:
-        case 3:
-        case 4:
-        case 5:
-            whileSignalBlocking(dateEditFrom)->setDate(QDate::currentDate().addDays(0 - itemData));
-            break;
-        case 6:
-        case 7:
-        case 8: {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+        whileSignalBlocking(dateEditFrom)->setDate(QDate::currentDate().addDays(0 - itemData));
+        break;
+    case 6:
+    case 7:
+    case 8: {
+        const auto dayOfWeek = QDate::currentDate().dayOfWeek();
+        const auto firstWeekDate = QDate::currentDate().addDays(1 - dayOfWeek);
+        const auto endWeekDate = QDate::currentDate().addDays(7 - dayOfWeek);
 
-            const auto dayOfWeek = QDate::currentDate().dayOfWeek();
-            const auto firstWeekDate = QDate::currentDate().addDays(1 - dayOfWeek);
-            const auto endWeekDate = QDate::currentDate().addDays(7 - dayOfWeek);
+        whileSignalBlocking(dateEditFrom)->setDate(firstWeekDate.addDays(0 - itemData));
+        whileSignalBlocking(dateEditTo)->setDate(endWeekDate.addDays(0 - itemData));
 
-            whileSignalBlocking(dateEditFrom)->setDate(firstWeekDate.addDays(0 - itemData));
-            whileSignalBlocking(dateEditTo)->setDate(endWeekDate.addDays(0 - itemData));
+        break;
+    }
+    case 9:
+    case 10:
+    case 11: {
+        const auto dayOfYear = QDate::currentDate().dayOfYear();
+        const auto firstYearDate = QDate::currentDate().addDays(1 - dayOfYear);
+        const auto endYearDate = QDate::currentDate().addDays(365 - dayOfYear);
 
-            break;
-        }
-        case 9:
-        case 10:
-        case 11: {
+        whileSignalBlocking(dateEditFrom)->setDate(firstYearDate.addYears(0 - itemData));
+        whileSignalBlocking(dateEditTo)->setDate(endYearDate.addYears(0 - itemData));
 
-            const auto dayOfYear = QDate::currentDate().dayOfYear();
-            const auto firstYearDate = QDate::currentDate().addDays(1 - dayOfYear);
-            const auto endYearDate = QDate::currentDate().addDays(365 - dayOfYear);
-
-            whileSignalBlocking(dateEditFrom)->setDate(firstYearDate.addYears(0 - itemData));
-            whileSignalBlocking(dateEditTo)->setDate(endYearDate.addYears(0 - itemData));
-
-            break;
-        }
-        default:
-            break;
+        break;
+    }
+    default:
+        break;
     }
 
     Q_EMIT dateTimePeriodChanged(dateEditFrom->date(), dateEditTo->date());

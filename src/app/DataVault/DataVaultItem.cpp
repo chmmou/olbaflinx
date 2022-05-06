@@ -30,7 +30,7 @@
 #include "DataVaultItem.h"
 
 #include "core/Container.h"
-#include "core/Storage/Storage.h"
+#include "core/Storage/VaultStorage.h"
 
 using namespace olbaflinx::app::datavault;
 using namespace olbaflinx::core;
@@ -111,9 +111,8 @@ void DataVaultItem::showPasswordChangeDialog()
 
     QPointer<QLabel> infoLabelField = new QLabel(&passwordChangeDlg);
     infoLabelField->setWordWrap(true);
-    infoLabelField->setText(
-        tr("Choose an secure password possible with at least 6 letters, numbers and special characters.")
-    );
+    infoLabelField->setText(tr("Choose an secure password possible with at least 6 letters, "
+                               "numbers and special characters."));
     form.addRow(infoLabelField);
 
     form.addItem(new QSpacerItem(1, 12, QSizePolicy::Minimum, QSizePolicy::Fixed));
@@ -124,103 +123,50 @@ void DataVaultItem::showPasswordChangeDialog()
     QPointer<QLineEdit> newPasswordField = new QLineEdit(&passwordChangeDlg);
     form.addRow(tr("New Password"), newPasswordField);
 
-    QDialogButtonBox passwordChangeDlgButtons(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-        Qt::Horizontal,
-        &passwordChangeDlg
-    );
+    QDialogButtonBox passwordChangeDlgButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                              Qt::Horizontal,
+                                              &passwordChangeDlg);
 
     form.addRow(&passwordChangeDlgButtons);
 
-    connect(
-        &passwordChangeDlgButtons,
-        &QDialogButtonBox::rejected,
-        &passwordChangeDlg,
-        &QDialog::reject
-    );
+    connect(&passwordChangeDlgButtons,
+            &QDialogButtonBox::rejected,
+            &passwordChangeDlg,
+            &QDialog::reject);
 
-    connect(
-        &passwordChangeDlgButtons,
-        &QDialogButtonBox::accepted,
-        &passwordChangeDlg,
-        [&passwordChangeDlg, currPasswordField, newPasswordField, this]()
-        {
-            const auto dlgTitle = passwordChangeDlg.windowTitle();
+    connect(&passwordChangeDlgButtons,
+            &QDialogButtonBox::accepted,
+            &passwordChangeDlg,
+            [&passwordChangeDlg, currPasswordField, newPasswordField, this]() {
+                const auto dlgTitle = passwordChangeDlg.windowTitle();
 
-            const auto currPassword = currPasswordField->text();
-            if (currPassword.isEmpty()) {
-                QMessageBox::critical(
-                    &passwordChangeDlg,
-                    dlgTitle,
-                    tr("The current password cannot be empty!")
-                );
-                return;
-            }
-
-            const auto newPassword = newPasswordField->text();
-            if (newPassword.isEmpty()) {
-                QMessageBox::critical(
-                    &passwordChangeDlg,
-                    dlgTitle,
-                    tr("The new password cannot be empty!")
-                );
-                return;
-            }
-
-            const auto passwordMatch = MinPasswordReqEx.match(newPassword);
-            if (!passwordMatch.hasMatch()) {
-                QMessageBox::critical(
-                    &passwordChangeDlg,
-                    dlgTitle,
-                    tr("The new password you entered does not match the criteria.")
-                );
-                return;
-            }
-
-            disconnect(Storage::instance(), &Storage::errorOccurred, nullptr, nullptr);
-            disconnect(Storage::instance(), &Storage::userChanged, nullptr, nullptr);
-
-            connect(
-                Storage::instance(),
-                &Storage::errorOccurred,
-                &passwordChangeDlg,
-                [&passwordChangeDlg, dlgTitle](const QString &message, const Storage::ErrorType errorType)
-                {
-                    if (errorType == Storage::PasswordError) {
-                        QMessageBox::critical(
-                            &passwordChangeDlg,
-                            dlgTitle,
-                            message
-                        );
-                    }
+                const auto currPassword = currPasswordField->text();
+                if (currPassword.isEmpty()) {
+                    QMessageBox::critical(&passwordChangeDlg,
+                                          dlgTitle,
+                                          tr("The current password cannot be empty!"));
+                    return;
                 }
-            );
 
-            connect(
-                Storage::instance(),
-                &Storage::userChanged,
-                &passwordChangeDlg,
-                [&passwordChangeDlg, currPassword, newPassword](const StorageUser *)
-                {
-                    const bool success = Storage::instance()->changePassword(
-                        currPassword,
-                        newPassword
-                    );
-
-                    if (!success) {
-                        return;
-                    }
-
-                    passwordChangeDlg.accept();
+                const auto newPassword = newPasswordField->text();
+                if (newPassword.isEmpty()) {
+                    QMessageBox::critical(&passwordChangeDlg,
+                                          dlgTitle,
+                                          tr("The new password cannot be empty!"));
+                    return;
                 }
-            );
 
-            StorageUser storageUser;
-            storageUser.setPassword(currPassword);
-            storageUser.setFilePath(vaultFilePath());
-            Storage::instance()->setUser(&storageUser);
-        }
-    );
+                const auto passwordMatch = MinPasswordReqEx.match(newPassword);
+                if (!passwordMatch.hasMatch()) {
+                    QMessageBox::critical(
+                        &passwordChangeDlg,
+                        dlgTitle,
+                        tr("The new password you entered does not match the criteria."));
+                    return;
+                }
+
+                const bool success = VaultStorage::instance()->changeKey(currPassword, newPassword);
+            });
 
     passwordChangeDlg.exec();
 
@@ -235,8 +181,7 @@ void DataVaultItem::deleteDataVault()
     const QMessageBox::StandardButton result = QMessageBox::question(
         this,
         tr("Data Vault"),
-        tr("Are you sure you want to delete your data vault?\nThis can not be undone!")
-    );
+        tr("Are you sure you want to delete your data vault?\nThis can not be undone!"));
 
     if (result == QMessageBox::Yes) {
         bool removed = true;
@@ -251,8 +196,7 @@ void DataVaultItem::deleteDataVault()
 
 void DataVaultItem::backupDataVault()
 {
-    const auto storage = Storage::instance();
-    QString storageBackupPath = storage->storagePath().append("/backup");
+    QString storageBackupPath = VaultStorage::instance()->storagePath().append("/backup");
     QDir backupDir(storageBackupPath);
     if (!backupDir.exists()) {
         backupDir.mkpath(storageBackupPath);
@@ -260,13 +204,12 @@ void DataVaultItem::backupDataVault()
 
     QFile storageFile(vaultFilePath());
     if (storageFile.exists()) {
-        const QString timeStamp = QDateTime::currentDateTime()
-            .toString(StorageFileBackupDateTimeFormat);
+        const QString timeStamp = QDateTime::currentDateTime().toString(
+            StorageFileBackupDateTimeFormat);
 
         QFileInfo info(vaultFilePath());
-        const QString storageBackupFile = storageBackupPath
-            .append("/%1.%2")
-            .arg(timeStamp, info.completeSuffix());
+        const QString storageBackupFile = storageBackupPath.append("/%1.%2")
+                                              .arg(timeStamp, info.completeSuffix());
 
         storageFile.copy(storageBackupFile);
     }

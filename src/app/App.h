@@ -20,16 +20,11 @@
 
 #include <QtWidgets/QMainWindow>
 
-#include "app/DataVault/DataVaultItem.h"
-
 #include "ui_OlbaFlinx.h"
 
-namespace olbaflinx::app
-{
+namespace olbaflinx::app {
 
-using namespace datavault;
-
-class App: public QMainWindow, private Ui::UiOlbaFlinx
+class App : public QMainWindow, public Ui::UiOlbaFlinx
 {
     Q_OBJECT
 
@@ -39,23 +34,13 @@ public:
 
     void initialize();
 
+private Q_SLOTS:
+    void openVault();
+
 protected:
     void closeEvent(QCloseEvent *event) override;
-
-private:
-    void setupDataVault();
-    void addDataVault(const QString &title, const QString &fileName);
-    void createVaultInfoLabel();
-    void createVaultInfoSpacerItems();
-    void addVaultInfo();
-    void removeVaultInfo();
-
-private Q_SLOTS:
-    void connectDataVaultForAdding();
-    void connectDataVaultItemForOpen(const DataVaultItem *item);
-    void connectDataVaultItemForDeletion(const DataVaultItem *item);
 };
 
-}
+} // namespace olbaflinx::app
 
 #endif // OLBAFLINX_APP_H

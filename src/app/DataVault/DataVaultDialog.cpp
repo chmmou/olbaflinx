@@ -15,13 +15,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <QtCore/QDebug>
 #include <QtCore/QRegularExpression>
 #include <QtGui/QRegularExpressionValidator>
 #include <QtWidgets/QMessageBox>
-#include <QtCore/QDebug>
 
-#include "DataVaultDialog.h"
 #include "core/Container.h"
+#include "DataVaultDialog.h"
 
 using namespace olbaflinx::app::datavault;
 
@@ -46,38 +46,28 @@ QString DataVaultDialog::vaultPassword() const
 void DataVaultDialog::accept()
 {
     if (lineEditVaultName->text().isEmpty()) {
-        QMessageBox::critical(
-            this,
-            tr("Data Vault Error"),
-            tr("The name for you new data vault can not be empty.")
-        );
+        QMessageBox::critical(this,
+                              tr("Data Vault Error"),
+                              tr("The name for you new data vault can not be empty."));
         return;
     }
 
     if (lineEditPassword->text().isEmpty()) {
-        QMessageBox::critical(
-            this,
-            tr("Password Error"),
-            tr("The password can not be empty.")
-        );
+        QMessageBox::critical(this, tr("Password Error"), tr("The password can not be empty."));
         return;
     }
 
     if (lineEditPasswordConfirm->text().isEmpty()) {
-        QMessageBox::critical(
-            this,
-            tr("Password Error"),
-            tr("The confirmation password can not be empty.")
-        );
+        QMessageBox::critical(this,
+                              tr("Password Error"),
+                              tr("The confirmation password can not be empty."));
         return;
     }
 
     if (lineEditPassword->text() != lineEditPasswordConfirm->text()) {
-        QMessageBox::critical(
-            this,
-            tr("Password Error"),
-            tr("The password you entered does not match.")
-        );
+        QMessageBox::critical(this,
+                              tr("Password Error"),
+                              tr("The password you entered does not match."));
         return;
     }
 
@@ -85,11 +75,9 @@ void DataVaultDialog::accept()
     auto passwordConfirmMatch = MinPasswordReqEx.match(lineEditPasswordConfirm->text());
 
     if (!passwordMatch.hasMatch() || !passwordConfirmMatch.hasMatch()) {
-        QMessageBox::critical(
-            this,
-            tr("Password Error"),
-            tr("The password you entered does not match.")
-        );
+        QMessageBox::critical(this,
+                              tr("Password Error"),
+                              tr("The password you entered does not match."));
         return;
     }
 
