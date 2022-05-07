@@ -27,8 +27,8 @@
 #include "core/Container.h"
 #include "core/Storage/VaultStorage.h"
 
-#include "PageDataVaults.h"
 #include "PageBasePrivate.h"
+#include "PageDataVaults.h"
 
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::app;
@@ -42,7 +42,7 @@ PageDataVaults::PageDataVaults(QWidget *parent)
     , m_scrollAreaSpacerTop(Q_NULLPTR)
     , m_scrollAreaSpacerBottom(Q_NULLPTR)
     , m_scrollAreaDataVaultsContentsLayout(Q_NULLPTR)
-{ }
+{}
 
 PageDataVaults::~PageDataVaults() = default;
 
@@ -53,16 +53,17 @@ void PageDataVaults::initialize(QMainWindow *mainWindow)
     createVaultInfoLabel();
     createVaultInfoSpacerItems();
 
-    m_scrollAreaDataVaultsContentsLayout = new QVBoxLayout(d_ptr->app()->scrollAreaDataVaultsContents);
+    const auto app = d_ptr->app();
+    m_scrollAreaDataVaultsContentsLayout = new QVBoxLayout(app->scrollAreaDataVaultsContents);
 
-    d_ptr->app()->scrollAreaDataVaults->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    d_ptr->app()->scrollAreaDataVaults->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    d_ptr->app()->scrollAreaDataVaults->setFrameShape(QScrollArea::NoFrame);
-    d_ptr->app()->scrollAreaDataVaults->setFrameShadow(QScrollArea::Plain);
+    app->scrollAreaDataVaults->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    app->scrollAreaDataVaults->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    app->scrollAreaDataVaults->setFrameShape(QScrollArea::NoFrame);
+    app->scrollAreaDataVaults->setFrameShadow(QScrollArea::Plain);
 
-    d_ptr->app()->pushButtonAddNewDataVaults->setShortcut(QKeySequence("Ctrl+N"));
+    app->pushButtonAddNewDataVaults->setShortcut(QKeySequence("Ctrl+N"));
 
-    connect(d_ptr->app()->pushButtonAddNewDataVaults,
+    connect(app->pushButtonAddNewDataVaults,
             &QPushButton::clicked,
             this,
             &PageDataVaults::addNewDataVault);

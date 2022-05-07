@@ -27,9 +27,9 @@
 
 #include <QtCore/QSettings>
 
+#include "VaultStorage.h"
 #include "core/SingleApplication/SingleApplication.h"
 #include "core/Storage/Connection/StorageConnection.h"
-#include "VaultStorage.h"
 
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::storage::connection;
@@ -42,7 +42,7 @@ public:
         , m_connection(Q_NULLPTR)
         , m_filePath("")
         , m_key("")
-    { }
+    {}
 
     ~Private()
     {
@@ -329,7 +329,7 @@ private:
 VaultStorage::VaultStorage()
     : QObject(Q_NULLPTR)
     , d_ptr(new Private())
-{ }
+{}
 
 VaultStorage::~VaultStorage()
 {
@@ -361,8 +361,9 @@ bool VaultStorage::changeKey(const QString &oldKey, const QString &newKey) const
         return oldKeyValid;
     }
 
-    query.exec(QString("PRAGMA key='%1';").arg(d_ptr->escapeKey(newKey)));
-    return d_ptr->isStorageValid();
+    d_ptr->setKey(newKey);
+    const bool success = query.exec(QString("PRAGMA rekey='%1';").arg(d_ptr->escapeKey(newKey)));
+    return success && d_ptr->isStorageValid();
 }
 
 QString VaultStorage::storagePath() const

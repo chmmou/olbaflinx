@@ -165,7 +165,25 @@ void DataVaultItem::showPasswordChangeDialog()
                     return;
                 }
 
+                VaultStorage::instance()->setDatabaseKey(vaultFilePath(), currPassword);
+                VaultStorage::instance()->initialize(false);
+                const bool isStorageValid = VaultStorage::instance()->isStorageValid();
+                if (!isStorageValid) {
+                    QMessageBox::critical(&passwordChangeDlg,
+                                          dlgTitle,
+                                          tr("The current password is not correct!"));
+                    return;
+                }
+
                 const bool success = VaultStorage::instance()->changeKey(currPassword, newPassword);
+                if (!success) {
+                    QMessageBox::critical(&passwordChangeDlg,
+                                          dlgTitle,
+                                          tr("The password could not be changed!"));
+                    return;
+                }
+                VaultStorage::instance()->close();
+                passwordChangeDlg.accept();
             });
 
     passwordChangeDlg.exec();
