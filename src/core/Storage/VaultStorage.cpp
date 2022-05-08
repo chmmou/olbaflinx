@@ -107,7 +107,12 @@ public:
     void close()
     {
         if (m_connection) {
-            m_connection->close();
+            if (m_connection->isOpen()) {
+                QSqlQuery query = databaseQuery();
+                query.exec("VACUUM;");
+                m_connection->close();
+            }
+
             delete m_connection;
             m_connection = Q_NULLPTR;
         }

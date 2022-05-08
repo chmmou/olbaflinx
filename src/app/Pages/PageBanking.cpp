@@ -42,14 +42,13 @@ PageBanking::~PageBanking() {}
 
 void PageBanking::initialize(QMainWindow *mainWindow)
 {
-    d_ptr->setMainWindow(mainWindow);
-
-    qRegisterMetaType<const AccountItem *>();
-
     auto accounts = VaultStorage::instance()->accounts();
     if (accounts.isEmpty()) {
         return;
     }
+
+    d_ptr->setMainWindow(mainWindow);
+    qRegisterMetaType<const AccountItem *>();
 
     const auto app = d_ptr->app();
 

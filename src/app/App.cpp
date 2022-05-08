@@ -27,6 +27,7 @@
 
 #include "core/Banking/Banking.h"
 #include "core/SingleApplication/SingleApplication.h"
+#include "core/Storage/VaultStorage.h"
 
 using namespace olbaflinx::app;
 using namespace olbaflinx::app::pages;
@@ -57,6 +58,7 @@ void App::initialize()
     }
 
     connect(pageDataVaults, &PageDataVaults::vaultOpen, this, &App::openVault);
+    connect(pageBanking, &PageBanking::vaultClosed, this, &App::vaultClosed);
 
     pageDataVaults->initialize(this);
 }
@@ -67,8 +69,16 @@ void App::openVault()
     pageBanking->initialize(this);
 }
 
+void App::vaultClosed()
+{
+    stackedWidgetMain->setCurrentIndex(0);
+    VaultStorage::instance()->close();
+}
+
 void App::closeEvent(QCloseEvent *event)
 {
+    VaultStorage::instance()->close();
     Banking::instance()->deInitialize();
+
     QMainWindow::closeEvent(event);
 }

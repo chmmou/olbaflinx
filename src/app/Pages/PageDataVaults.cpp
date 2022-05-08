@@ -233,6 +233,7 @@ void PageDataVaults::openDataVaultItem(const QString &filePath, const QString &p
     VaultStorage::instance()->initialize(false);
 
     if (!VaultStorage::instance()->isStorageValid()) {
+        VaultStorage::instance()->close();
         QMessageBox::critical(this,
                               tr("Error"),
                               tr("Your data vault is corrupted and or not readable / writeable."));
@@ -249,6 +250,7 @@ void PageDataVaults::openDataVaultItem(const QString &filePath, const QString &p
                 this,
                 [&](const AccountList &accounts) {
                     VaultStorage::instance()->addAccounts(accounts);
+                    d_ptr->app()->pageBanking->initialize(d_ptr->app());
                 });
         setupAssistant->exec();
         setupAssistant->deleteLater();

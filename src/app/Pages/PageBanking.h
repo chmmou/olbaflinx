@@ -35,6 +35,9 @@ public:
 
     void initialize(QMainWindow *mainWindow);
 
+Q_SIGNALS:
+    void vaultClosed();
+
 private:
     friend class PageBasePrivate;
     QScopedPointer<PageBasePrivate> d_ptr;

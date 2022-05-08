@@ -36,6 +36,7 @@ public:
 
 private Q_SLOTS:
     void openVault();
+    void vaultClosed();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
