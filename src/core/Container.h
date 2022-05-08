@@ -18,9 +18,10 @@
 #ifndef OLBAFLINX_CONTAINER_H
 #define OLBAFLINX_CONTAINER_H
 
-#include <QtCore/QList>
+#include <QtGui/QImage>
 #include <QtCore/QObject>
 #include <QtCore/QRegularExpression>
+#include <QtCore/QVector>
 
 #include "core/Logger/Logger.h"
 #include "core/Storage/Account/Account.h"
@@ -114,8 +115,7 @@ namespace olbaflinx::core {
 using namespace storage::account;
 using namespace storage::transaction;
 
-template<class T>
-class SignalBlocker
+template<class T> class SignalBlocker
 {
     T *blocked;
     bool previous;
@@ -124,30 +124,34 @@ public:
     SignalBlocker(T *blocked)
         : blocked(blocked)
         , previous(blocked->blockSignals(true))
-    {}
+    { }
 
     ~SignalBlocker() { blocked->blockSignals(previous); }
 
     T *operator->() { return blocked; }
 };
 
-template<class T>
-inline SignalBlocker<T> whileSignalBlocking(T *blocked)
+template<class T> inline SignalBlocker<T> whileSignalBlocking(T *blocked)
 {
     return SignalBlocker<T>(blocked);
 }
 
-[[deprecated]] typedef QList<const Account *> AccountList;
+struct AccountItem {
+    QString title = "";
+    QImage image = {};
+    double balance = 0.0;
+};
 
-typedef QVector<const Account *> AccountList_;
-typedef QList<const Transaction *> TransactionList;
-typedef QList<quint32> AccountIds;
+typedef QVector<const Account *> AccountList;
+typedef QVector<const Transaction *> TransactionList;
+typedef QVector<quint32> AccountIds;
 
 } // namespace olbaflinx::core
 
 Q_DECLARE_METATYPE(olbaflinx::core::AccountList)
-Q_DECLARE_METATYPE(olbaflinx::core::AccountList_)
-Q_DECLARE_METATYPE(olbaflinx::core::TransactionList)
 Q_DECLARE_METATYPE(olbaflinx::core::AccountIds)
+Q_DECLARE_METATYPE(olbaflinx::core::AccountItem *)
+Q_DECLARE_METATYPE(const olbaflinx::core::AccountItem *)
+Q_DECLARE_METATYPE(olbaflinx::core::TransactionList)
 
 #endif // OLBAFLINX_CONTAINER_H

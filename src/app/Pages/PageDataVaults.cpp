@@ -247,7 +247,7 @@ void PageDataVaults::openDataVaultItem(const QString &filePath, const QString &p
         connect(setupAssistant,
                 &SetupAssistant::accountsReceived,
                 this,
-                [&](const AccountList_ &accounts) {
+                [&](const AccountList &accounts) {
                     VaultStorage::instance()->addAccounts(accounts);
                 });
         setupAssistant->exec();

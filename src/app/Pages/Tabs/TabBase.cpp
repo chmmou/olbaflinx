@@ -15,13 +15,29 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "TabTransactions.h"
+#include "TabBase.h"
+#include <QDebug>
+#include <QMetaObject>
 
 using namespace olbaflinx::app::pages::tabs;
 
-TabTransactions::TabTransactions(QWidget *parent)
-    : TabBase(parent)
+TabBase::TabBase(QWidget *parent)
+    : QWidget(parent)
+    , m_accountId(0)
+    , m_transactions({})
 {
+    setupUi(this);
 }
 
-TabTransactions::~TabTransactions() {}
+TabBase::~TabBase() = default;
+
+void TabBase::setAccountId(const quint32 id)
+{
+    m_accountId = id;
+}
+
+TransactionList TabBase::transactions(const Type type) const
+{
+    // result caching
+    return m_transactions;
+}

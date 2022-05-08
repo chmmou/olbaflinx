@@ -21,12 +21,12 @@
 #include <QtCore/QDate>
 #include <QtCore/QMap>
 #include <QtCore/QMetaType>
+#include <QtSql/QSqlQuery>
 
 #include <aqbanking/types/transaction.h>
 #include <aqbanking/types/transactionlimits.h>
 
-namespace olbaflinx::core::storage::transaction
-{
+namespace olbaflinx::core::storage::transaction {
 
 typedef AB_TRANSACTION_TYPE TransactionType;
 typedef AB_TRANSACTION_SUBTYPE TransactionSubType;
@@ -117,6 +117,9 @@ public:
 
     [[nodiscard]] QString toString() const;
     [[nodiscard]] bool isStandingOrder() const;
+    [[nodiscard]] QString calculateTransactionHash() const;
+    [[nodiscard]] QSqlQuery createInsertQuery(const quint32 &accountId, QSqlQuery &query) const;
+    [[nodiscard]] static QMap<QString, QVariant> transactionQueryToMap(const QSqlQuery &query);
     [[nodiscard]] static Transaction *create(const QMap<QString, QVariant> &row);
 
 private:
@@ -124,7 +127,8 @@ private:
     static GWEN_DATE *qDateToGwenDate(const QDate &qDate);
     AB_TRANSACTION *abTransaction;
 };
-}
+
+} // namespace olbaflinx::core::storage::transaction
 
 Q_DECLARE_METATYPE(olbaflinx::core::storage::transaction::Transaction *)
 Q_DECLARE_METATYPE(const olbaflinx::core::storage::transaction::Transaction *)

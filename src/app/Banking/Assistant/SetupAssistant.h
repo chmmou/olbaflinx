@@ -39,7 +39,7 @@ protected:
     void done(int result) override;
 
 Q_SIGNALS:
-    void accountsReceived(const AccountList_ &selectedAccounts);
+    void accountsReceived(const AccountList &selectedAccounts);
 };
 
 } // namespace olbaflinx::app::banking::assistant

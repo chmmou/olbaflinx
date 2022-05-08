@@ -18,22 +18,19 @@
 #ifndef OLBAFLINX_TABTRANSACTIONS_H
 #define OLBAFLINX_TABTRANSACTIONS_H
 
-#include <QWidget>
+#include "TabBase.h"
 
-#include "ui_Transaction.h"
+namespace olbaflinx::app::pages::tabs {
 
-namespace olbaflinx::app::pages::tabs
-{
-class TabTransactions : public QWidget, private Ui::UiTransaction
+class TabTransactions : public TabBase
 {
     Q_OBJECT
 
 public:
     explicit TabTransactions(QWidget *parent = nullptr);
     ~TabTransactions() override;
-
 };
 
-}
-// namespace olbaflinx::app::pages
+} // namespace olbaflinx::app::pages::tabs
+
 #endif // OLBAFLINX_TABTRANSACTIONS_H

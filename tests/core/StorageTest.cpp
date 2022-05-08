@@ -104,7 +104,6 @@ void StorageTest::testInitializingWithNoPassword()
     storage->initialize(true);
     QVERIFY(!storage->isStorageValid());
 
-    // File not exists that's reason
     bool removed = QFile(tmpStorage).remove();
     QVERIFY(removed);
 }

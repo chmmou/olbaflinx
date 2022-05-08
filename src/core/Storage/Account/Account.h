@@ -20,6 +20,7 @@
 #include <QtCore/QMap>
 #include <QtCore/QString>
 #include <QtCore/QVariant>
+#include <QtSql/QSqlQuery>
 
 #include <aqbanking/account_type.h>
 #include <aqbanking/types/account_spec.h>
@@ -33,7 +34,7 @@ class Account
     typedef AB_TRANSACTION_LIMITS_LIST TransactionLimitsList;
 
 public:
-    explicit Account(const AB_ACCOUNT_SPEC *accountSpec = Q_NULLPTR);
+    explicit Account(const AB_ACCOUNT_SPEC *accountSpec = Q_NULLPTR, const double balance = 0.0);
     ~Account();
 
     [[nodiscard]] qint32 type() const;
@@ -52,15 +53,19 @@ public:
     [[nodiscard]] QString branchId() const;
     [[nodiscard]] QString accountNumber() const;
     [[nodiscard]] QString subAccountNumber() const;
+    [[nodiscard]] double balance() const;
     [[nodiscard]] TransactionLimitsList *transactionLimitsList() const;
-    [[nodiscard]] TransactionLimits *transactionLimitsForCommand(
-        const AB_TRANSACTION_COMMAND &cmd) const;
+    [[nodiscard]] TransactionLimits *transactionLimitsForCommand(const AB_TRANSACTION_COMMAND &cmd) const;
+
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] QString toString() const;
+    [[nodiscard]] QSqlQuery createInsertQuery(QSqlQuery &query) const;
+    [[nodiscard]] static QMap<QString, QVariant> accountQueryToMap(const QSqlQuery &query);
     [[nodiscard]] static Account *create(const QMap<QString, QVariant> &row);
 
 private:
     AB_ACCOUNT_SPEC *abAccountSpec;
+    double m_balance;
 };
 
 } // namespace olbaflinx::core::storage::account

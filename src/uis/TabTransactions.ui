@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>UiTransaction</class>
- <widget class="QWidget" name="UiTransaction">
+ <class>UiTabTransactions</class>
+ <widget class="QWidget" name="UiTabTransactions">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -19,7 +19,7 @@
   <property name="windowTitle">
    <string>Transaction</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
+  <layout class="QVBoxLayout" name="verticalLayoutTabTransactions">
    <item>
     <widget class="olbaflinx::app::components::FilterWidget" name="filterWidget" native="true">
      <property name="minimumSize">
@@ -48,7 +48,7 @@
       <bool>true</bool>
      </attribute>
      <attribute name="verticalHeaderDefaultSectionSize">
-      <number>20</number>
+      <number>21</number>
      </attribute>
     </widget>
    </item>

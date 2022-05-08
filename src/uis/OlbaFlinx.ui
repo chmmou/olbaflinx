@@ -197,7 +197,7 @@
             <string>Transactions</string>
            </attribute>
           </widget>
-          <widget class="QWidget" name="tabStandingOrders">
+          <widget class="olbaflinx::app::pages::tabs::TabStandingOrders" name="tabStandingOrders">
            <attribute name="title">
             <string>Standing Orders</string>
            </attribute>
@@ -239,6 +239,12 @@
    <class>olbaflinx::app::pages::tabs::TabTransactions</class>
    <extends>QWidget</extends>
    <header>TabTransactions.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>olbaflinx::app::pages::tabs::TabStandingOrders</class>
+   <extends>QWidget</extends>
+   <header>TabStandingOrders.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

@@ -232,8 +232,8 @@
    <slot>slotDateEditChanged(QDate)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>411</x>
-     <y>13</y>
+     <x>643</x>
+     <y>15</y>
     </hint>
     <hint type="destinationlabel">
      <x>349</x>
@@ -248,8 +248,8 @@
    <slot>slotDateEditChanged(QDate)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>560</x>
-     <y>14</y>
+     <x>827</x>
+     <y>16</y>
     </hint>
     <hint type="destinationlabel">
      <x>558</x>

@@ -18,7 +18,6 @@
 #ifndef OLBAFLINX_VAULT_STORAGE_H
 #define OLBAFLINX_VAULT_STORAGE_H
 
-#include <QtCore/QList>
 #include <QtCore/QObject>
 #include <QtCore/QScopedPointer>
 
@@ -45,21 +44,21 @@ public:
     QString storagePath() const;
     void close();
 
-
     void storeSetting(const QString &key, const QVariant &value, const QString &group = QString());
     QVariant setting(const QString &key,
                      const QString &group = QString(),
                      const QVariant &defaultValue = QVariant()) const;
 
     void addAccount(const Account *account);
-    void addAccounts(const QVector<const Account *> &accounts);
-    QVector<quint32> accountIds();
+    void addAccounts(const AccountList &accounts);
+    AccountList accounts();
+    AccountIds accountIds();
 
     void addTransaction(const quint32 &accountId, const Transaction *transaction);
-    void addTransactions(const quint32 &accountId, const QVector<const Transaction *> &transactions);
-    QVector<const Transaction *> transactionsIds(const quint32 &accountId,
-                                                 const qint32 &limit = 50,
-                                                 const qint32 &offset = 0);
+    void addTransactions(const quint32 &accountId, const TransactionList &transactions);
+    TransactionList transactions(const quint32 &accountId,
+                                 const qint32 &limit = 50,
+                                 const qint32 &offset = 0);
 
 Q_SIGNALS:
     void progress(const qreal progress);

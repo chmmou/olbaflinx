@@ -55,6 +55,7 @@ set(
 include_directories(${AQ_INCLUDES})
 
 add_definitions(
+        ${Qt${QT_VERSION_MAJOR}Concurrent_DEFINITIONS}
         ${Qt${QT_VERSION_MAJOR}Widgets_DEFINITIONS}
         ${Qt${QT_VERSION_MAJOR}Gui_DEFINITIONS}
         ${Qt${QT_VERSION_MAJOR}Network_DEFINITIONS}

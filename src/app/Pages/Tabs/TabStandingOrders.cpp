@@ -15,13 +15,13 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "TabTransactions.h"
+#include "TabStandingOrders.h"
 
 using namespace olbaflinx::app::pages::tabs;
 
-TabTransactions::TabTransactions(QWidget *parent)
+TabStandingOrders::TabStandingOrders(QWidget *parent)
     : TabBase(parent)
 {
 }
 
-TabTransactions::~TabTransactions() {}
+TabStandingOrders::~TabStandingOrders() {}

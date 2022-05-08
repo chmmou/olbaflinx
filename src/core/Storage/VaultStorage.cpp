@@ -19,18 +19,17 @@
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QFile>
 #include <QtCore/QFutureWatcher>
-#include <QtCore/QList>
+#include <QtCore/QSettings>
 #include <QtCore/QTextStream>
 #include <QtSql/QSqlError>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 
-#include <QtCore/QSettings>
-
-#include "VaultStorage.h"
 #include "core/SingleApplication/SingleApplication.h"
 #include "core/Storage/Connection/StorageConnection.h"
+#include "VaultStorage.h"
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::storage::connection;
 
@@ -42,7 +41,7 @@ public:
         , m_connection(Q_NULLPTR)
         , m_filePath("")
         , m_key("")
-    {}
+    { }
 
     ~Private()
     {
@@ -119,122 +118,6 @@ public:
         QSqlQuery dbQuery(m_connection->database());
         dbQuery.exec(QString("PRAGMA key='%1';").arg(escapeKey(m_key)));
         return dbQuery;
-    }
-
-    QSqlQuery accountQuery(const Account *account, QSqlQuery &query)
-    {
-        query.prepare(StorageSqlAccountInsertQuery);
-        query.bindValue(":type", account->type());
-        query.bindValue(":unique_id", account->uniqueId());
-        query.bindValue(":backend_name", account->backendName());
-        query.bindValue(":owner_name", account->ownerName());
-        query.bindValue(":account_name", account->accountName());
-        query.bindValue(":currency", account->currency());
-        query.bindValue(":memo", account->memo());
-        query.bindValue(":iban", account->iban());
-        query.bindValue(":bic", account->bic());
-        query.bindValue(":country", account->country());
-        query.bindValue(":bank_code", account->bankCode());
-        query.bindValue(":bank_name", account->bankName());
-        query.bindValue(":branch_id", account->branchId());
-        query.bindValue(":account_number", account->accountNumber());
-        query.bindValue(":sub_account_number", account->subAccountNumber());
-
-        return query;
-    }
-
-    QSqlQuery transactionQuery(const quint32 &accountId,
-                               const Transaction *transaction,
-                               QSqlQuery &query)
-    {
-        query.prepare(StorageSqlTransactionInsertQuery);
-        query.bindValue(":account_id", accountId);
-        query.bindValue(":type", (qint32) transaction->type());
-        query.bindValue(":sub_type", (qint32) transaction->subType());
-        query.bindValue(":command", (qint32) transaction->command());
-        query.bindValue(":status", (qint32) transaction->status());
-        query.bindValue(":unique_account_id", transaction->uniqueAccountId());
-        query.bindValue(":unique_id", transaction->uniqueId());
-        query.bindValue(":ref_unique_id", transaction->refUniqueId());
-        query.bindValue(":id_for_application", transaction->idForApplication());
-        query.bindValue(":string_id_for_application", transaction->stringIdForApplication());
-        query.bindValue(":session_id", transaction->sessionId());
-        query.bindValue(":group_id", transaction->groupId());
-        query.bindValue(":fi_id", transaction->fiId());
-        query.bindValue(":local_iban", transaction->localIban());
-        query.bindValue(":local_bic", transaction->localBic());
-        query.bindValue(":local_country", transaction->localCountry());
-        query.bindValue(":local_bank_code", transaction->localBankCode());
-        query.bindValue(":local_branch_id", transaction->localBranchId());
-        query.bindValue(":local_account_number", transaction->localAccountNumber());
-        query.bindValue(":local_suffix", transaction->localSuffix());
-        query.bindValue(":local_name", transaction->localName());
-        query.bindValue(":remote_country", transaction->remoteCountry());
-        query.bindValue(":remote_bank_code", transaction->remoteBankCode());
-        query.bindValue(":remote_branch_id", transaction->remoteBranchId());
-        query.bindValue(":remote_account_number", transaction->remoteAccountNumber());
-        query.bindValue(":remote_suffix", transaction->remoteSuffix());
-        query.bindValue(":remote_iban", transaction->remoteIban());
-        query.bindValue(":remote_bic", transaction->remoteBic());
-        query.bindValue(":remote_name", transaction->remoteName());
-        query.bindValue(":date", transaction->date());
-        query.bindValue(":valuta_date", transaction->valutaDate());
-        query.bindValue(":value", transaction->value());
-        query.bindValue(":currency", transaction->currency());
-        query.bindValue(":fees", transaction->fees());
-        query.bindValue(":transaction_code", transaction->transactionCode());
-        query.bindValue(":transaction_text", transaction->transactionText());
-        query.bindValue(":transaction_key", transaction->transactionKey());
-        query.bindValue(":text_key", transaction->textKey());
-        query.bindValue(":primanota", transaction->primanota());
-        query.bindValue(":purpose", transaction->purpose());
-        query.bindValue(":category", transaction->category());
-        query.bindValue(":customer_reference", transaction->customerReference());
-        query.bindValue(":bank_reference", transaction->bankReference());
-        query.bindValue(":end_to_end_reference", transaction->endToEndReference());
-        query.bindValue(":creditor_scheme_id", transaction->creditorSchemeId());
-        query.bindValue(":originator_id", transaction->originatorId());
-        query.bindValue(":mandate_id", transaction->mandateId());
-        query.bindValue(":mandate_date", transaction->mandateDate());
-        query.bindValue(":mandate_debitor_name", transaction->mandateDebitorName());
-        query.bindValue(":original_creditor_scheme_id", transaction->originalCreditorSchemeId());
-        query.bindValue(":original_mandate_id", transaction->originalMandateId());
-        query.bindValue(":original_creditor_name", transaction->originalCreditorName());
-        query.bindValue(":sequence", (qint32) transaction->sequence());
-        query.bindValue(":charge", (qint32) transaction->charge());
-        query.bindValue(":remote_addr_street", transaction->remoteAddrStreet());
-        query.bindValue(":remote_addr_zipcode", transaction->remoteAddrZipcode());
-        query.bindValue(":remote_addr_city", transaction->remoteAddrCity());
-        query.bindValue(":remote_addr_phone", transaction->remoteAddrPhone());
-        query.bindValue(":period", (qint32) transaction->period());
-        query.bindValue(":cycle", transaction->cycle());
-        query.bindValue(":execution_day", transaction->executionDay());
-        query.bindValue(":first_date", transaction->firstDate());
-        query.bindValue(":last_date", transaction->lastDate());
-        query.bindValue(":next_date", transaction->nextDate());
-        query.bindValue(":unit_id", transaction->unitId());
-        query.bindValue(":unit_id_name_space", transaction->unitIdNameSpace());
-        query.bindValue(":ticker_symbol", transaction->tickerSymbol());
-        query.bindValue(":units", transaction->units());
-        query.bindValue(":unit_price_value", transaction->unitPriceValue());
-        query.bindValue(":unit_price_date", transaction->unitPriceDate());
-        query.bindValue(":commission_value", transaction->commissionValue());
-        query.bindValue(":memo", transaction->memo());
-        query.bindValue(":hash", calculateTransactionHash(transaction));
-
-        return query;
-    }
-
-    QString calculateTransactionHash(const Transaction *transaction)
-    {
-        const QString hash = transaction->hash();
-        if (!hash.isEmpty()) {
-            return hash;
-        }
-
-        const QString purpose = transaction->purpose();
-        return QString("%1").arg(
-            QString(QCryptographicHash::hash(purpose.toUtf8(), QCryptographicHash::Sha1).toHex()));
     }
 
     QString escapeKey(const QString &key)
@@ -329,7 +212,7 @@ private:
 VaultStorage::VaultStorage()
     : QObject(Q_NULLPTR)
     , d_ptr(new Private())
-{}
+{ }
 
 VaultStorage::~VaultStorage()
 {
@@ -420,10 +303,10 @@ void VaultStorage::addAccount(const Account *account)
     }
 
     QSqlQuery query = d_ptr->databaseQuery();
-    d_ptr->accountQuery(account, query).exec();
+    account->createInsertQuery(query).exec();
 }
 
-void VaultStorage::addAccounts(const QVector<const Account *> &accounts)
+void VaultStorage::addAccounts(const AccountList &accounts)
 {
     if (accounts.isEmpty()) {
         return;
@@ -450,7 +333,7 @@ void VaultStorage::addAccounts(const QVector<const Account *> &accounts)
         const int accountSize = accounts.size();
         for (int currentIndex = 0; currentIndex < accountSize; ++currentIndex) {
             const auto account = accounts.at(currentIndex);
-            d_ptr->accountQuery(account, query).exec();
+            account->createInsertQuery(query).exec();
             const qreal percentage = currentIndex * 100.0 / accountSize;
             Q_EMIT progress(percentage);
         }
@@ -459,7 +342,41 @@ void VaultStorage::addAccounts(const QVector<const Account *> &accounts)
     loop.exec();
 }
 
-QVector<quint32> VaultStorage::accountIds()
+AccountList VaultStorage::accounts()
+{
+    if (!d_ptr->isStorageValid()) {
+        return {};
+    }
+
+    qApp->setOverrideCursor(Qt::WaitCursor);
+
+    QEventLoop loop(this);
+    QFutureWatcher<AccountList> accountWatcher(this);
+    connect(&accountWatcher, &QFutureWatcher<AccountList>::finished, &loop, [&]() {
+        loop.quit();
+        accountWatcher.cancel();
+        accountWatcher.waitForFinished();
+
+        qApp->restoreOverrideCursor();
+    });
+
+    QSqlQuery query = d_ptr->databaseQuery();
+    accountWatcher.setFuture(QtConcurrent::run([&query]() -> AccountList {
+        AccountList accounts = {};
+        query.exec(StorageSqlAccountSelectQuery);
+        while (query.next()) {
+            const auto map = Account::accountQueryToMap(query);
+            const auto account = Account::create(map);
+            accounts.append(account);
+        }
+        return accounts;
+    }));
+    loop.exec();
+
+    return accountWatcher.result();
+}
+
+AccountIds VaultStorage::accountIds()
 {
     if (!d_ptr->isStorageValid()) {
         return {};
@@ -499,11 +416,10 @@ void VaultStorage::addTransaction(const quint32 &accountId, const Transaction *t
     }
 
     QSqlQuery query = d_ptr->databaseQuery();
-    d_ptr->transactionQuery(accountId, transaction, query).exec();
+    transaction->createInsertQuery(accountId, query).exec();
 }
 
-void VaultStorage::addTransactions(const quint32 &accountId,
-                                   const QVector<const Transaction *> &transactions)
+void VaultStorage::addTransactions(const quint32 &accountId, const TransactionList &transactions)
 {
     if (transactions.isEmpty()) {
         return;
@@ -531,7 +447,7 @@ void VaultStorage::addTransactions(const quint32 &accountId,
             const int transactionSize = transactions.size();
             for (int currentIndex = 0; currentIndex < transactionSize; ++currentIndex) {
                 const auto transaction = transactions.at(currentIndex);
-                const QString hash = d_ptr->calculateTransactionHash(transaction);
+                const QString hash = transaction->calculateTransactionHash();
 
                 query.prepare(StorageSqlTransactionExists);
                 query.bindValue(":account_id", accountId);
@@ -541,7 +457,7 @@ void VaultStorage::addTransactions(const quint32 &accountId,
 
                 const int count = query.record().count();
                 if (count == 0) {
-                    d_ptr->transactionQuery(accountId, transaction, query).exec();
+                    transaction->createInsertQuery(accountId, query).exec();
                 }
 
                 const qreal percentage = currentIndex * 100.0 / transactionSize;
@@ -551,9 +467,9 @@ void VaultStorage::addTransactions(const quint32 &accountId,
     loop.exec();
 }
 
-QVector<const Transaction *> VaultStorage::transactionsIds(const quint32 &accountId,
-                                                           const qint32 &limit,
-                                                           const qint32 &offset)
+TransactionList VaultStorage::transactions(const quint32 &accountId,
+                                           const qint32 &limit,
+                                           const qint32 &offset)
 {
     if (!d_ptr->isStorageValid()) {
         return {};
@@ -577,7 +493,8 @@ QVector<const Transaction *> VaultStorage::transactionsIds(const quint32 &accoun
     QSqlQuery query = d_ptr->databaseQuery();
     transactionWatcher.setFuture(QtConcurrent::run(
         [this, accountId, limit, offset, &query]() -> QVector<const Transaction *> {
-            QVector<const Transaction *> transactions = QVector<const Transaction *>();
+            TransactionList transactions = {};
+
             query.prepare(StorageSqlTransactionByAccountIdWithLimitQuery);
             query.bindValue(":account_id", accountId);
             query.bindValue(":limit", limit);
@@ -586,7 +503,9 @@ QVector<const Transaction *> VaultStorage::transactionsIds(const quint32 &accoun
 
             int currentIndex = 0;
             while (query.next()) {
-                transactions.append(Q_NULLPTR);
+                const auto map = Transaction::transactionQueryToMap(query);
+                const auto transaction = Transaction::create(map);
+                transactions.append(transaction);
                 ++currentIndex;
             }
 

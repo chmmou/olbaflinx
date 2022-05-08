@@ -15,8 +15,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <QtCore/QCryptographicHash>
 #include <QtCore/QVariant>
+#include <QtSql/QSqlField>
+#include <QtSql/QSqlRecord>
 
+#include "core/Container.h"
 #include "Transaction.h"
 
 using namespace olbaflinx::core::storage::transaction;
@@ -454,6 +458,178 @@ QString Transaction::toString() const
 bool Transaction::isStandingOrder() const
 {
     return type() == AB_Transaction_TypeStandingOrder;
+}
+
+QString Transaction::calculateTransactionHash() const
+{
+    if (!hash().isEmpty()) {
+        return hash();
+    }
+
+    const QString purpose = this->purpose();
+    const QByteArray hash = QCryptographicHash::hash(purpose.toUtf8(), QCryptographicHash::Sha1);
+    return QString("%1").arg(QString(hash.toHex()));
+}
+
+QSqlQuery Transaction::createInsertQuery(const quint32 &accountId, QSqlQuery &query) const
+{
+    query.prepare(StorageSqlTransactionInsertQuery);
+    query.bindValue(":account_id", accountId);
+    query.bindValue(":type", (qint32) type());
+    query.bindValue(":sub_type", (qint32) subType());
+    query.bindValue(":command", (qint32) command());
+    query.bindValue(":status", (qint32) status());
+    query.bindValue(":unique_account_id", uniqueAccountId());
+    query.bindValue(":unique_id", uniqueId());
+    query.bindValue(":ref_unique_id", refUniqueId());
+    query.bindValue(":id_for_application", idForApplication());
+    query.bindValue(":string_id_for_application", stringIdForApplication());
+    query.bindValue(":session_id", sessionId());
+    query.bindValue(":group_id", groupId());
+    query.bindValue(":fi_id", fiId());
+    query.bindValue(":local_iban", localIban());
+    query.bindValue(":local_bic", localBic());
+    query.bindValue(":local_country", localCountry());
+    query.bindValue(":local_bank_code", localBankCode());
+    query.bindValue(":local_branch_id", localBranchId());
+    query.bindValue(":local_account_number", localAccountNumber());
+    query.bindValue(":local_suffix", localSuffix());
+    query.bindValue(":local_name", localName());
+    query.bindValue(":remote_country", remoteCountry());
+    query.bindValue(":remote_bank_code", remoteBankCode());
+    query.bindValue(":remote_branch_id", remoteBranchId());
+    query.bindValue(":remote_account_number", remoteAccountNumber());
+    query.bindValue(":remote_suffix", remoteSuffix());
+    query.bindValue(":remote_iban", remoteIban());
+    query.bindValue(":remote_bic", remoteBic());
+    query.bindValue(":remote_name", remoteName());
+    query.bindValue(":date", date());
+    query.bindValue(":valuta_date", valutaDate());
+    query.bindValue(":value", value());
+    query.bindValue(":currency", currency());
+    query.bindValue(":fees", fees());
+    query.bindValue(":transaction_code", transactionCode());
+    query.bindValue(":transaction_text", transactionText());
+    query.bindValue(":transaction_key", transactionKey());
+    query.bindValue(":text_key", textKey());
+    query.bindValue(":primanota", primanota());
+    query.bindValue(":purpose", purpose());
+    query.bindValue(":category", category());
+    query.bindValue(":customer_reference", customerReference());
+    query.bindValue(":bank_reference", bankReference());
+    query.bindValue(":end_to_end_reference", endToEndReference());
+    query.bindValue(":creditor_scheme_id", creditorSchemeId());
+    query.bindValue(":originator_id", originatorId());
+    query.bindValue(":mandate_id", mandateId());
+    query.bindValue(":mandate_date", mandateDate());
+    query.bindValue(":mandate_debitor_name", mandateDebitorName());
+    query.bindValue(":original_creditor_scheme_id", originalCreditorSchemeId());
+    query.bindValue(":original_mandate_id", originalMandateId());
+    query.bindValue(":original_creditor_name", originalCreditorName());
+    query.bindValue(":sequence", (qint32) sequence());
+    query.bindValue(":charge", (qint32) charge());
+    query.bindValue(":remote_addr_street", remoteAddrStreet());
+    query.bindValue(":remote_addr_zipcode", remoteAddrZipcode());
+    query.bindValue(":remote_addr_city", remoteAddrCity());
+    query.bindValue(":remote_addr_phone", remoteAddrPhone());
+    query.bindValue(":period", (qint32) period());
+    query.bindValue(":cycle", cycle());
+    query.bindValue(":execution_day", executionDay());
+    query.bindValue(":first_date", firstDate());
+    query.bindValue(":last_date", lastDate());
+    query.bindValue(":next_date", nextDate());
+    query.bindValue(":unit_id", unitId());
+    query.bindValue(":unit_id_name_space", unitIdNameSpace());
+    query.bindValue(":ticker_symbol", tickerSymbol());
+    query.bindValue(":units", units());
+    query.bindValue(":unit_price_value", unitPriceValue());
+    query.bindValue(":unit_price_date", unitPriceDate());
+    query.bindValue(":commission_value", commissionValue());
+    query.bindValue(":memo", memo());
+    query.bindValue(":hash", calculateTransactionHash());
+
+    return query;
+}
+
+QMap<QString, QVariant> Transaction::transactionQueryToMap(const QSqlQuery &query)
+{
+    QMap<QString, QVariant> map = QMap<QString, QVariant>();
+
+    map["accountId"] = query.record().field("account_id").value();
+    map["type"] = query.record().field("type").value();
+    map["subType"] = query.record().field("sub_type").value();
+    map["command"] = query.record().field("command").value();
+    map["status"] = query.record().field("status").value();
+    map["uniqueAccountId"] = query.record().field("unique_account_id").value();
+    map["uniqueId"] = query.record().field("unique_id").value();
+    map["refUniqueId"] = query.record().field("ref_unique_id").value();
+    map["idForApplication"] = query.record().field("id_for_application").value();
+    map["stringIdForApplication"] = query.record().field("string_id_for_application").value();
+    map["sessionId"] = query.record().field("session_id").value();
+    map["groupId"] = query.record().field("group_id").value();
+    map["fiId"] = query.record().field("fi_id").value();
+    map["localIban"] = query.record().field("local_iban").value();
+    map["localBic"] = query.record().field("local_bic").value();
+    map["localCountry"] = query.record().field("local_country").value();
+    map["localBankCode"] = query.record().field("local_bank_code").value();
+    map["localBranchId"] = query.record().field("local_branch_id").value();
+    map["localAccountNumber"] = query.record().field("local_account_number").value();
+    map["localSuffix"] = query.record().field("local_suffix").value();
+    map["localName"] = query.record().field("local_name").value();
+    map["remoteCountry"] = query.record().field("remote_country").value();
+    map["remoteBankCode"] = query.record().field("remote_bank_code").value();
+    map["remoteBranchId"] = query.record().field("remote_branch_id").value();
+    map["remoteAccountNumber"] = query.record().field("remote_account_number").value();
+    map["remoteSuffix"] = query.record().field("remote_suffix").value();
+    map["remoteIban"] = query.record().field("remote_iban").value();
+    map["remoteBic"] = query.record().field("remote_bic").value();
+    map["remoteName"] = query.record().field("remote_name").value();
+    map["date"] = query.record().field("date").value();
+    map["valutaDate"] = query.record().field("valuta_date").value();
+    map["value"] = query.record().field("value").value();
+    map["currency"] = query.record().field("currency").value();
+    map["fees"] = query.record().field("fees").value();
+    map["transactionCode"] = query.record().field("transaction_code").value();
+    map["transactionText"] = query.record().field("transaction_text").value();
+    map["transactionKey"] = query.record().field("transaction_key").value();
+    map["textKey"] = query.record().field("text_key").value();
+    map["primanota"] = query.record().field("primanota").value();
+    map["purpose"] = query.record().field("purpose").value();
+    map["category"] = query.record().field("category").value();
+    map["customerReference"] = query.record().field("customer_reference").value();
+    map["bankReference"] = query.record().field("bank_reference").value();
+    map["endToEndReference"] = query.record().field("end_to_end_reference").value();
+    map["creditorSchemeId"] = query.record().field("creditor_scheme_id").value();
+    map["originatorId"] = query.record().field("originator_id").value();
+    map["mandateId"] = query.record().field("mandate_id").value();
+    map["mandateDate"] = query.record().field("mandate_date").value();
+    map["mandateDebitorName"] = query.record().field("mandate_debitor_name").value();
+    map["originalCreditorSchemeId"] = query.record().field("original_creditor_scheme_id").value();
+    map["originalMandateId"] = query.record().field("original_mandate_id").value();
+    map["originalCreditorName"] = query.record().field("original_creditor_name").value();
+    map["sequence"] = query.record().field("sequence").value();
+    map["charge"] = query.record().field("charge").value();
+    map["remoteAddrStreet"] = query.record().field("remote_addr_street").value();
+    map["remoteAddrZipcode"] = query.record().field("remote_addr_zipcode").value();
+    map["remoteAddrCity"] = query.record().field("remote_addr_city").value();
+    map["remoteAddrPhone"] = query.record().field("remote_addr_phone").value();
+    map["period"] = query.record().field("period").value();
+    map["cycle"] = query.record().field("cycle").value();
+    map["executionDay"] = query.record().field("execution_day").value();
+    map["firstDate"] = query.record().field("first_date").value();
+    map["lastDate"] = query.record().field("last_date").value();
+    map["nextDate"] = query.record().field("next_date").value();
+    map["unitId"] = query.record().field("unit_id").value();
+    map["unitIdNameSpace"] = query.record().field("unit_id_name_space").value();
+    map["tickerSymbol"] = query.record().field("ticker_symbol").value();
+    map["units"] = query.record().field("units").value();
+    map["unitPriceValue"] = query.record().field("unit_price_value").value();
+    map["unitPriceDate"] = query.record().field("unit_price_date").value();
+    map["commissionValue"] = query.record().field("commission_value").value();
+    map["memo"] = query.record().field("memo").value();
+    map["hash"] = query.record().field("hash").value();
+
+    return map;
 }
 
 Transaction *Transaction::create(const QMap<QString, QVariant> &row)

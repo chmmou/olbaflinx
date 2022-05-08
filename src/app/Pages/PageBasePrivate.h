@@ -21,15 +21,15 @@
 #include "app/App.h"
 #include <QtWidgets/QMainWindow>
 
-namespace olbaflinx::app::pages
-{
+namespace olbaflinx::app::pages {
+
 class PageBasePrivate
 {
 public:
     inline explicit PageBasePrivate()
         : m_app(Q_NULLPTR)
         , m_mainWindow(Q_NULLPTR)
-    { }
+    {}
 
     inline ~PageBasePrivate()
     {

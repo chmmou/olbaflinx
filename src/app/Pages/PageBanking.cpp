@@ -15,20 +15,69 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <QtCore/QVariant>
+#include <QtWidgets/QAction>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QMenuBar>
+#include <QtWidgets/QProgressBar>
+#include <QtWidgets/QToolBar>
+#include <QtWidgets/QToolButton>
+#include <QtWidgets/QTreeWidgetItem>
+
 #include "PageBanking.h"
 #include "PageBasePrivate.h"
 
+#include "core/Storage/VaultStorage.h"
+
+using namespace olbaflinx::core;
+using namespace olbaflinx::core::storage;
 using namespace olbaflinx::app::pages;
 
 PageBanking::PageBanking(QWidget *parent)
     : QWidget(parent)
     , d_ptr(new PageBasePrivate())
-{ }
+{}
 
-PageBanking::~PageBanking() { }
+PageBanking::~PageBanking() {}
 
 void PageBanking::initialize(QMainWindow *mainWindow)
 {
     d_ptr->setMainWindow(mainWindow);
 
+    qRegisterMetaType<const AccountItem *>();
+
+    auto accounts = VaultStorage::instance()->accounts();
+    if (accounts.isEmpty()) {
+        return;
+    }
+
+    const auto app = d_ptr->app();
+
+    initializeMenuBar();
+    initializeToolbar();
+
+    for (const auto account : accounts) {
+        auto item = new QTreeWidgetItem();
+
+        const auto accountItem = new AccountItem();
+        accountItem->title = account->toString();
+        accountItem->balance = account->balance();
+
+        item->setText(0, account->toString());
+        item->setData(0, Qt::UserRole, QVariant::fromValue(accountItem));
+
+        app->treeWidgetBankingAccounts->addTopLevelItem(item);
+    }
+
+    // app->tabTransactions
+    // app->tabStandingOrder
+    // app->tabDocuments
+    // app->tabJobs
+
+    qDeleteAll(accounts);
+    accounts.clear();
 }
+
+void PageBanking::initializeMenuBar() {}
+
+void PageBanking::initializeToolbar() {}

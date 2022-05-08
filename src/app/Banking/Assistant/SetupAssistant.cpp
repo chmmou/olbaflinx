@@ -57,15 +57,15 @@ void SetupAssistant::done(int result)
         return;
     }
 
-    AccountList_ accounts_ = {};
-    for (const quint32 uniqueId : accountIds) {
-        accounts_.append(Banking::instance()->account(uniqueId));
+    AccountList accounts = {};
+    for (const quint32 uniqueId : qAsConst(accountIds)) {
+        accounts.append(Banking::instance()->account(uniqueId));
     }
 
-    Q_EMIT accountsReceived(accounts_);
+    Q_EMIT accountsReceived(accounts);
 
-    qDeleteAll(accounts_);
-    accounts_.clear();
+    qDeleteAll(accounts);
+    accounts.clear();
 
     QWizard::done(result);
 }

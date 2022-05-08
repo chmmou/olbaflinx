@@ -38,6 +38,9 @@ public:
 private:
     friend class PageBasePrivate;
     QScopedPointer<PageBasePrivate> d_ptr;
+
+    void initializeMenuBar();
+    void initializeToolbar();
 };
 
 } // namespace pages

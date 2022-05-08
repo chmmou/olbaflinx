@@ -15,13 +15,40 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "TabTransactions.h"
+#ifndef OLBAFLINX_TABBASE_H
+#define OLBAFLINX_TABBASE_H
 
-using namespace olbaflinx::app::pages::tabs;
+#include <QtWidgets/QWidget>
 
-TabTransactions::TabTransactions(QWidget *parent)
-    : TabBase(parent)
+#include "ui_TabTransactions.h"
+#include "core/Container.h"
+
+namespace olbaflinx::app::pages::tabs {
+
+using namespace olbaflinx::core;
+
+class TabBase : public QWidget, protected Ui::UiTabTransactions
 {
-}
+    Q_OBJECT
 
-TabTransactions::~TabTransactions() {}
+public:
+    enum Type {
+        Transaction,
+        StandingOrders
+    };
+    Q_ENUM(Type)
+
+    explicit TabBase(QWidget *parent = nullptr);
+    ~TabBase() override;
+
+    void setAccountId(const quint32 id);
+    TransactionList transactions(const Type type) const;
+
+private:
+    quint32 m_accountId;
+    TransactionList m_transactions;
+};
+
+} // namespace olbaflinx::app::pages::tabs
+
+#endif //OLBAFLINX_TABBASE_H

@@ -16,20 +16,7 @@
  */
 #include <QtWidgets/QPushButton>
 
-#ifdef signals
-#undef signals
-#define _signals \
-public \
-    __attribute__((annotate("qt_signal")))
-#endif
-
-#ifdef slots
-#undef slots
-#define _slots __attribute__((annotate("qt_slot")))
-#endif
-
 #include <gwenhywfar/dialog.h>
-#include <gwenhywfar/dialog_be.h>
 #include <gwenhywfar/gui.h>
 #include <gwenhywfar/gwenhywfar.h>
 
@@ -61,13 +48,11 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage::account;
 
 GWEN_GUI *gwenGui;
-
 QT5_Gui *qtGui;
-
 AB_BANKING *abBanking;
 
 #ifdef USE_LIBCHIPCARD
-LC_CLIENT *libChipCardClient;
+LC_CLIENT *m_chipCardClient;
 #endif
 
 BankingPrivate::BankingPrivate(Banking *banking)
@@ -126,11 +111,11 @@ bool BankingPrivate::initializeAqBanking(const QString &name,
     mIsInitialized = ((abBanking != nullptr) && (gwenGui != nullptr));
 
 #ifdef USE_LIBCHIPCARD
-    libChipCardClient
+    m_chipCardClient
         = LC_Client_new(SingleApplication::applicationName().toLocal8Bit().constData(),
                         SingleApplication::applicationVersion().toLocal8Bit().constData());
 
-    LC_Client_Init(libChipCardClient);
+    LC_Client_Init(m_chipCardClient);
 #endif
 
     return mIsInitialized;
@@ -153,10 +138,10 @@ void BankingPrivate::finalizeAqBanking()
     }
 
 #ifdef USE_LIBCHIPCARD
-    if (libChipCardClient != nullptr) {
-        LC_Client_Fini(libChipCardClient);
-        LC_Client_free(libChipCardClient);
-        libChipCardClient = nullptr;
+    if (m_chipCardClient != nullptr) {
+        LC_Client_Fini(m_chipCardClient);
+        LC_Client_free(m_chipCardClient);
+        m_chipCardClient = nullptr;
     }
 #endif
 
@@ -215,7 +200,7 @@ void BankingPrivate::receiveAccounts()
     AB_ACCOUNT_SPEC *accountSpec;
     while ((accountSpec = AB_AccountSpec_List_First(accountSpecList))) {
         AB_AccountSpec_List_Del(accountSpec);
-        accountList.push_back(new Account(accountSpec));
+        accountList.append(new Account(accountSpec));
 
         currentAccount = accountList.size() / totalAccounts * 100;
         Q_EMIT q_ptr->progressStatus(currentAccount, totalAccounts);
@@ -249,7 +234,7 @@ void BankingPrivate::receiveAccountIds()
         AccountIds accountIds = AccountIds();
 
         for (const auto account : qAsConst(accounts)) {
-            accountIds.push_back(account->uniqueId());
+            accountIds.append(account->uniqueId());
         }
 
         std::sort(accountIds.begin(), accountIds.end());
@@ -323,7 +308,7 @@ void BankingPrivate::receiveTransactions(const Account *account, const QDate &fr
             AB_TRANSACTION *abTransaction;
             while ((abTransaction = AB_Transaction_List_First(abList))) {
                 AB_Transaction_List_Del(abTransaction);
-                transactionList.push_back(new Transaction(abTransaction));
+                transactionList.append(new Transaction(abTransaction));
             }
 
             AB_Transaction_List_free(abList);

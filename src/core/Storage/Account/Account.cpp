@@ -15,16 +15,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <QtCore/QList>
-#include <QtCore/QMetaType>
 #include <QtCore/QObject>
+#include <QtSql/QSqlField>
+#include <QtSql/QSqlRecord>
 
 #include "Account.h"
+#include "core/Container.h"
 
 using namespace olbaflinx::core::storage::account;
 
-Account::Account(const AB_ACCOUNT_SPEC *accountSpec)
+Account::Account(const AB_ACCOUNT_SPEC *accountSpec, const double balance)
     : abAccountSpec(accountSpec ? AB_AccountSpec_dup(accountSpec) : Q_NULLPTR)
+    , m_balance(balance)
 { }
 
 Account::~Account()
@@ -154,6 +156,11 @@ QString Account::subAccountNumber() const
     return QString::fromUtf8(AB_AccountSpec_GetSubAccountNumber(abAccountSpec));
 }
 
+double Account::balance() const
+{
+    return m_balance;
+}
+
 Account::TransactionLimitsList *Account::transactionLimitsList() const
 {
     return AB_AccountSpec_GetTransactionLimitsList(abAccountSpec);
@@ -176,6 +183,52 @@ QString Account::toString() const
         .arg(accountNumber(), bankName(), ownerName(), accountName());
 }
 
+QSqlQuery Account::createInsertQuery(QSqlQuery &query) const
+{
+    query.prepare(StorageSqlAccountInsertQuery);
+    query.bindValue(":type", type());
+    query.bindValue(":unique_id", uniqueId());
+    query.bindValue(":backend_name", backendName());
+    query.bindValue(":owner_name", ownerName());
+    query.bindValue(":account_name", accountName());
+    query.bindValue(":currency", currency());
+    query.bindValue(":memo", memo());
+    query.bindValue(":iban", iban());
+    query.bindValue(":bic", bic());
+    query.bindValue(":country", country());
+    query.bindValue(":bank_code", bankCode());
+    query.bindValue(":bank_name", bankName());
+    query.bindValue(":branch_id", branchId());
+    query.bindValue(":account_number", accountNumber());
+    query.bindValue(":sub_account_number", subAccountNumber());
+
+    return query;
+}
+
+QMap<QString, QVariant> Account::accountQueryToMap(const QSqlQuery &query)
+{
+    QMap<QString, QVariant> map = {};
+
+    map["type"] = query.record().field("type").value();
+    map["uniqueId"] = query.record().field("unique_id").value();
+    map["backendName"] = query.record().field("backend_name").value();
+    map["ownerName"] = query.record().field("owner_name").value();
+    map["accountName"] = query.record().field("account_name").value();
+    map["currency"] = query.record().field("currency").value();
+    map["memo"] = query.record().field("memo").value();
+    map["iban"] = query.record().field("iban").value();
+    map["bic"] = query.record().field("bic").value();
+    map["country"] = query.record().field("country").value();
+    map["bankCode"] = query.record().field("bank_code").value();
+    map["bankName"] = query.record().field("bank_name").value();
+    map["branchId"] = query.record().field("branch_id").value();
+    map["accountNumber"] = query.record().field("account_number").value();
+    map["subAccountNumber"] = query.record().field("sub_account_number").value();
+    map["balance"] = query.record().field("balance").value();
+
+    return map;
+}
+
 Account *Account::create(const QMap<QString, QVariant> &row)
 {
     auto accountSpec = AB_AccountSpec_new();
@@ -193,6 +246,7 @@ Account *Account::create(const QMap<QString, QVariant> &row)
     const QString branchId = row["branchId"].toString();
     const QString accountNumber = row["accountNumber"].toString();
     const QString subAccountNumber = row["subAccountNumber"].toString();
+    const double balance = row["balance"].toDouble();
 
     AB_AccountSpec_SetType(accountSpec, row["type"].toInt());
     AB_AccountSpec_SetUniqueId(accountSpec, row["uniqueId"].toInt());
@@ -210,7 +264,7 @@ Account *Account::create(const QMap<QString, QVariant> &row)
     AB_AccountSpec_SetAccountNumber(accountSpec, accountNumber.toLocal8Bit().constData());
     AB_AccountSpec_SetSubAccountNumber(accountSpec, subAccountNumber.toLocal8Bit().constData());
 
-    const auto account = new Account(accountSpec);
+    const auto account = new Account(accountSpec, balance);
 
     AB_AccountSpec_free(accountSpec);
 

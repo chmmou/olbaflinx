@@ -26,8 +26,6 @@
 #include "App.h"
 
 #include "core/Banking/Banking.h"
-#include "core/Container.h"
-#include "core/Logger/Logger.h"
 #include "core/SingleApplication/SingleApplication.h"
 
 using namespace olbaflinx::app;
@@ -61,12 +59,12 @@ void App::initialize()
     connect(pageDataVaults, &PageDataVaults::vaultOpen, this, &App::openVault);
 
     pageDataVaults->initialize(this);
-    pageBanking->initialize(this);
 }
 
 void App::openVault()
 {
     stackedWidgetMain->setCurrentIndex(1);
+    pageBanking->initialize(this);
 }
 
 void App::closeEvent(QCloseEvent *event)
