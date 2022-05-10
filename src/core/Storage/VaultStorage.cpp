@@ -525,7 +525,7 @@ TransactionList VaultStorage::transactions(const quint32 &accountId,
     return transactionWatcher.result();
 }
 
-int storage::VaultStorage::transactionCount(bool isStandingOrder) const
+int VaultStorage::transactionCount(bool isStandingOrder) const
 {
     if (!d_ptr->isStorageValid()) {
         return -1;
