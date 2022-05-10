@@ -27,6 +27,8 @@
 #include <aqbanking/banking.h>
 #include <aqbanking/banking_dialogs.h>
 #include <aqbanking/banking_online.h>
+#include <aqbanking/banking_imex.h>
+
 #include <aqbanking/error.h>
 #include <aqbanking/gui/abgui.h>
 #include <aqbanking/types/account_spec.h>

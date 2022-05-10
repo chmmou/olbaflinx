@@ -32,17 +32,13 @@ class TabBase : public QWidget, protected Ui::UiTabTransactions
     Q_OBJECT
 
 public:
-    enum Type {
-        Transaction,
-        StandingOrders
-    };
-    Q_ENUM(Type)
-
     explicit TabBase(QWidget *parent = nullptr);
     ~TabBase() override;
 
     void setAccountId(const quint32 id);
-    TransactionList transactions(const Type type) const;
+    TransactionList transactions(bool isStandingOrder = false, bool force = false);
+    int transactionCount(bool isStandingOrder = false);
+
 
 private:
     quint32 m_accountId;

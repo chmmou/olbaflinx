@@ -22,6 +22,7 @@
 #include <QtCore/QSettings>
 #include <QtCore/QTextStream>
 #include <QtSql/QSqlError>
+#include <QtSql/QSqlField>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 
@@ -522,4 +523,21 @@ TransactionList VaultStorage::transactions(const quint32 &accountId,
     loop.exec();
 
     return transactionWatcher.result();
+}
+
+int storage::VaultStorage::transactionCount(bool isStandingOrder) const
+{
+    if (!d_ptr->isStorageValid()) {
+        return -1;
+    }
+
+    QSqlQuery query = d_ptr->databaseQuery();
+    query.prepare(StorageSqlTransactionSelectCountQuery);
+    query.bindValue(":type",
+                    isStandingOrder ? (int) TransactionType::AB_Transaction_TypeStandingOrder
+                                    : (int) TransactionType::AB_Transaction_TypeStatement);
+    query.exec();
+    query.first();
+
+    return query.record().field(0).value().toInt();
 }

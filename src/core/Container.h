@@ -91,6 +91,7 @@
     ":commission_value, :memo, :hash);"
 
 #define StorageSqlTransactionSelectQuery "SELECT * FROM transactions"
+#define StorageSqlTransactionSelectCountQuery "SELECT COUNT(id) AS CNT FROM transactions WHERE `type` = :type;"
 #define StorageSqlTransactionByAccountIdQuery \
     QString("%1 WHERE account_id = :account_id").arg(StorageSqlTransactionSelectQuery)
 #define StorageSqlTransactionByAccountIdWithLimitQuery \

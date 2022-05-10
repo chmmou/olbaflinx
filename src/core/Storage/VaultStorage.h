@@ -59,6 +59,7 @@ public:
     TransactionList transactions(const quint32 &accountId,
                                  const qint32 &limit = 50,
                                  const qint32 &offset = 0);
+    int transactionCount(bool isStandingOrder = false) const;
 
 Q_SIGNALS:
     void progress(const qreal progress);

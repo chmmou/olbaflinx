@@ -133,14 +133,24 @@ include_directories(${APP_DIR}/app/Pages/Tabs)
 set(APP_UI_DIR ${APP_DIR}/uis)
 file(GLOB APP_UI_FILES ${APP_UI_DIR}/*.ui)
 include_directories(${APP_UI_DIR})
-qt_wrap_ui(APP_UI_HDRS ${APP_UI_FILES})
+
+if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
+    qt_wrap_ui(APP_UI_HDRS ${APP_UI_FILES})
+else()
+    qt5_wrap_ui(APP_UI_HDRS ${APP_UI_FILES})
+endif()
 
 set(
         APP_RCS_FILE
         ${CMAKE_CURRENT_SOURCE_DIR}/../res/${CMAKE_PROJECT_NAME}.qrc
         ${CMAKE_CURRENT_SOURCE_DIR}/../res/${CMAKE_PROJECT_NAME}-translations.qrc
 )
-qt_add_resources(APP_RCS_FILE ${APP_RCS_FILE})
+
+if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
+    qt_add_resources(APP_RCS_FILE ${APP_RCS_FILE})
+else()
+    qt5_add_resources(APP_RCS_FILE ${APP_RCS_FILE})
+endif()
 
 set(EXEC_PROPERTY "")
 set(RC_FILES "")
@@ -200,7 +210,7 @@ target_compile_definitions(
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>")
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${QT_LIBS} ${AQ_LIBS} ${QX_LIBRARIES})
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${QT_LIBS} ${AQ_LIBS})
 
 if (APPLE)
     set_target_properties(
