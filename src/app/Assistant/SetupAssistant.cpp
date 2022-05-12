@@ -24,7 +24,7 @@
 
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage;
-using namespace olbaflinx::app::banking::assistant;
+using namespace olbaflinx::app::assistant;
 
 SetupAssistant::SetupAssistant(QWidget *parent)
     : QWizard(parent)

@@ -21,11 +21,9 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::storage::account;
 
 Banking::Banking()
-    : QObject(nullptr),
-      d_ptr(new BankingPrivate(this))
-{
-
-}
+    : QObject(nullptr)
+    , d_ptr(new BankingPrivate(this))
+{}
 
 Banking::~Banking()
 {
@@ -72,4 +70,16 @@ void Banking::receiveTransactions(const Account *account, const QDate &from, con
 void Banking::receiveStandingOrders(const Account *account)
 {
     //d_ptr->receiveStandingOrders(account);
+}
+
+ImExportProfileList Banking::importExportProfiles(bool import)
+{
+    return d_ptr->importExportProfiles(import);
+}
+
+TransactionList Banking::import(const QString &importerName,
+                                const QString &profileName,
+                                const QString &fileName)
+{
+    return d_ptr->import(importerName, profileName, fileName);
 }

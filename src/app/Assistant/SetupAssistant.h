@@ -25,7 +25,7 @@
 
 using namespace olbaflinx::core;
 
-namespace olbaflinx::app::banking::assistant {
+namespace olbaflinx::app::assistant {
 
 class SetupAssistant : public QWizard, private Ui::UiSetupAssistant
 {

@@ -18,10 +18,10 @@
 #ifndef OLBAFLINX_CONTAINER_H
 #define OLBAFLINX_CONTAINER_H
 
-#include <QtGui/QImage>
 #include <QtCore/QObject>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QVector>
+#include <QtGui/QImage>
 
 #include "core/Logger/Logger.h"
 #include "core/Storage/Account/Account.h"
@@ -91,14 +91,15 @@
     ":commission_value, :memo, :hash);"
 
 #define StorageSqlTransactionSelectQuery "SELECT * FROM transactions"
-#define StorageSqlTransactionSelectCountQuery "SELECT COUNT(id) AS CNT FROM transactions WHERE `type` = :type;"
+#define StorageSqlTransactionSelectCountQuery \
+    "SELECT COUNT(id) AS CNT FROM transactions WHERE `type` = :type;"
 #define StorageSqlTransactionByAccountIdQuery \
     QString("%1 WHERE account_id = :account_id").arg(StorageSqlTransactionSelectQuery)
 #define StorageSqlTransactionByAccountIdWithLimitQuery \
     QString("%1 LIMIT :limit OFFSET :offset").arg(StorageSqlTransactionByAccountIdQuery)
 
 #define StorageSqlTransactionExists \
-    "SELECT 1 FROM transactions WHERE account_id = :account_id AND hash = :hash"
+    "SELECT COUNT(id) AS CNT FROM transactions WHERE account_id = :account_id AND hash = :hash"
 
 /**
  * Group & Key for settings
@@ -116,7 +117,12 @@ namespace olbaflinx::core {
 using namespace storage::account;
 using namespace storage::transaction;
 
-template<class T> class SignalBlocker
+typedef QVector<const Account *> AccountList;
+typedef QVector<const Transaction *> TransactionList;
+typedef QVector<quint32> AccountIds;
+
+template<class T>
+class SignalBlocker
 {
     T *blocked;
     bool previous;
@@ -125,27 +131,50 @@ public:
     SignalBlocker(T *blocked)
         : blocked(blocked)
         , previous(blocked->blockSignals(true))
-    { }
+    {}
 
     ~SignalBlocker() { blocked->blockSignals(previous); }
 
     T *operator->() { return blocked; }
 };
 
-template<class T> inline SignalBlocker<T> whileSignalBlocking(T *blocked)
+template<class T>
+inline SignalBlocker<T> whileSignalBlocking(T *blocked)
 {
     return SignalBlocker<T>(blocked);
 }
 
-struct AccountItem {
+struct AccountItem
+{
     QString title = "";
     QImage image = {};
     double balance = 0.0;
+    quint32 id = 0;
 };
 
-typedef QVector<const Account *> AccountList;
-typedef QVector<const Transaction *> TransactionList;
-typedef QVector<quint32> AccountIds;
+struct ImExportProfileData
+{
+    QString name = "";
+    QString longDescr = "";
+    QString shortDescr = "";
+    QString type = "";
+    int import = 0;
+    int exp = 0;
+};
+typedef QVector<const ImExportProfileData *> ImExportProfileDataList;
+
+struct ImExportProfile
+{
+    QString name = "";
+    QString type = "";
+    QString shortDescr = "";
+    QString author = "";
+    QString version = "";
+    QString longDescr = "";
+    QString fileName = "";
+    ImExportProfileDataList profiles = {};
+};
+typedef QVector<const ImExportProfile *> ImExportProfileList;
 
 } // namespace olbaflinx::core
 
@@ -154,5 +183,14 @@ Q_DECLARE_METATYPE(olbaflinx::core::AccountIds)
 Q_DECLARE_METATYPE(olbaflinx::core::AccountItem *)
 Q_DECLARE_METATYPE(const olbaflinx::core::AccountItem *)
 Q_DECLARE_METATYPE(olbaflinx::core::TransactionList)
+
+Q_DECLARE_METATYPE(olbaflinx::core::ImExportProfileData *)
+Q_DECLARE_METATYPE(const olbaflinx::core::ImExportProfileData *)
+
+Q_DECLARE_METATYPE(olbaflinx::core::ImExportProfile *)
+Q_DECLARE_METATYPE(const olbaflinx::core::ImExportProfile *)
+
+Q_DECLARE_METATYPE(olbaflinx::core::ImExportProfileList)
+Q_DECLARE_METATYPE(olbaflinx::core::ImExportProfileDataList)
 
 #endif // OLBAFLINX_CONTAINER_H

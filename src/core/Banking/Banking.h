@@ -17,27 +17,25 @@
 #ifndef OLBAFLINX_BANKING_H
 #define OLBAFLINX_BANKING_H
 
+#include <core/Banking/Private/BankingPrivate.h>
 #include <QtCore/QObject>
 #include <QtWidgets/QWidget>
-#include <core/Banking/Private/BankingPrivate.h>
 
-
-#include "core/Singleton.h"
 #include "core/Container.h"
+#include "core/Singleton.h"
 
-namespace olbaflinx::core::banking
-{
+namespace olbaflinx::core::banking {
+
+using namespace olbaflinx::core;
 
 class BankingPrivate;
-class Banking: public QObject, public Singleton<Banking>
+class Banking : public QObject, public Singleton<Banking>
 {
-
-Q_OBJECT
+    Q_OBJECT
     friend class Singleton<Banking>;
 
 public:
-    enum ErrorType
-    {
+    enum ErrorType {
         InitializedError,
         AccountError,
         TransactionError,
@@ -49,13 +47,19 @@ public:
 
     ~Banking() override;
 
-    [[nodiscard]] bool initialize(const QString &name, const QString &key,
+    [[nodiscard]] bool initialize(const QString &name,
+                                  const QString &key,
                                   const QString &version) const;
     void deInitialize();
 
     int showSetupDialog(QWidget *widget) const;
 
     [[nodiscard]] Account *account(quint32 uniqueId) const;
+
+    ImExportProfileList importExportProfiles(bool import = true);
+    TransactionList import(const QString &importerName,
+                           const QString &profileName,
+                           const QString &fileName);
 
 public Q_SLOTS:
     void receiveAccounts();
@@ -83,6 +87,6 @@ protected:
     Q_DISABLE_COPY(Banking)
 };
 
-}
+} // namespace olbaflinx::core::banking
 
 #endif //OLBAFLINX_BANKING_H

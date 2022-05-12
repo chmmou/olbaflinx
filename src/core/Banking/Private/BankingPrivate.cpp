@@ -26,8 +26,8 @@
 
 #include <aqbanking/banking.h>
 #include <aqbanking/banking_dialogs.h>
-#include <aqbanking/banking_online.h>
 #include <aqbanking/banking_imex.h>
+#include <aqbanking/banking_online.h>
 
 #include <aqbanking/error.h>
 #include <aqbanking/gui/abgui.h>
@@ -374,4 +374,105 @@ AB_IMEXPORTER_ACCOUNTINFO *BankingPrivate::abImExporterAccountInfo(AB_TRANSACTIO
     AB_Banking_SendCommands(abBanking, transactionList, imExporterCtx);
 
     return AB_ImExporterContext_GetFirstAccountInfo(imExporterCtx);
+}
+
+ImExportProfileList BankingPrivate::importExportProfiles(bool import)
+{
+    ImExportProfileList imExportProfiles = {};
+
+    auto list = AB_Banking_GetImExporterDescrs(abBanking);
+    auto ilit = GWEN_PluginDescription_List2_First(list);
+    if (ilit) {
+        auto pdesc = GWEN_PluginDescription_List2Iterator_Data(ilit);
+        while (pdesc) {
+            auto pd = new ImExportProfile();
+
+            pd->name = GWEN_PluginDescription_GetName(pdesc);
+            pd->type = GWEN_PluginDescription_GetType(pdesc);
+            pd->shortDescr = GWEN_PluginDescription_GetShortDescr(pdesc);
+            pd->author = GWEN_PluginDescription_GetAuthor(pdesc);
+            pd->version = GWEN_PluginDescription_GetVersion(pdesc);
+            pd->longDescr = GWEN_PluginDescription_GetLongDescr(pdesc);
+            pd->fileName = GWEN_PluginDescription_GetFileName(pdesc);
+
+            auto profiles = AB_Banking_GetImExporterProfiles(abBanking,
+                                                             pd->name.toLatin1().constData());
+            if (profiles) {
+                auto profileGroups = GWEN_DB_GetFirstGroup(profiles);
+                while (profileGroups) {
+                    auto pdp = new ImExportProfileData();
+
+                    pdp->name = GWEN_DB_GetCharValue(profileGroups, "name", 0, "");
+                    pdp->longDescr = GWEN_DB_GetCharValue(profileGroups, "longDescr", 0, "");
+                    pdp->shortDescr = GWEN_DB_GetCharValue(profileGroups, "shortDescr", 0, "");
+                    pdp->type = GWEN_DB_GetCharValue(profileGroups, "type", 0, "");
+                    pdp->exp = GWEN_DB_GetIntValue(profileGroups, "export", 0, 0);
+                    pdp->import = GWEN_DB_GetIntValue(profileGroups, "import", 0, 0);
+
+                    if (import && pdp->import == 1) {
+                        pd->profiles.append(pdp);
+                    } else if (!import && pdp->exp == 1) {
+                        pd->profiles.append(pdp);
+                    }
+
+                    profileGroups = GWEN_DB_GetNextGroup(profileGroups);
+                }
+            }
+
+            if (!pd->profiles.isEmpty()) {
+                imExportProfiles.append(pd);
+            }
+
+            pdesc = GWEN_PluginDescription_List2Iterator_Next(ilit);
+        }
+
+        GWEN_PluginDescription_List2Iterator_free(ilit);
+    }
+    GWEN_PluginDescription_List2_freeAll(list);
+
+    return imExportProfiles;
+}
+
+TransactionList BankingPrivate::import(const QString &importerName,
+                                       const QString &profileName,
+                                       const QString &fileName)
+{
+    TransactionList transactionList = {};
+
+    GWEN_DB_NODE *dbProfile = AB_Banking_GetImExporterProfile(abBanking,
+                                                              importerName.toLatin1().constData(),
+                                                              profileName.toLatin1().constData());
+    if (dbProfile != Q_NULLPTR) {
+        AB_IMEXPORTER_CONTEXT *imExporterCtx = AB_ImExporterContext_new();
+        const int result = AB_Banking_ImportFromFile(abBanking,
+                                                     importerName.toLatin1().constData(),
+                                                     imExporterCtx,
+                                                     fileName.toLatin1().constData(),
+                                                     dbProfile);
+        if (result != AB_SUCCESS) {
+            return {};
+        }
+
+        auto accountInfo = AB_ImExporterContext_GetFirstAccountInfo(imExporterCtx);
+        while (accountInfo) {
+            AB_TRANSACTION_LIST *abList = AB_ImExporterAccountInfo_GetTransactionList(accountInfo);
+            if (abList) {
+                AB_TRANSACTION *abTransaction;
+                while ((abTransaction = AB_Transaction_List_First(abList))) {
+                    AB_Transaction_List_Del(abTransaction);
+                    transactionList.append(new Transaction(abTransaction));
+                }
+
+                AB_Transaction_List_free(abList);
+            }
+
+            accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
+        }
+
+        AB_ImExporterAccountInfo_free(accountInfo);
+
+        GWEN_DB_Group_free(dbProfile);
+    }
+
+    return transactionList;
 }

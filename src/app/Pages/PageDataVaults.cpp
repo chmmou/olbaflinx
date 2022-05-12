@@ -21,7 +21,7 @@
 #include <QtWidgets/QMessageBox>
 
 #include "app/App.h"
-#include "app/Banking/Assistant/SetupAssistant.h"
+#include "app/Assistant/SetupAssistant.h"
 #include "app/DataVault/DataVaultDialog.h"
 
 #include "core/Container.h"
@@ -33,7 +33,7 @@
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::app;
 using namespace olbaflinx::app::pages;
-using namespace olbaflinx::app::banking::assistant;
+using namespace olbaflinx::app::assistant;
 
 PageDataVaults::PageDataVaults(QWidget *parent)
     : QWidget(parent)

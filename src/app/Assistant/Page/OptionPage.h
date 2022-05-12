@@ -26,7 +26,7 @@
 
 using namespace olbaflinx::core;
 
-namespace olbaflinx::app::banking::assistant::page {
+namespace olbaflinx::app::assistant::page {
 
 class OptionPage : public QWizardPage, private Ui::UiOptionPage
 {

@@ -14,20 +14,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <QtCore/QFileInfo>
+
 #include <QtGui/QKeySequence>
+
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QMessageBox>
-#include <QtWidgets/QScrollArea>
-#include <QtWidgets/QSizePolicy>
-#include <QtWidgets/QSpacerItem>
-#include <QtWidgets/QVBoxLayout>
-
-#include "App.h"
 
 #include "core/Banking/Banking.h"
 #include "core/SingleApplication/SingleApplication.h"
 #include "core/Storage/VaultStorage.h"
+
+#include "App.h"
 
 using namespace olbaflinx::app;
 using namespace olbaflinx::app::pages;

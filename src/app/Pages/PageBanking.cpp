@@ -15,7 +15,10 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <QtConcurrent/QtConcurrent>
+
 #include <QtCore/QVariant>
+
 #include <QtWidgets/QAction>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QMenuBar>
@@ -24,10 +27,10 @@
 #include <QtWidgets/QToolButton>
 #include <QtWidgets/QTreeWidgetItem>
 
+#include "core/Storage/VaultStorage.h"
+
 #include "PageBanking.h"
 #include "PageBasePrivate.h"
-
-#include "core/Storage/VaultStorage.h"
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
@@ -61,6 +64,7 @@ void PageBanking::initialize(QMainWindow *mainWindow)
         const auto accountItem = new AccountItem();
         accountItem->title = account->toString();
         accountItem->balance = account->balance();
+        accountItem->id = account->uniqueId();
 
         item->setText(0, account->toString());
         item->setData(0, Qt::UserRole, QVariant::fromValue(accountItem));

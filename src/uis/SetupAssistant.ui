@@ -62,7 +62,7 @@
     </item>
    </layout>
   </widget>
-  <widget class="olbaflinx::app::banking::assistant::page::OptionPage" name="optionPage">
+  <widget class="olbaflinx::app::assistant::page::OptionPage" name="optionPage">
    <property name="title">
     <string>Account</string>
    </property>
@@ -73,7 +73,7 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>olbaflinx::app::banking::assistant::page::OptionPage</class>
+   <class>olbaflinx::app::assistant::page::OptionPage</class>
    <extends>QWizardPage</extends>
    <header>OptionPage.h</header>
    <container>1</container>

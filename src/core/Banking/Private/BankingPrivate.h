@@ -26,26 +26,23 @@
 
 #include "core/Container.h"
 
-namespace olbaflinx::core::banking
-{
+namespace olbaflinx::core::banking {
+
+using namespace olbaflinx::core;
 
 class Banking;
-class BankingPrivate: public QObject
+class BankingPrivate : public QObject
 {
     Q_DISABLE_COPY(BankingPrivate)
     Q_DECLARE_PUBLIC(Banking)
 
-Q_OBJECT
+    Q_OBJECT
 
 public:
     explicit BankingPrivate(Banking *banking);
     ~BankingPrivate() override;
 
-    bool initializeAqBanking(
-        const QString &name,
-        const QString &key,
-        const QString &version
-    );
+    bool initializeAqBanking(const QString &name, const QString &key, const QString &version);
     void finalizeAqBanking();
 
     [[nodiscard]] Account *account(quint32 uniqueId) const;
@@ -56,17 +53,20 @@ public:
 
     int showSetupDialog(QWidget *parentWidget) const;
 
+    ImExportProfileList importExportProfiles(bool import = true);
+    TransactionList import(const QString &importerName,
+                           const QString &profileName,
+                           const QString &fileName);
+
 private:
     Banking *const q_ptr;
     bool mIsInitialized;
 
-    AB_IMEXPORTER_ACCOUNTINFO *abImExporterAccountInfo(
-        AB_TRANSACTION_COMMAND cmd,
-        quint32 uniqueId,
-        GWEN_DATE *from,
-        GWEN_DATE *to
-    );
+    AB_IMEXPORTER_ACCOUNTINFO *abImExporterAccountInfo(AB_TRANSACTION_COMMAND cmd,
+                                                       quint32 uniqueId,
+                                                       GWEN_DATE *from,
+                                                       GWEN_DATE *to);
 };
-}
+} // namespace olbaflinx::core::banking
 
 #endif // OLBAFLINX_BANKINGPRIVATE_H

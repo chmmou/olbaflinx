@@ -466,7 +466,7 @@ QString Transaction::calculateTransactionHash() const
         return hash();
     }
 
-    const QString purpose = this->purpose();
+    const QString purpose = this->purpose().append(QDateTime::currentDateTime().toString(" - dd.MM.yyyy hh:mm:ss.z"));
     const QByteArray hash = QCryptographicHash::hash(purpose.toUtf8(), QCryptographicHash::Sha1);
     return QString("%1").arg(QString(hash.toHex()));
 }

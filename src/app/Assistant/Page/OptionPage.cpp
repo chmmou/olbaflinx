@@ -23,7 +23,7 @@
 #include "OptionPage.h"
 
 using namespace olbaflinx::core::banking;
-using namespace olbaflinx::app::banking::assistant::page;
+using namespace olbaflinx::app::assistant::page;
 
 QTimer *accountTimer = nullptr;
 QThread *accountTimerThread = nullptr;

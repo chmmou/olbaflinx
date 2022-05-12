@@ -461,7 +461,7 @@ void VaultStorage::addTransactions(const quint32 &accountId, const TransactionLi
                 query.exec();
                 query.first();
 
-                const int count = query.record().count();
+                const int count = query.record().value("CNT").toInt();
                 if (count == 0) {
                     transaction->createInsertQuery(accountId, query).exec();
                 }

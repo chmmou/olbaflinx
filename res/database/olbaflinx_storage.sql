@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS transactions
     remote_name                 varchar,
     `date`                      date,
     valuta_date                 date,
-    value                       double,
+    `value`                     double,
     currency                    varchar,
     fees                        double,
     transaction_code            integer,
