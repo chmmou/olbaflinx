@@ -20,7 +20,7 @@
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QMessageBox>
 
-#include "core/Banking/Banking.h"
+#include "core/Banking/OnlineBanking.h"
 #include "core/SingleApplication/SingleApplication.h"
 #include "core/Storage/VaultStorage.h"
 
@@ -44,9 +44,9 @@ App::~App() = default;
 
 void App::initialize()
 {
-    bool initialized = Banking::instance()->initialize(SingleApplication::applicationName(),
-                                                       "3E1B97FF72A24783EC2215B12",
-                                                       SingleApplication::applicationVersion());
+    bool initialized = OnlineBanking::instance()->initialize(SingleApplication::applicationName(),
+                                                             "3E1B97FF72A24783EC2215B12",
+                                                             SingleApplication::applicationVersion());
 
     if (!initialized) {
         QMessageBox::critical(this,
@@ -54,13 +54,16 @@ void App::initialize()
                               tr("Banking backend can't be initialized"));
     }
 
-    connect(pageDataVaults, &PageDataVaults::vaultOpen, this, &App::openVault);
+    connect(pageDataVaults, &PageDataVaults::vaultOpen, this, &App::vaultOpened);
     connect(pageBanking, &PageBanking::vaultClosed, this, &App::vaultClosed);
+
+    appToolBar->hide();
+    statusBar()->hide();
 
     pageDataVaults->initialize(this);
 }
 
-void App::openVault()
+void App::vaultOpened()
 {
     stackedWidgetMain->setCurrentIndex(1);
     pageBanking->initialize(this);
@@ -68,14 +71,19 @@ void App::openVault()
 
 void App::vaultClosed()
 {
+    qApp->setOverrideCursor(Qt::WaitCursor);
+
+    pageBanking->deInitialize();
     stackedWidgetMain->setCurrentIndex(0);
     VaultStorage::instance()->close();
+
+    qApp->restoreOverrideCursor();
 }
 
 void App::closeEvent(QCloseEvent *event)
 {
     VaultStorage::instance()->close();
-    Banking::instance()->deInitialize();
+    OnlineBanking::instance()->finalize();
 
     QMainWindow::closeEvent(event);
 }

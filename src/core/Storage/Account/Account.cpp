@@ -24,10 +24,10 @@
 
 using namespace olbaflinx::core::storage::account;
 
-Account::Account(const AB_ACCOUNT_SPEC *accountSpec, const double balance)
-    : abAccountSpec(accountSpec ? AB_AccountSpec_dup(accountSpec) : Q_NULLPTR)
+Account::Account(const AB_ACCOUNT_SPEC *accountSpec, double balance)
+    : abAccountSpec(AB_AccountSpec_dup(accountSpec))
     , m_balance(balance)
-{ }
+{}
 
 Account::~Account()
 {
@@ -161,13 +161,12 @@ double Account::balance() const
     return m_balance;
 }
 
-Account::TransactionLimitsList *Account::transactionLimitsList() const
+TransactionLimitsList *Account::transactionLimitsList() const
 {
     return AB_AccountSpec_GetTransactionLimitsList(abAccountSpec);
 }
 
-Account::TransactionLimits *Account::transactionLimitsForCommand(
-    const AB_TRANSACTION_COMMAND &cmd) const
+TransactionLimits *Account::transactionLimitsForCommand(const AB_TRANSACTION_COMMAND &cmd) const
 {
     return AB_AccountSpec_GetTransactionLimitsForCommand(abAccountSpec, cmd);
 }
@@ -205,7 +204,7 @@ QSqlQuery Account::createInsertQuery(QSqlQuery &query) const
     return query;
 }
 
-QMap<QString, QVariant> Account::accountQueryToMap(const QSqlQuery &query)
+QMap<QString, QVariant> Account::queryToMap(const QSqlQuery &query)
 {
     QMap<QString, QVariant> map = {};
 

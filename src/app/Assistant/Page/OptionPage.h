@@ -20,13 +20,13 @@
 
 #include <QtWidgets/QWizardPage>
 
-#include "ui_OptionPage.h"
-
 #include "core/Container.h"
 
-using namespace olbaflinx::core;
+#include "ui_OptionPage.h"
 
 namespace olbaflinx::app::assistant::page {
+
+using namespace olbaflinx::core;
 
 class OptionPage : public QWizardPage, private Ui::UiOptionPage
 {
@@ -41,13 +41,15 @@ public:
 
     [[nodiscard]] AccountIds selectedAccountIds() const;
 
-private Q_SLOTS:
-    void checkForAccounts(const AccountList &accounts);
-    void setupAccounts(const AccountList &accounts);
-
 public Q_SLOTS:
     void showSetupDialog();
+
+private:
+    bool m_isOptionPageComplete;
+
+    void addAccounts(const AccountList &accounts);
 };
-} // namespace olbaflinx::app::banking::assistant::page
+
+} // namespace olbaflinx::app::assistant::page
 
 #endif // OLBAFLINX_OPTIONPAGE_H

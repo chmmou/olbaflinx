@@ -12,8 +12,8 @@ set(KTOBLZCHECK_MIN_VERSION 1.53.0)
 set(LIBCHIPCARD_MIN_VERSION 5.1.6)
 set(EXECUTABLE_OUTPUT_PATH "bin/")
 
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Network REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Network REQUIRED)
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Xml Network REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Xml Network REQUIRED)
 find_package(PkgConfig REQUIRED)
 
 # Check if we have the required Qt5 plugin installed

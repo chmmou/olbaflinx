@@ -19,6 +19,7 @@
 #define OLBAFLINX_PAGEBANKING_H
 
 #include <QtCore/QScopedPointer>
+#include <QtCore/QVector>
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QWidget>
 
@@ -34,6 +35,7 @@ public:
     ~PageBanking() override;
 
     void initialize(QMainWindow *mainWindow);
+    void deInitialize();
 
 Q_SIGNALS:
     void vaultClosed();
@@ -42,8 +44,11 @@ private:
     friend class PageBasePrivate;
     QScopedPointer<PageBasePrivate> d_ptr;
 
+    QVector<int> m_typeIds;
+
     void initializeMenuBar();
     void initializeToolbar();
+    void initializeStatusBar();
 };
 
 } // namespace pages

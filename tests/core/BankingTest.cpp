@@ -19,19 +19,21 @@
 #include <QtCore/QRandomGenerator>
 #include <QtTest/QtTest>
 
-#include "Banking/Banking.h"
-#include "SingleApplication/SingleApplication.h"
+#include "core/Banking/OnlineBanking.h"
+#include "core/SingleApplication/SingleApplication.h"
+
+#include "BaseTest.h"
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 
-namespace olbaflinx::core::banking::tests
-{
+namespace olbaflinx::core::banking::tests {
 
-class BankingTest: public QObject
-{
+using namespace olbaflinx::core::tests;
 
-Q_OBJECT
+class BankingTest : public QObject
+{
+    Q_OBJECT
 
 public:
     BankingTest();
@@ -43,10 +45,7 @@ private:
 private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
-    void testReceiveAccount();
-    void testReceiveAccountsEmpty();
-    void testReceiveAccountIdsEmpty();
-    void testCreateAccount();
+    void testAccountInvalid();
 };
 
 BankingTest::BankingTest()
@@ -54,7 +53,7 @@ BankingTest::BankingTest()
 {
     SingleApplication::setApplicationName("OlbaFlinx");
     SingleApplication::setApplicationVersion("1.0.0");
-    SingleApplication::setOrganizationName("de.chm-projects.olbaflinx");
+    SingleApplication::setOrganizationName("de.chm-projects.olbaflinx.test");
     SingleApplication::setOrganizationDomain("https://olbaflinx.chm-projects.de");
 }
 
@@ -62,33 +61,34 @@ BankingTest::~BankingTest() = default;
 
 void BankingTest::initTestCase()
 {
+    metaTypeIds << qRegisterMetaType<AccountBalanceList>("AccountBalanceList");
     metaTypeIds << qRegisterMetaType<AccountList>("AccountList");
     metaTypeIds << qRegisterMetaType<AccountIds>("AccountIds");
-    QCOMPARE(metaTypeIds.count(), 2);
 
-    bool initialized = Banking::instance()->initialize(
-        SingleApplication::applicationName(),
-        QString("%1").arg(QRandomGenerator::system()->generate()),
-        SingleApplication::applicationVersion()
-    );
+    QCOMPARE(metaTypeIds.count(), 3);
+
+    bool initialized = OnlineBanking::instance()
+                           ->initialize(SingleApplication::applicationName(),
+                                        QString("%1").arg(QRandomGenerator::system()->generate()),
+                                        SingleApplication::applicationVersion());
 
     QVERIFY(initialized);
 }
 
 void BankingTest::cleanupTestCase()
 {
-    for (const int id: qAsConst(metaTypeIds)) {
+    for (const int id : qAsConst(metaTypeIds)) {
         QMetaType::unregisterType(id);
     }
     metaTypeIds.clear();
     QVERIFY(metaTypeIds.isEmpty());
 
-    Banking::instance()->deInitialize();
+    OnlineBanking::instance()->finalize();
 }
 
-void BankingTest::testReceiveAccount()
+void BankingTest::testAccountInvalid()
 {
-    const auto banking = Banking::instance();
+    const auto banking = OnlineBanking::instance();
     const quint32 accountId = QRandomGenerator::system()->generate();
     const auto account = banking->account(accountId);
 
@@ -97,43 +97,8 @@ void BankingTest::testReceiveAccount()
     QCOMPARE(account->isValid(), false);
 }
 
-void BankingTest::testReceiveAccountsEmpty()
-{
-    const auto banking = Banking::instance();
-    QSignalSpy spy(banking, &Banking::accountsReceived);
+} // namespace olbaflinx::core::banking::tests
 
-    banking->receiveAccounts();
-
-    QCOMPARE(spy.count(), 1);
-
-    QList<QVariant> arguments = spy.takeFirst();
-    auto accountList = qvariant_cast<AccountList>(arguments.at(0));
-    QVERIFY(accountList.isEmpty());
-}
-
-void BankingTest::testReceiveAccountIdsEmpty()
-{
-    const auto banking = Banking::instance();
-    QSignalSpy spy(banking, &Banking::accountIdsReceived);
-
-    banking->receiveAccountIds();
-
-    QCOMPARE(spy.count(), 1);
-
-    QList<QVariant> arguments = spy.takeFirst();
-    auto accountIds = qvariant_cast<AccountIds>(arguments.at(0));
-    QVERIFY(accountIds.isEmpty());
-}
-
-void BankingTest::testCreateAccount()
-{
-    // ToDo Missing AQ Banking documentation about to create accounts programmatically
-    // ToDO Maybe in the feature ?
-    QVERIFY(true);
-}
-
-}
-
-QTEST_MAIN(tests::BankingTest)
+QTEST_MAIN(banking::tests::BankingTest)
 
 #include "BankingTest.moc"

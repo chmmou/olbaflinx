@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <author>Alexander Saal &lt;developer@olbaflinx.chm-projects.de&gt;</author>
+ <class>UiSepaTransferDraft</class>
+ <widget class="QDialog" name="UiSepaTransferDraft">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>640</width>
+    <height>505</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>640</width>
+    <height>505</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>SEPA Transfer Draft</string>
+  </property>
+  <layout class="QVBoxLayout" name="vlSepaTransferDraft">
+   <item>
+    <layout class="QHBoxLayout" name="hlDescription">
+     <item>
+      <widget class="QLabel" name="lblDescription">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Description</string>
+       </property>
+       <property name="buddy">
+        <cstring>leDescription</cstring>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="leDescription"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBoxAccount">
+     <property name="title">
+      <string>Account</string>
+     </property>
+     <layout class="QVBoxLayout" name="vlGroupBoxAccount">
+      <item>
+       <widget class="QComboBox" name="cbxAccounts"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBoxRecipient">
+     <property name="title">
+      <string>Recipient</string>
+     </property>
+     <layout class="QVBoxLayout" name="vlGroupBoxRecipient">
+      <item>
+       <layout class="QHBoxLayout" name="hlGroupBoxRecipient">
+        <item>
+         <widget class="QLineEdit" name="leRecipient">
+          <property name="maxLength">
+           <number>70</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="tbSearchRecipient">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="icon">
+           <iconset resource="../../res/olbaflinx.qrc">
+            <normaloff>:/general/add</normaloff>:/general/add</iconset>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="hlGroupBoxRecipientIbaneBic">
+        <item>
+         <layout class="QVBoxLayout" name="vlIban">
+          <item>
+           <widget class="QLabel" name="lblIban">
+            <property name="minimumSize">
+             <size>
+              <width>110</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>IBAN</string>
+            </property>
+            <property name="buddy">
+             <cstring>leIban</cstring>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="leIban">
+            <property name="maxLength">
+             <number>70</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="vlBic">
+          <item>
+           <widget class="QLabel" name="lblBic">
+            <property name="minimumSize">
+             <size>
+              <width>110</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>BIC</string>
+            </property>
+            <property name="buddy">
+             <cstring>leBic</cstring>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="leBic">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="placeholderText">
+             <string>Automatically determined</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="hlGroupBoxRecipientBankNameAmount">
+        <item>
+         <layout class="QVBoxLayout" name="vlBankName">
+          <item>
+           <widget class="QLabel" name="lblBankName">
+            <property name="minimumSize">
+             <size>
+              <width>110</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Bank</string>
+            </property>
+            <property name="buddy">
+             <cstring>leBankName</cstring>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="leBankName">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="placeholderText">
+             <string>Automatically determined</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="vlAmount">
+          <item>
+           <widget class="QLabel" name="lblAmount">
+            <property name="minimumSize">
+             <size>
+              <width>110</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Amount</string>
+            </property>
+            <property name="buddy">
+             <cstring>sbAmount</cstring>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QDoubleSpinBox" name="sbAmount">
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+            <property name="suffix">
+             <string> EUR</string>
+            </property>
+            <property name="minimum">
+             <double>0.000000000000000</double>
+            </property>
+            <property name="maximum">
+             <double>999999999999.989990234375000</double>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="vlGroupBoxRecipientPurpose">
+        <item>
+         <widget class="QLabel" name="lblPurpose">
+          <property name="minimumSize">
+           <size>
+            <width>110</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Purpose</string>
+          </property>
+          <property name="buddy">
+           <cstring>lePurpose</cstring>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lePurpose">
+          <property name="maxLength">
+           <number>140</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="vlGroupBoxRecipientCustomerReference">
+        <item>
+         <widget class="QLabel" name="lblCustomerReference">
+          <property name="minimumSize">
+           <size>
+            <width>110</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Customer reference</string>
+          </property>
+          <property name="buddy">
+           <cstring>leCustomerReference</cstring>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="leCustomerReference">
+          <property name="maxLength">
+           <number>35</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="vlSepaTransferDraftSeparator">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>46</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="Line" name="lineSepaTransferDraftSeparator">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="hlSepaTransferDraftButtons">
+     <item>
+      <spacer name="horizontalSpacerTransferTemplateButtons">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnApplay">
+       <property name="text">
+        <string>Save</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text">
+        <string>Cancel</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>leDescription</tabstop>
+  <tabstop>cbxAccounts</tabstop>
+  <tabstop>tbSearchRecipient</tabstop>
+  <tabstop>leRecipient</tabstop>
+  <tabstop>leIban</tabstop>
+  <tabstop>leBic</tabstop>
+  <tabstop>leBankName</tabstop>
+  <tabstop>sbAmount</tabstop>
+  <tabstop>lePurpose</tabstop>
+  <tabstop>leCustomerReference</tabstop>
+  <tabstop>btnApplay</tabstop>
+  <tabstop>btnCancel</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../../res/olbaflinx.qrc"/>
+ </resources>
+ <connections>
+  <connection>
+   <sender>btnApplay</sender>
+   <signal>clicked()</signal>
+   <receiver>UiSepaTransferDraft</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>436</x>
+     <y>475</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>376</x>
+     <y>473</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btnCancel</sender>
+   <signal>clicked()</signal>
+   <receiver>UiSepaTransferDraft</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>559</x>
+     <y>494</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>361</x>
+     <y>494</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>tbSearchRecipient</sender>
+   <signal>clicked()</signal>
+   <receiver>UiSepaTransferDraft</receiver>
+   <slot>showContacts()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>607</x>
+     <y>162</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>303</x>
+     <y>433</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>leIban</sender>
+   <signal>textChanged(QString)</signal>
+   <receiver>UiSepaTransferDraft</receiver>
+   <slot>validateIban(QString)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>36</x>
+     <y>221</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>52</x>
+     <y>433</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>showContacts()</slot>
+  <slot>validateIban(QString)</slot>
+ </slots>
+</ui>

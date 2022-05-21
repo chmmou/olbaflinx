@@ -19,7 +19,8 @@
 
 #include "SetupAssistant.h"
 
-#include "core/Banking/Banking.h"
+#include "core/Banking/OnlineBanking.h"
+
 #include "core/Container.h"
 
 using namespace olbaflinx::core::banking;
@@ -59,7 +60,7 @@ void SetupAssistant::done(int result)
 
     AccountList accounts = {};
     for (const quint32 uniqueId : qAsConst(accountIds)) {
-        accounts.append(Banking::instance()->account(uniqueId));
+        accounts.append(OnlineBanking::instance()->account(uniqueId));
     }
 
     Q_EMIT accountsReceived(accounts);

@@ -241,7 +241,7 @@ bool VaultStorage::isStorageValid() const
     return d_ptr->isStorageValid();
 }
 
-bool VaultStorage::changeKey(const QString &oldKey, const QString &newKey) const
+bool VaultStorage::changeKey(const QString &oldKey, const QString &newKey)
 {
     d_ptr->setKey(oldKey);
     QSqlQuery query = d_ptr->databaseQuery();
@@ -348,6 +348,52 @@ void VaultStorage::addAccounts(const AccountList &accounts)
     loop.exec();
 }
 
+void VaultStorage::addAccountBalance(const quint32 &accountId, const AccountBalance *balance)
+{
+    if (!d_ptr->isStorageValid()) {
+        return;
+    }
+
+    QSqlQuery query = d_ptr->databaseQuery();
+    balance->createInsertQuery(accountId, query).exec();
+}
+
+void VaultStorage::addAccountBalance(const quint32 &accountId, const AccountBalanceList &balances)
+{
+    if (balances.isEmpty()) {
+        return;
+    }
+
+    if (!d_ptr->isStorageValid()) {
+        return;
+    }
+
+    qApp->setOverrideCursor(Qt::WaitCursor);
+
+    QEventLoop loop(this);
+    QFutureWatcher<void> accountBalancesWatcher(this);
+    connect(&accountBalancesWatcher, &QFutureWatcher<void>::finished, &loop, [&]() {
+        loop.quit();
+        accountBalancesWatcher.cancel();
+        accountBalancesWatcher.waitForFinished();
+
+        qApp->restoreOverrideCursor();
+    });
+
+    QSqlQuery query = d_ptr->databaseQuery();
+    accountBalancesWatcher.setFuture(
+        QtConcurrent::run([this, accountId, balances, &query]() -> void {
+            const int balanceSize = balances.size();
+            for (int currentIndex = 0; currentIndex < balanceSize; ++currentIndex) {
+                const auto balance = balances.at(currentIndex);
+                balance->createInsertQuery(accountId, query).exec();
+                const qreal percentage = currentIndex * 100.0 / balanceSize;
+                Q_EMIT progress(percentage);
+            }
+        }));
+    loop.exec();
+}
+
 AccountList VaultStorage::accounts()
 {
     if (!d_ptr->isStorageValid()) {
@@ -371,7 +417,7 @@ AccountList VaultStorage::accounts()
         AccountList accounts = {};
         query.exec(StorageSqlAccountSelectQuery);
         while (query.next()) {
-            const auto map = Account::accountQueryToMap(query);
+            const auto map = Account::queryToMap(query);
             const auto account = Account::create(map);
             accounts.append(account);
         }
@@ -414,6 +460,8 @@ AccountIds VaultStorage::accountIds()
 
     return accountWatcher.result();
 }
+
+AccountBalanceList VaultStorage::accountBalances(const quint32 accountId) { }
 
 void VaultStorage::addTransaction(const quint32 &accountId, const Transaction *transaction)
 {
@@ -484,21 +532,18 @@ TransactionList VaultStorage::transactions(const quint32 &accountId,
     qApp->setOverrideCursor(Qt::WaitCursor);
 
     QEventLoop loop(this);
-    QFutureWatcher<QVector<const Transaction *>> transactionWatcher(this);
-    connect(&transactionWatcher,
-            &QFutureWatcher<QVector<const Transaction *>>::finished,
-            &loop,
-            [&]() {
-                loop.quit();
-                transactionWatcher.cancel();
-                transactionWatcher.waitForFinished();
+    QFutureWatcher<TransactionList> transactionWatcher(this);
+    connect(&transactionWatcher, &QFutureWatcher<TransactionList>::finished, &loop, [&]() {
+        loop.quit();
+        transactionWatcher.cancel();
+        transactionWatcher.waitForFinished();
 
-                qApp->restoreOverrideCursor();
-            });
+        qApp->restoreOverrideCursor();
+    });
 
     QSqlQuery query = d_ptr->databaseQuery();
-    transactionWatcher.setFuture(QtConcurrent::run(
-        [this, accountId, limit, offset, &query]() -> QVector<const Transaction *> {
+    transactionWatcher.setFuture(
+        QtConcurrent::run([this, accountId, limit, offset, &query]() -> TransactionList {
             TransactionList transactions = {};
 
             query.prepare(StorageSqlTransactionByAccountIdWithLimitQuery);
@@ -509,14 +554,15 @@ TransactionList VaultStorage::transactions(const quint32 &accountId,
 
             int currentIndex = 0;
             while (query.next()) {
-                const auto map = Transaction::transactionQueryToMap(query);
+                const auto map = Transaction::queryToMap(query);
                 const auto transaction = Transaction::create(map);
                 transactions.append(transaction);
+
+                const qreal percentage = currentIndex * 100.0 / limit;
+                Q_EMIT progress(percentage);
+
                 ++currentIndex;
             }
-
-            const qreal percentage = currentIndex * 100.0 / limit;
-            Q_EMIT progress(percentage);
 
             return transactions;
         }));

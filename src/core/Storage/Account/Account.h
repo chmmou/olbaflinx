@@ -17,6 +17,7 @@
 #ifndef OLBAFLINX_ACCOUNT_H
 #define OLBAFLINX_ACCOUNT_H
 
+#include <QtCore/qglobal.h>
 #include <QtCore/QMap>
 #include <QtCore/QString>
 #include <QtCore/QVariant>
@@ -28,13 +29,13 @@
 
 namespace olbaflinx::core::storage::account {
 
+typedef AB_TRANSACTION_LIMITS TransactionLimits;
+typedef AB_TRANSACTION_LIMITS_LIST TransactionLimitsList;
+
 class Account
 {
-    typedef AB_TRANSACTION_LIMITS TransactionLimits;
-    typedef AB_TRANSACTION_LIMITS_LIST TransactionLimitsList;
-
 public:
-    explicit Account(const AB_ACCOUNT_SPEC *accountSpec = Q_NULLPTR, const double balance = 0.0);
+    explicit Account(const AB_ACCOUNT_SPEC *accountSpec = Q_NULLPTR, double balance = 0.0);
     ~Account();
 
     [[nodiscard]] qint32 type() const;
@@ -59,8 +60,9 @@ public:
 
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] QString toString() const;
+
     [[nodiscard]] QSqlQuery createInsertQuery(QSqlQuery &query) const;
-    [[nodiscard]] static QMap<QString, QVariant> accountQueryToMap(const QSqlQuery &query);
+    [[nodiscard]] static QMap<QString, QVariant> queryToMap(const QSqlQuery &query);
     [[nodiscard]] static Account *create(const QMap<QString, QVariant> &row);
 
 private:

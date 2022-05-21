@@ -118,13 +118,12 @@ public:
     [[nodiscard]] QString toString() const;
     [[nodiscard]] bool isStandingOrder() const;
     [[nodiscard]] QString calculateTransactionHash() const;
+
     [[nodiscard]] QSqlQuery createInsertQuery(const quint32 &accountId, QSqlQuery &query) const;
-    [[nodiscard]] static QMap<QString, QVariant> transactionQueryToMap(const QSqlQuery &query);
+    [[nodiscard]] static QMap<QString, QVariant> queryToMap(const QSqlQuery &query);
     [[nodiscard]] static Transaction *create(const QMap<QString, QVariant> &row);
 
 private:
-    QDate gwenDateToQDate(const GWEN_DATE *gwenDate) const;
-    static GWEN_DATE *qDateToGwenDate(const QDate &qDate);
     AB_TRANSACTION *abTransaction;
 };
 

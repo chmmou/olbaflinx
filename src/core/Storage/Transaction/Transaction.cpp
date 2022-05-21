@@ -21,48 +21,18 @@
 #include <QtSql/QSqlRecord>
 
 #include "core/Container.h"
+#include "core/Utils.h"
 #include "Transaction.h"
 
 using namespace olbaflinx::core::storage::transaction;
 
 Transaction::Transaction(const AB_TRANSACTION *transaction)
     : abTransaction(AB_Transaction_dup(transaction))
-{
-
-}
+{ }
 
 Transaction::~Transaction()
 {
     AB_Transaction_free(abTransaction);
-}
-
-QDate Transaction::gwenDateToQDate(const GWEN_DATE *gwenDate) const
-{
-    if (gwenDate) {
-        GWEN_BUFFER *buffer = GWEN_Buffer_new(nullptr, 16, 0, 1);
-        const int rv = GWEN_Date_toStringWithTemplate(gwenDate, "DD.MM.YYYY HH:mm:ss", buffer);
-        if (rv == 0) {
-            char *start = GWEN_Buffer_GetStart(buffer);
-            QDate qDate = QDate::fromString(QString(start), "dd.MM.yyyy HH:mm:ss");
-
-            GWEN_Buffer_Reset(buffer);
-            GWEN_Buffer_free(buffer);
-
-            return qDate;
-        }
-    }
-
-    return QDate::currentDate();
-}
-
-GWEN_DATE *Transaction::qDateToGwenDate(const QDate &qDate)
-{
-    if (qDate.isValid()) {
-        const auto dateString = qDate.toString("YYYY-DD-MM HH:mm::ss");
-        return GWEN_Date_fromString(dateString.toLocal8Bit().constData());
-    }
-
-    return nullptr;
 }
 
 TransactionType Transaction::type() const
@@ -207,12 +177,12 @@ QString Transaction::remoteName() const
 
 QDate Transaction::date() const
 {
-    return gwenDateToQDate(AB_Transaction_GetDate(abTransaction));
+    return Utils::gwenDateToQDate(AB_Transaction_GetDate(abTransaction));
 }
 
 QDate Transaction::valutaDate() const
 {
-    return gwenDateToQDate(AB_Transaction_GetValutaDate(abTransaction));
+    return Utils::gwenDateToQDate(AB_Transaction_GetValutaDate(abTransaction));
 }
 
 qreal Transaction::value() const
@@ -307,7 +277,7 @@ QString Transaction::mandateId() const
 
 QDate Transaction::mandateDate() const
 {
-    return gwenDateToQDate(AB_Transaction_GetMandateDate(abTransaction));
+    return Utils::gwenDateToQDate(AB_Transaction_GetMandateDate(abTransaction));
 }
 
 QString Transaction::mandateDebitorName() const
@@ -377,17 +347,17 @@ quint32 Transaction::executionDay() const
 
 QDate Transaction::firstDate() const
 {
-    return gwenDateToQDate(AB_Transaction_GetFirstDate(abTransaction));
+    return Utils::gwenDateToQDate(AB_Transaction_GetFirstDate(abTransaction));
 }
 
 QDate Transaction::lastDate() const
 {
-    return gwenDateToQDate(AB_Transaction_GetLastDate(abTransaction));
+    return Utils::gwenDateToQDate(AB_Transaction_GetLastDate(abTransaction));
 }
 
 QDate Transaction::nextDate() const
 {
-    return gwenDateToQDate(AB_Transaction_GetNextDate(abTransaction));
+    return Utils::gwenDateToQDate(AB_Transaction_GetNextDate(abTransaction));
 }
 
 QString Transaction::unitId() const
@@ -427,7 +397,7 @@ qreal Transaction::unitPriceValue() const
 
 QDate Transaction::unitPriceDate() const
 {
-    return gwenDateToQDate(AB_Transaction_GetUnitPriceDate(abTransaction));
+    return Utils::gwenDateToQDate(AB_Transaction_GetUnitPriceDate(abTransaction));
 }
 
 qreal Transaction::commissionValue() const
@@ -466,7 +436,8 @@ QString Transaction::calculateTransactionHash() const
         return hash();
     }
 
-    const QString purpose = this->purpose().append(QDateTime::currentDateTime().toString(" - dd.MM.yyyy hh:mm:ss.z"));
+    const QString purpose = this->purpose().append(
+        QDateTime::currentDateTime().toString(" - dd.MM.yyyy hh:mm:ss.z"));
     const QByteArray hash = QCryptographicHash::hash(purpose.toUtf8(), QCryptographicHash::Sha1);
     return QString("%1").arg(QString(hash.toHex()));
 }
@@ -551,7 +522,7 @@ QSqlQuery Transaction::createInsertQuery(const quint32 &accountId, QSqlQuery &qu
     return query;
 }
 
-QMap<QString, QVariant> Transaction::transactionQueryToMap(const QSqlQuery &query)
+QMap<QString, QVariant> Transaction::queryToMap(const QSqlQuery &query)
 {
     QMap<QString, QVariant> map = QMap<QString, QVariant>();
 
@@ -644,28 +615,44 @@ Transaction *Transaction::create(const QMap<QString, QVariant> &row)
     AB_Transaction_SetUniqueId(abTransaction, row["uniqueId"].toUInt());
     AB_Transaction_SetRefUniqueId(abTransaction, row["refUniqueId"].toUInt());
     AB_Transaction_SetIdForApplication(abTransaction, row["idForApplication"].toUInt());
-    AB_Transaction_SetStringIdForApplication(abTransaction, row["stringIdForApplication"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetStringIdForApplication(
+        abTransaction, row["stringIdForApplication"].toString().toLocal8Bit().constData());
     AB_Transaction_SetSessionId(abTransaction, row["sessionId"].toUInt());
     AB_Transaction_SetGroupId(abTransaction, row["groupId"].toUInt());
     AB_Transaction_SetFiId(abTransaction, row["fiId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalIban(abTransaction, row["localIban"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalIban(abTransaction,
+                                row["localIban"].toString().toLocal8Bit().constData());
     AB_Transaction_SetLocalBic(abTransaction, row["localBic"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalCountry(abTransaction, row["localCountry"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBankCode(abTransaction, row["localBankCode"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBranchId(abTransaction, row["localBranchId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalAccountNumber(abTransaction, row["localAccountNumber"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalSuffix(abTransaction, row["localSuffix"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalName(abTransaction, row["localName"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteCountry(abTransaction, row["remoteCountry"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBankCode(abTransaction, row["remoteBankCode"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBranchId(abTransaction, row["remoteBranchId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAccountNumber(abTransaction, row["remoteAccountNumber"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteSuffix(abTransaction, row["remoteSuffix"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteIban(abTransaction, row["remoteIban"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBic(abTransaction, row["remoteBic"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteName(abTransaction, row["remoteName"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetDate(abTransaction, Transaction::qDateToGwenDate(row["date"].toDate()));
-    AB_Transaction_SetValutaDate(abTransaction, Transaction::qDateToGwenDate(row["valutaDate"].toDate()));
+    AB_Transaction_SetLocalCountry(abTransaction,
+                                   row["localCountry"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalBankCode(abTransaction,
+                                    row["localBankCode"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalBranchId(abTransaction,
+                                    row["localBranchId"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalAccountNumber(
+        abTransaction, row["localAccountNumber"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalSuffix(abTransaction,
+                                  row["localSuffix"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalName(abTransaction,
+                                row["localName"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteCountry(abTransaction,
+                                    row["remoteCountry"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteBankCode(abTransaction,
+                                     row["remoteBankCode"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteBranchId(abTransaction,
+                                     row["remoteBranchId"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteAccountNumber(
+        abTransaction, row["remoteAccountNumber"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteSuffix(abTransaction,
+                                   row["remoteSuffix"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteIban(abTransaction,
+                                 row["remoteIban"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteBic(abTransaction,
+                                row["remoteBic"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteName(abTransaction,
+                                 row["remoteName"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetDate(abTransaction, Utils::qDateToGwenDate(row["date"].toDate()));
+    AB_Transaction_SetValutaDate(abTransaction, Utils::qDateToGwenDate(row["valutaDate"].toDate()));
 
     auto value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, row["value"].toDouble());
@@ -681,38 +668,58 @@ Transaction *Transaction::create(const QMap<QString, QVariant> &row)
     value = nullptr;
 
     AB_Transaction_SetTransactionCode(abTransaction, row["transactionCode"].toInt());
-    AB_Transaction_SetTransactionText(abTransaction, row["transactionText"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetTransactionKey(abTransaction, row["transactionKey"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetTransactionText(abTransaction,
+                                      row["transactionText"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetTransactionKey(abTransaction,
+                                     row["transactionKey"].toString().toLocal8Bit().constData());
     AB_Transaction_SetTextKey(abTransaction, row["textKey"].toInt());
-    AB_Transaction_SetPrimanota(abTransaction, row["primanota"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetPrimanota(abTransaction,
+                                row["primanota"].toString().toLocal8Bit().constData());
     AB_Transaction_SetPurpose(abTransaction, row["purpose"].toString().toLocal8Bit().constData());
     AB_Transaction_SetCategory(abTransaction, row["category"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetCustomerReference(abTransaction, row["customerReference"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetBankReference(abTransaction, row["bankReference"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetEndToEndReference(abTransaction, row["endToEndReference"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetCreditorSchemeId(abTransaction, row["creditorSchemeId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetOriginatorId(abTransaction, row["originatorId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetMandateId(abTransaction, row["mandateId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetMandateDate(abTransaction, Transaction::qDateToGwenDate(row["mandateDate"].toDate()));
-    AB_Transaction_SetMandateDebitorName(abTransaction, row["mandateDebitorName"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetOriginalCreditorSchemeId(abTransaction, row["originalCreditorSchemeId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetOriginalMandateId(abTransaction, row["originalMandateId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetOriginalCreditorName(abTransaction, row["originalCreditorName"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetCustomerReference(
+        abTransaction, row["customerReference"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetBankReference(abTransaction,
+                                    row["bankReference"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetEndToEndReference(
+        abTransaction, row["endToEndReference"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetCreditorSchemeId(abTransaction,
+                                       row["creditorSchemeId"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetOriginatorId(abTransaction,
+                                   row["originatorId"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetMandateId(abTransaction,
+                                row["mandateId"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetMandateDate(abTransaction,
+                                  Utils::qDateToGwenDate(row["mandateDate"].toDate()));
+    AB_Transaction_SetMandateDebitorName(
+        abTransaction, row["mandateDebitorName"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetOriginalCreditorSchemeId(
+        abTransaction, row["originalCreditorSchemeId"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetOriginalMandateId(
+        abTransaction, row["originalMandateId"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetOriginalCreditorName(
+        abTransaction, row["originalCreditorName"].toString().toLocal8Bit().constData());
     AB_Transaction_SetSequence(abTransaction, (TransactionSequence) row["sequence"].toInt());
     AB_Transaction_SetCharge(abTransaction, (TransactionCharge) row["charge"].toInt());
-    AB_Transaction_SetRemoteAddrStreet(abTransaction, row["remoteAddrStreet"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrZipcode(abTransaction, row["remoteAddrZipcode"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrCity(abTransaction, row["remoteAddrCity"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrPhone(abTransaction, row["remoteAddrPhone"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteAddrStreet(abTransaction,
+                                       row["remoteAddrStreet"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteAddrZipcode(
+        abTransaction, row["remoteAddrZipcode"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteAddrCity(abTransaction,
+                                     row["remoteAddrCity"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteAddrPhone(abTransaction,
+                                      row["remoteAddrPhone"].toString().toLocal8Bit().constData());
     AB_Transaction_SetPeriod(abTransaction, (TransactionPeriod) row["period"].toInt());
     AB_Transaction_SetCycle(abTransaction, row["cycle"].toUInt());
     AB_Transaction_SetExecutionDay(abTransaction, row["executionDay"].toUInt());
-    AB_Transaction_SetFirstDate(abTransaction, Transaction::qDateToGwenDate(row["firstDate"].toDate()));
-    AB_Transaction_SetLastDate(abTransaction, Transaction::qDateToGwenDate(row["lastDate"].toDate()));
-    AB_Transaction_SetNextDate(abTransaction, Transaction::qDateToGwenDate(row["nextDate"].toDate()));
+    AB_Transaction_SetFirstDate(abTransaction, Utils::qDateToGwenDate(row["firstDate"].toDate()));
+    AB_Transaction_SetLastDate(abTransaction, Utils::qDateToGwenDate(row["lastDate"].toDate()));
+    AB_Transaction_SetNextDate(abTransaction, Utils::qDateToGwenDate(row["nextDate"].toDate()));
     AB_Transaction_SetUnitId(abTransaction, row["unitId"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetUnitIdNameSpace(abTransaction, row["unitIdNameSpace"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetTickerSymbol(abTransaction, row["tickerSymbol"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetUnitIdNameSpace(abTransaction,
+                                      row["unitIdNameSpace"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetTickerSymbol(abTransaction,
+                                   row["tickerSymbol"].toString().toLocal8Bit().constData());
 
     value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, row["units"].toDouble());
@@ -726,7 +733,8 @@ Transaction *Transaction::create(const QMap<QString, QVariant> &row)
     AB_Value_free(value);
     value = nullptr;
 
-    AB_Transaction_SetUnitPriceDate(abTransaction, Transaction::qDateToGwenDate(row["unitPriceDate"].toDate()));
+    AB_Transaction_SetUnitPriceDate(abTransaction,
+                                    Utils::qDateToGwenDate(row["unitPriceDate"].toDate()));
 
     value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, row["commissionValue"].toDouble());

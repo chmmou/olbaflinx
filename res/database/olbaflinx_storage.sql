@@ -170,6 +170,20 @@ CREATE INDEX IF NOT EXISTS transactions_last_date_index on transactions (last_da
 CREATE INDEX IF NOT EXISTS transactions_next_date_index on transactions (next_date desc);
 CREATE INDEX IF NOT EXISTS transactions_unit_price_date_index on transactions (unit_price_date desc);
 
+CREATE TABLE IF NOT EXISTS balances
+(
+    id         integer not null
+        constraint balance_id_pk primary key autoincrement,
+    account_id integer,
+    `date`     date,
+    `value`    double,
+    `type`     integer,
+    currency   varchar,
+    UNIQUE (account_id),
+    FOREIGN KEY (account_id) REFERENCES accounts (id)
+);
+CREATE INDEX IF NOT EXISTS balances_date_index on balances (`date` desc);
+
 CREATE TABLE IF NOT EXISTS migrations
 (
     id         integer not null

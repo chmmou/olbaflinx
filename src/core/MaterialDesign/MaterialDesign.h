@@ -1,5 +1,8 @@
 /**
- * Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
+ * Original code from
+ * https://github.com/sthlm58/QtMaterialDesignIcons
+ *
+ * Copyright (C) 2021-2022, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,30 +18,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OLBAFLINX_SINGLETON_H
-#define OLBAFLINX_SINGLETON_H
+#ifndef OLBAFLINX_MATERIALDESIGN_H
+#define OLBAFLINX_MATERIALDESIGN_H
 
-template<typename S> class Singleton
+#include <QtCore/QSize>
+#include <QtCore/QString>
+#include <QtGui/QColor>
+#include <QtGui/QPixmap>
+
+namespace olbaflinx::core::material::design {
+
+class MaterialDesign
 {
 public:
-    static S *instance()
-    {
-        if (_instance == nullptr) {
-            _instance = new S();
-        }
-
-        return _instance;
-    }
-
-    virtual ~Singleton() { _instance = nullptr; }
-
-private:
-    static S *_instance;
-
-protected:
-    Singleton() = default;
+    static QPixmap icon(const QString &name,
+                        const QSize &size = QSize(24, 24),
+                        const QColor &color = Qt::darkGray);
 };
 
-template<typename S> S *Singleton<S>::_instance = nullptr;
+} // namespace olbaflinx::core::material::design
 
-#endif // OLBAFLINX_SINGLETON_H
+#endif //OLBAFLINX_MATERIALDESIGN_H

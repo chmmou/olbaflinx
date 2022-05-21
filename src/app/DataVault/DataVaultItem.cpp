@@ -14,6 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <QtConcurrent/QtConcurrent>
+
 #include <QtCore/QDateTime>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
@@ -165,6 +167,7 @@ void DataVaultItem::showPasswordChangeDialog()
                     return;
                 }
 
+                qApp->setOverrideCursor(Qt::WaitCursor);
                 VaultStorage::instance()->setDatabaseKey(vaultFilePath(), currPassword);
                 VaultStorage::instance()->initialize(false);
                 const bool isStorageValid = VaultStorage::instance()->isStorageValid();
@@ -172,6 +175,7 @@ void DataVaultItem::showPasswordChangeDialog()
                     QMessageBox::critical(&passwordChangeDlg,
                                           dlgTitle,
                                           tr("The current password is not correct!"));
+                    qApp->restoreOverrideCursor();
                     return;
                 }
 
@@ -180,9 +184,11 @@ void DataVaultItem::showPasswordChangeDialog()
                     QMessageBox::critical(&passwordChangeDlg,
                                           dlgTitle,
                                           tr("The password could not be changed!"));
+                    qApp->restoreOverrideCursor();
                     return;
                 }
                 VaultStorage::instance()->close();
+                qApp->restoreOverrideCursor();
                 passwordChangeDlg.accept();
             });
 

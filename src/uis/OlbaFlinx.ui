@@ -116,7 +116,7 @@
              <x>0</x>
              <y>0</y>
              <width>928</width>
-             <height>506</height>
+             <height>489</height>
             </rect>
            </property>
           </widget>
@@ -220,7 +220,18 @@
     </item>
    </layout>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QStatusBar" name="appStatusBar"/>
+  <widget class="QToolBar" name="appToolBar">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+  </widget>
  </widget>
  <customwidgets>
   <customwidget>

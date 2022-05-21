@@ -42,7 +42,7 @@ PageDataVaults::PageDataVaults(QWidget *parent)
     , m_scrollAreaSpacerTop(Q_NULLPTR)
     , m_scrollAreaSpacerBottom(Q_NULLPTR)
     , m_scrollAreaDataVaultsContentsLayout(Q_NULLPTR)
-{}
+{ }
 
 PageDataVaults::~PageDataVaults() = default;
 
@@ -53,17 +53,17 @@ void PageDataVaults::initialize(QMainWindow *mainWindow)
     createVaultInfoLabel();
     createVaultInfoSpacerItems();
 
-    const auto app = d_ptr->app();
-    m_scrollAreaDataVaultsContentsLayout = new QVBoxLayout(app->scrollAreaDataVaultsContents);
+    m_scrollAreaDataVaultsContentsLayout = new QVBoxLayout(
+        d_ptr->app()->scrollAreaDataVaultsContents);
 
-    app->scrollAreaDataVaults->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    app->scrollAreaDataVaults->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    app->scrollAreaDataVaults->setFrameShape(QScrollArea::NoFrame);
-    app->scrollAreaDataVaults->setFrameShadow(QScrollArea::Plain);
+    d_ptr->app()->scrollAreaDataVaults->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    d_ptr->app()->scrollAreaDataVaults->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    d_ptr->app()->scrollAreaDataVaults->setFrameShape(QScrollArea::NoFrame);
+    d_ptr->app()->scrollAreaDataVaults->setFrameShadow(QScrollArea::Plain);
 
-    app->pushButtonAddNewDataVaults->setShortcut(QKeySequence("Ctrl+N"));
+    d_ptr->app()->pushButtonAddNewDataVaults->setShortcut(QKeySequence("Ctrl+N"));
 
-    connect(app->pushButtonAddNewDataVaults,
+    connect(d_ptr->app()->pushButtonAddNewDataVaults,
             &QPushButton::clicked,
             this,
             &PageDataVaults::addNewDataVault);
@@ -230,7 +230,7 @@ void PageDataVaults::createVaultInfoSpacerItems()
 void PageDataVaults::openDataVaultItem(const QString &filePath, const QString &password)
 {
     VaultStorage::instance()->setDatabaseKey(filePath, password);
-    VaultStorage::instance()->initialize(false);
+    VaultStorage::instance()->initialize(true);
 
     if (!VaultStorage::instance()->isStorageValid()) {
         VaultStorage::instance()->close();

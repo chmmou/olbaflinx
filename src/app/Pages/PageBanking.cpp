@@ -27,36 +27,42 @@
 #include <QtWidgets/QToolButton>
 #include <QtWidgets/QTreeWidgetItem>
 
+#include "core/MaterialDesign/MaterialDesign.h"
+#include "core/MaterialDesign/MaterialDesignNames.h"
 #include "core/Storage/VaultStorage.h"
 
 #include "PageBanking.h"
 #include "PageBasePrivate.h"
 
 using namespace olbaflinx::core;
+using namespace olbaflinx::core::material::design;
+using namespace olbaflinx::core::material::design::names;
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::app::pages;
 
 PageBanking::PageBanking(QWidget *parent)
     : QWidget(parent)
     , d_ptr(new PageBasePrivate())
-{}
+    , m_typeIds({})
+{ }
 
-PageBanking::~PageBanking() {}
+PageBanking::~PageBanking() { }
 
 void PageBanking::initialize(QMainWindow *mainWindow)
 {
+    d_ptr->setMainWindow(mainWindow);
+    m_typeIds << qRegisterMetaType<const AccountItem *>();
+
+    initializeMenuBar();
+    initializeToolbar();
+    initializeStatusBar();
+
     auto accounts = VaultStorage::instance()->accounts();
     if (accounts.isEmpty()) {
         return;
     }
 
-    d_ptr->setMainWindow(mainWindow);
-    qRegisterMetaType<const AccountItem *>();
-
     const auto app = d_ptr->app();
-
-    initializeMenuBar();
-    initializeToolbar();
 
     for (const auto account : accounts) {
         auto item = new QTreeWidgetItem();
@@ -81,6 +87,35 @@ void PageBanking::initialize(QMainWindow *mainWindow)
     accounts.clear();
 }
 
-void PageBanking::initializeMenuBar() {}
+void PageBanking::deInitialize()
+{
+    const auto app = d_ptr->app();
 
-void PageBanking::initializeToolbar() {}
+    for (const auto typeId : m_typeIds) {
+        QMetaType::unregisterType(typeId);
+    }
+    m_typeIds.clear();
+
+    app->treeWidgetBankingAccounts->clear();
+    app->appToolBar->clear();
+    app->appToolBar->hide();
+    app->appStatusBar->clearMessage();
+    app->appStatusBar->hide();
+}
+
+void PageBanking::initializeMenuBar() { }
+
+void PageBanking::initializeToolbar()
+{
+    const auto app = d_ptr->app();
+    app->appToolBar->show();
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Close), "Close", [&]() {
+        Q_EMIT vaultClosed();
+    });
+}
+
+void PageBanking::initializeStatusBar()
+{
+    const auto app = d_ptr->app();
+    app->appStatusBar->show();
+}

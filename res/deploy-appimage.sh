@@ -17,7 +17,7 @@ if [ ! -z "$USE_VERSION" ]
 then
   export VERSION=$USE_VERSION
 else
-  export VERSION="git rev-parse --short HEAD"
+  export VERSION=`git rev-parse --short HEAD`
 fi
 
 BUILD_DIR="build/appimage"
@@ -29,5 +29,5 @@ cd $BUILD_DIR
 
 # example call: ./deploy-appimage.sh "sign key" "/path/to/qt" "version"
 
-rm -rf * && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=RelWithDebInfo $USE_CMAKE_PREFIX_PATH ../.. && make -j$(nproc) && make DESTDIR=AppDir install
+rm -rf * && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release $USE_CMAKE_PREFIX_PATH ../.. && make -j$(nproc) && make DESTDIR=AppDir install
 ~/Apps/AppImage/linuxdeploy --appdir AppDir --desktop-file=../../res/olbaflinx.desktop --icon-file=../../res/olbaflinx.png --output appimage --plugin qt

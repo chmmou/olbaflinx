@@ -24,7 +24,7 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QWizardPage>
 
-#include "core/Banking/Banking.h"
+#include "core/Banking/OnlineBanking.h"
 #include "core/Storage/VaultStorage.h"
 
 #include "ImExportAssistant.h"
@@ -38,12 +38,12 @@ ImExportAssistant::ImExportAssistant(QWidget *parent)
     : QWizard(parent)
     , m_imExportProfileList({})
     , m_metaTypeIds({})
-    , m_accountId(0)
 {
     setupUi(this);
     setWizardStyle(QWizard::ModernStyle);
 
     pbImExportProgress->setVisible(false);
+    pbIntroductionProgress->setVisible(false);
 
     connect(cbxImExportProfile,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -61,6 +61,11 @@ ImExportAssistant::ImExportAssistant(QWidget *parent)
             this,
             &ImExportAssistant::imExportProgress);
 
+    connect(OnlineBanking::instance(),
+            &OnlineBanking::progress,
+            this,
+            &ImExportAssistant::profileLoadingProgress);
+
     m_metaTypeIds << qRegisterMetaType<const ImExportProfileData *>();
     m_metaTypeIds << qRegisterMetaType<ImExportProfileDataList>();
 }
@@ -69,30 +74,30 @@ ImExportAssistant::~ImExportAssistant() = default;
 
 bool ImExportAssistant::validateCurrentPage()
 {
-    const bool isImportChecked = rbIntroductionImport->isChecked()
-                                 && !rbIntroductionExport->isChecked();
+    const bool isImportChecked = isImport();
 
     cbxImExportPlugin->clear();
     cbxImExportProfile->clear();
 
-    m_imExportProfileList = Banking::instance()->importExportProfiles(isImportChecked);
+    m_imExportProfileList = OnlineBanking::instance()->importExportProfiles(isImportChecked);
     for (const auto profile : qAsConst(m_imExportProfileList)) {
         cbxImExportPlugin->addItem(profile->name, QVariant::fromValue(profile->profiles));
     }
 
     QWizardPage *page = currentPage();
     if (page->objectName() == "wizardPageIntroduction") {
-        const bool importChecked = rbIntroductionImport->isChecked()
-                                   && !rbIntroductionExport->isChecked();
-
-        if (importChecked) {
+        if (isImportChecked) {
             lblImExportPlugin->setText(tr("Import Plugin"));
             lblImExportProfile->setText(tr("Import Profile"));
             lblImExportFile->setText(tr("Import File"));
+            pbIntroductionProgress->setFormat(tr("Loading import profiles ... %p%"));
+            pbImExportProgress->setFormat(tr("Import transactions ... %p%"));
         } else {
             lblImExportPlugin->setText(tr("Export Plugin"));
             lblImExportProfile->setText(tr("Export Profile"));
             lblImExportFile->setText(tr("Export File"));
+            pbIntroductionProgress->setFormat(tr("Loading export profiles ... %p%"));
+            pbImExportProgress->setFormat(tr("Export transactions ... %p%"));
         }
 
         return rbIntroductionImport->isChecked() || rbIntroductionExport->isChecked();
@@ -101,9 +106,11 @@ bool ImExportAssistant::validateCurrentPage()
     return QWizard::validateCurrentPage();
 }
 
-void ImExportAssistant::setAccountId(quint32 id)
+void ImExportAssistant::setAccounts(const AccountList &accounts)
 {
-    m_accountId = id;
+    for (const auto account : accounts) {
+        cbxIntroductionAccounts->addItem(account->toString(), account->uniqueId());
+    }
 }
 
 void ImExportAssistant::done(int result)
@@ -113,8 +120,7 @@ void ImExportAssistant::done(int result)
         return;
     }
 
-    const bool isImportChecked = rbIntroductionImport->isChecked()
-                                 && !rbIntroductionExport->isChecked();
+    const bool isImportChecked = isImport();
 
     if (leImExportFile->text().isEmpty()) {
         QMessageBox::critical(this,
@@ -136,9 +142,9 @@ void ImExportAssistant::done(int result)
     const auto imExporterName = cbxImExportPlugin->currentText();
     const auto imExporterProfile = cbxImExportProfile->currentText();
 
-    auto transactions = Banking::instance()->import(imExporterName,
-                                                    imExporterProfile,
-                                                    leImExportFile->text());
+    auto transactions = OnlineBanking::instance()->importTransactionsFromFile(imExporterName,
+                                                                              imExporterProfile,
+                                                                              leImExportFile->text());
 
     if (transactions.isEmpty()) {
         QMessageBox::critical(
@@ -148,7 +154,9 @@ void ImExportAssistant::done(int result)
         return;
     }
 
-    VaultStorage::instance()->addTransactions(m_accountId, transactions);
+    const int accountId = cbxIntroductionAccounts->itemData(cbxIntroductionAccounts->currentIndex())
+                              .toInt();
+    VaultStorage::instance()->addTransactions(accountId, transactions);
 
     qDeleteAll(transactions);
     transactions.clear();
@@ -165,6 +173,16 @@ void ImExportAssistant::done(int result)
     m_metaTypeIds.clear();
 
     QWizard::done(result);
+}
+
+void ImExportAssistant::initializePage(int id)
+{
+    if (id == ImExportAssistant::ImExport) {
+        pbIntroductionProgress->setVisible(false);
+        pbIntroductionProgress->setValue(0);
+    }
+
+    QWizard::initializePage(id);
 }
 
 void ImExportAssistant::comboboxIndexChanged(int index)
@@ -185,7 +203,7 @@ void ImExportAssistant::comboboxIndexChanged(int index)
         if (profile == Q_NULLPTR) {
             return;
         }
-        lblImExportProfileHhelp->setText(profile->name);
+        lblImExportProfileHelp->setText(profile->name);
         lblImExportProfileHelpDesc->setText(profile->longDescr);
     }
 }
@@ -213,4 +231,18 @@ void ImExportAssistant::imExportProgress(qreal progress)
     }
 
     pbImExportProgress->setValue((int) progress);
+}
+
+void ImExportAssistant::profileLoadingProgress(qreal progress)
+{
+    if (!pbIntroductionProgress->isVisible()) {
+        pbIntroductionProgress->setVisible(true);
+    }
+
+    pbIntroductionProgress->setValue((int) progress);
+}
+
+bool ImExportAssistant::isImport() const
+{
+    return rbIntroductionImport->isChecked() && !rbIntroductionExport->isChecked();
 }

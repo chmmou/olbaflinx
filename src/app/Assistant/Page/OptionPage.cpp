@@ -18,52 +18,49 @@
 #include <QtCore/QThread>
 #include <QtCore/QTimer>
 
-#include "core/Banking/Banking.h"
+#include <QtWidgets/QTreeWidget>
+#include <QtWidgets/QTreeWidgetItem>
+
+#include "core/Banking/OnlineBanking.h"
 
 #include "OptionPage.h"
 
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::app::assistant::page;
 
-QTimer *accountTimer = nullptr;
-QThread *accountTimerThread = nullptr;
-bool isOptionPageComplete = false;
-
 OptionPage::OptionPage(QWidget *parent)
     : QWizardPage(parent)
+    , m_isOptionPageComplete(false)
 {
     setupUi(this);
 }
 
-OptionPage::~OptionPage()
-{
-    accountTimer->stop();
-
-    accountTimerThread->quit();
-    accountTimerThread->wait();
-    accountTimerThread->deleteLater();
-
-    accountTimer->deleteLater();
-}
+OptionPage::~OptionPage() { }
 
 void OptionPage::initialize()
 {
-    connect(Banking::instance(), &Banking::accountsReceived, this, &OptionPage::checkForAccounts);
+    connect(treeWidgetAccounts, &QTreeWidget::itemSelectionChanged, this, [&]() {
+        m_isOptionPageComplete = false;
+        const bool hasItemsSelected = !treeWidgetAccounts->selectedItems().isEmpty();
+        if (hasItemsSelected) {
+            m_isOptionPageComplete = true;
+        }
+        Q_EMIT completeChanged();
+    });
 
-    accountTimer = new QTimer(nullptr);
-    accountTimer->setInterval(750);
-    connect(accountTimer, &QTimer::timeout, Banking::instance(), &Banking::receiveAccounts);
+    auto accounts = OnlineBanking::instance()->accounts();
+    if (accounts.isEmpty()) {
+        return;
+    }
 
-    accountTimerThread = new QThread(this);
-    connect(accountTimerThread, &QThread::started, accountTimer, qOverload<>(&QTimer::start));
-
-    accountTimer->moveToThread(accountTimerThread);
-    accountTimerThread->start();
+    addAccounts(accounts);
+    qDeleteAll(accounts);
+    accounts.clear();
 }
 
 bool OptionPage::isComplete() const
 {
-    return isOptionPageComplete && treeWidgetAccounts->topLevelItemCount() > 0;
+    return m_isOptionPageComplete && treeWidgetAccounts->topLevelItemCount() > 0;
 }
 
 AccountIds OptionPage::selectedAccountIds() const
@@ -77,34 +74,31 @@ AccountIds OptionPage::selectedAccountIds() const
     return accountIds;
 }
 
-void OptionPage::checkForAccounts(const AccountList &accounts)
-{
-    isOptionPageComplete = !accounts.empty();
-    if (isOptionPageComplete) {
-        accountTimer->stop();
-        accountTimerThread->quit();
-        accountTimerThread->wait();
-
-        setupAccounts(accounts);
-    }
-}
-
 void OptionPage::showSetupDialog()
 {
-    int result = Banking::instance()->showSetupDialog(this);
-    if (result == 1) { // Ok
-        disconnect(Banking::instance(), &Banking::accountsReceived, this, nullptr);
-        connect(Banking::instance(), &Banking::accountsReceived, this, &OptionPage::setupAccounts);
-        Banking::instance()->receiveAccounts();
-    }
-}
+    m_isOptionPageComplete = false;
 
-void OptionPage::setupAccounts(const AccountList &accounts)
-{
-    if (accounts.isEmpty()) {
+    int result = OnlineBanking::instance()->setupAccounts(this);
+    if (result != 1) {
+        Q_EMIT completeChanged();
         return;
     }
 
+    auto accounts = OnlineBanking::instance()->accounts();
+    if (accounts.isEmpty()) {
+        Q_EMIT completeChanged();
+        return;
+    }
+
+    m_isOptionPageComplete = true;
+
+    addAccounts(accounts);
+    qDeleteAll(accounts);
+    accounts.clear();
+}
+
+void OptionPage::addAccounts(const AccountList &accounts)
+{
     treeWidgetAccounts->clear();
     for (const auto account : accounts) {
         if (account->isValid()) {

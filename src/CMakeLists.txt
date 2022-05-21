@@ -18,6 +18,7 @@ set(
         ${Qt${QT_VERSION_MAJOR}Network_LIBRARIES}
         ${Qt${QT_VERSION_MAJOR}Sql_LIBRARIES}
         ${Qt${QT_VERSION_MAJOR}Svg_LIBRARIES}
+        ${Qt${QT_VERSION_MAJOR}Xml_LIBRARIES}
         SingleApplication::SingleApplication
 )
 
@@ -30,9 +31,8 @@ set(
         ${Qt${QT_VERSION_MAJOR}Network_INCLUDE_DIRS}
         ${Qt${QT_VERSION_MAJOR}Sql_INCLUDE_DIRS}
         ${Qt${QT_VERSION_MAJOR}Svg_INCLUDE_DIRS}
+        ${Qt${QT_VERSION_MAJOR}Xml_INCLUDE_DIRS}
 )
-
-message(STATUS ${QX_DIR})
 
 set(
         AQ_LIBS
@@ -61,6 +61,7 @@ add_definitions(
         ${Qt${QT_VERSION_MAJOR}Network_DEFINITIONS}
         ${Qt${QT_VERSION_MAJOR}Sql_DEFINITIONS}
         ${Qt${QT_VERSION_MAJOR}Svg_DEFINITIONS}
+        ${Qt${QT_VERSION_MAJOR}Xml_DEFINITIONS}
 )
 
 include_directories(${QT_INCLUDES})
@@ -77,9 +78,10 @@ file(
         GLOB_RECURSE
         APP_SRC_FILES
         ${APP_DIR}/core/*.cpp
+        ${APP_DIR}/core/BankData/*.cpp
         ${APP_DIR}/core/Banking/*.cpp
-        ${APP_DIR}/core/Banking/Private/*.cpp
         ${APP_DIR}/core/Logger/*.cpp
+        ${APP_DIR}/core/MaterialDesign/*.cpp
         ${APP_DIR}/core/Storage/*.cpp
         ${APP_DIR}/core/Storage/Account/*.cpp
         ${APP_DIR}/core/Storage/Connection/*.cpp
@@ -99,11 +101,12 @@ file(
         GLOB_RECURSE
         APP_HDR_FILES
         ${APP_DIR}/core/*.h
+        ${APP_DIR}/core/BankData/*.h
+        ${APP_DIR}/core/Banking/*.h
+        ${APP_DIR}/core/Logger/*.h
+        ${APP_DIR}/core/MaterialDesign/*.h
         ${APP_DIR}/core/Storage/*.h
         ${APP_DIR}/core/Storage/Account/*.h
-        ${APP_DIR}/core/Banking/*.h
-        ${APP_DIR}/core/Banking/Private/*.h
-        ${APP_DIR}/core/Logger/*.h
         ${APP_DIR}/core/Storage/Connection/*.h
         ${APP_DIR}/core/Storage/Private/*.h
         ${APP_DIR}/core/Storage/Transaction/*.h
@@ -136,9 +139,9 @@ include_directories(${APP_UI_DIR})
 
 if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_wrap_ui(APP_UI_HDRS ${APP_UI_FILES})
-else()
+else ()
     qt5_wrap_ui(APP_UI_HDRS ${APP_UI_FILES})
-endif()
+endif ()
 
 set(
         APP_RCS_FILE
@@ -148,9 +151,9 @@ set(
 
 if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_resources(APP_RCS_FILE ${APP_RCS_FILE})
-else()
+else ()
     qt5_add_resources(APP_RCS_FILE ${APP_RCS_FILE})
-endif()
+endif ()
 
 set(EXEC_PROPERTY "")
 set(RC_FILES "")
@@ -185,7 +188,7 @@ add_compile_definitions(QT_DEPRECATED_WARNINGS)
 add_compile_definitions(QT_DISABLE_DEPRECATED_BEFORE=0x050E20)
 
 if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_create_translation(APP_TR_FILES ${APP_FILES})
+    qt_create_translation(APP_TR_FILES ${APP_FILES} ${APP_TS_FILES})
     qt_add_executable(
             ${CMAKE_PROJECT_NAME} ${EXEC_PROPERTY}
             ${APP_FILES}
@@ -193,7 +196,7 @@ if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
             ${APP_TR_FILES}
     )
 else ()
-    qt5_create_translation(APP_TR_FILES ${APP_FILES})
+    qt5_create_translation(APP_TR_FILES ${APP_FILES} ${APP_TS_FILES})
     add_executable(
             ${CMAKE_PROJECT_NAME} ${EXEC_PROPERTY}
             ${APP_FILES}

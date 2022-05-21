@@ -1,0 +1,526 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <author>Alexander Saal &lt;developer@olbaflinx.chm-projects.de&gt;</author>
+ <class>UiContacts</class>
+ <widget class="QDialog" name="UiContacts">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>755</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>755</width>
+    <height>480</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Kontakte</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayoutContacts">
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutFirstname">
+     <item>
+      <widget class="QLabel" name="labelFirstname">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Vorname</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEditFirstname"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutLastname">
+     <item>
+      <widget class="QLabel" name="labelLastname">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Nachname</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEditLastname"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutIban">
+     <item>
+      <widget class="QLabel" name="labelIban">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>IBAN</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEditIban"/>
+     </item>
+     <item>
+      <widget class="QToolButton" name="toolButtonIbanSearch">
+       <property name="icon">
+        <iconset theme="find">
+         <normaloff>.</normaloff>.</iconset>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutSwiftBic">
+     <item>
+      <widget class="QLabel" name="labelSwiftBic">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>BIC</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEditSwiftBic"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutBankName">
+     <item>
+      <widget class="QLabel" name="labelBankName">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Banke Name</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEditBankName"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutAccountNumber">
+     <item>
+      <widget class="QLabel" name="labelAccountNumber">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Kontonummer</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEditAccountNumber"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutBankCode">
+     <item>
+      <widget class="QLabel" name="labelBankCode">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>110</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Bankleitzahl</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEditBankCode"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutContactButtons">
+     <item>
+      <widget class="QTreeWidget" name="treeWidgetContacts">
+       <property name="showDropIndicator" stdset="0">
+        <bool>false</bool>
+       </property>
+       <property name="alternatingRowColors">
+        <bool>true</bool>
+       </property>
+       <property name="rootIsDecorated">
+        <bool>false</bool>
+       </property>
+       <property name="uniformRowHeights">
+        <bool>true</bool>
+       </property>
+       <column>
+        <property name="text">
+         <string>Vorname</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Nachname</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>BIC</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>IBAN</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Bankename</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Kontonummer</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Bankleitzahl</string>
+        </property>
+       </column>
+      </widget>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="verticalLayoutContactButtons">
+       <item>
+        <widget class="QToolButton" name="toolButtonSaveContact">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="icon">
+          <iconset theme="filesave">
+           <normaloff>.</normaloff>.</iconset>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="toolButtonEditContact">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="icon">
+          <iconset theme="edit">
+           <normaloff>.</normaloff>.</iconset>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="toolButtonAddContact">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="icon">
+          <iconset theme="add">
+           <normaloff>.</normaloff>.</iconset>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="toolButtonRemoveContact">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="icon">
+          <iconset theme="remove">
+           <normaloff>.</normaloff>.</iconset>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacerConactButtons">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="Line" name="lineContactSeparator">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutDialogButtons">
+     <item>
+      <spacer name="horizontalSpacerDialogButtons">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonApply">
+       <property name="text">
+        <string>Anwenden</string>
+       </property>
+       <property name="icon">
+        <iconset theme="dialog-ok">
+         <normaloff>.</normaloff>.</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonCancel">
+       <property name="text">
+        <string>Schließen</string>
+       </property>
+       <property name="icon">
+        <iconset theme="dialog-cancel">
+         <normaloff>.</normaloff>.</iconset>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>lineEditFirstname</tabstop>
+  <tabstop>lineEditLastname</tabstop>
+  <tabstop>lineEditIban</tabstop>
+  <tabstop>toolButtonIbanSearch</tabstop>
+  <tabstop>lineEditSwiftBic</tabstop>
+  <tabstop>lineEditBankName</tabstop>
+  <tabstop>lineEditAccountNumber</tabstop>
+  <tabstop>lineEditBankCode</tabstop>
+  <tabstop>treeWidgetContacts</tabstop>
+  <tabstop>toolButtonAddContact</tabstop>
+  <tabstop>toolButtonEditContact</tabstop>
+  <tabstop>toolButtonSaveContact</tabstop>
+  <tabstop>toolButtonRemoveContact</tabstop>
+  <tabstop>pushButtonApply</tabstop>
+  <tabstop>pushButtonCancel</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>toolButtonIbanSearch</sender>
+   <signal>clicked()</signal>
+   <receiver>UiContacts</receiver>
+   <slot>showIbanSearch()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>733</x>
+     <y>90</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>657</x>
+     <y>103</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>toolButtonSaveContact</sender>
+   <signal>clicked()</signal>
+   <receiver>UiContacts</receiver>
+   <slot>saveContact()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>735</x>
+     <y>244</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>212</x>
+     <y>470</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>toolButtonEditContact</sender>
+   <signal>clicked()</signal>
+   <receiver>UiContacts</receiver>
+   <slot>editContact()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>725</x>
+     <y>279</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>173</x>
+     <y>449</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>toolButtonAddContact</sender>
+   <signal>clicked()</signal>
+   <receiver>UiContacts</receiver>
+   <slot>addContact()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>741</x>
+     <y>310</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>309</x>
+     <y>459</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>toolButtonRemoveContact</sender>
+   <signal>clicked()</signal>
+   <receiver>UiContacts</receiver>
+   <slot>removeContact()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>735</x>
+     <y>335</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>350</x>
+     <y>464</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonApply</sender>
+   <signal>clicked()</signal>
+   <receiver>UiContacts</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>590</x>
+     <y>459</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>393</x>
+     <y>454</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonCancel</sender>
+   <signal>clicked()</signal>
+   <receiver>UiContacts</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>693</x>
+     <y>455</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>264</x>
+     <y>445</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>showIbanSearch()</slot>
+  <slot>saveContact()</slot>
+  <slot>editContact()</slot>
+  <slot>addContact()</slot>
+  <slot>removeContact()</slot>
+ </slots>
+</ui>

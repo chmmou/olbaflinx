@@ -6,14 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>545</width>
-    <height>400</height>
+    <width>520</width>
+    <height>475</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>545</width>
-    <height>400</height>
+    <width>520</width>
+    <height>475</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -38,13 +38,11 @@
    <property name="subTitle">
     <string>Welcome to the OlbaFlinx Import &amp; Export assistant</string>
    </property>
-   <layout class="QVBoxLayout" name="vlIntroduction">
+   <layout class="QVBoxLayout" name="vlWizardPageIntroduction">
     <item>
      <widget class="QLabel" name="lblIntroducingTop">
       <property name="text">
-       <string>The Import / Export Assistant guides you through several steps to import and/or export your transactions.
-
-Which step do you want to perform?</string>
+       <string>The Import / Export Assistant guides you through several steps to import and/or export your transactions.</string>
       </property>
       <property name="wordWrap">
        <bool>true</bool>
@@ -52,7 +50,7 @@ Which step do you want to perform?</string>
      </widget>
     </item>
     <item>
-     <spacer name="vsIntroductionTop">
+     <spacer name="vsIntroduction1">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
@@ -63,6 +61,71 @@ Which step do you want to perform?</string>
        <size>
         <width>20</width>
         <height>20</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
+     <widget class="QLabel" name="labelIntroductionAccountsInfo">
+      <property name="text">
+       <string>To continue you must first select an account</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <spacer name="vsIntroduction2">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Fixed</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>5</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
+     <widget class="QComboBox" name="cbxIntroductionAccounts"/>
+    </item>
+    <item>
+     <spacer name="vsIntroduction3">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Fixed</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>5</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
+     <widget class="QLabel" name="lblIntroductionImExportInfo">
+      <property name="text">
+       <string>Which step do you want to perform?</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <spacer name="vsIntroduction4">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Fixed</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>5</height>
        </size>
       </property>
      </spacer>
@@ -92,7 +155,7 @@ Which step do you want to perform?</string>
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="lblIntroductionImportHelp">
+       <widget class="QLabel" name="lblIntroductionImportInfo">
         <property name="text">
          <string>Imports various formats that are supported by AqBanking</string>
         </property>
@@ -125,7 +188,7 @@ Which step do you want to perform?</string>
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="lblIntroductionExportHelp">
+       <widget class="QLabel" name="lblIntroductionExportInfo">
         <property name="enabled">
          <bool>false</bool>
         </property>
@@ -137,7 +200,7 @@ Which step do you want to perform?</string>
      </layout>
     </item>
     <item>
-     <spacer name="vsIntroductionMiddle">
+     <spacer name="vsIntroduction5">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
@@ -163,7 +226,7 @@ Which step do you want to perform?</string>
      </widget>
     </item>
     <item>
-     <spacer name="vsIntroductionBottom">
+     <spacer name="vsIntroduction6">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
@@ -175,6 +238,16 @@ Which step do you want to perform?</string>
       </property>
      </spacer>
     </item>
+    <item>
+     <widget class="QProgressBar" name="pbIntroductionProgress">
+      <property name="value">
+       <number>0</number>
+      </property>
+      <property name="format">
+       <string>Loading %1 profiles ... %p%</string>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QWizardPage" name="wizardPageImExport">
@@ -184,7 +257,7 @@ Which step do you want to perform?</string>
    <property name="subTitle">
     <string>Select one of the loaded profiles and the file to import and or export</string>
    </property>
-   <layout class="QVBoxLayout" name="vlImExport">
+   <layout class="QVBoxLayout" name="vlWizardPageImExport">
     <item>
      <layout class="QHBoxLayout" name="hlImExportPlugin">
       <item>
@@ -262,7 +335,7 @@ Which step do you want to perform?</string>
     <item>
      <layout class="QHBoxLayout" name="hlImExportProfileHelp">
       <item>
-       <widget class="QLabel" name="lblImExportProfileHhelp">
+       <widget class="QLabel" name="lblImExportProfileHelp">
         <property name="minimumSize">
          <size>
           <width>110</width>
@@ -364,6 +437,9 @@ Which step do you want to perform?</string>
      <widget class="QProgressBar" name="pbImExportProgress">
       <property name="value">
        <number>0</number>
+      </property>
+      <property name="format">
+       <string>%1 transactions ... %p%</string>
       </property>
      </widget>
     </item>

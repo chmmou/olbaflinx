@@ -3,9 +3,13 @@
         <file alias="splashscreen">images/splashscreen.jpeg</file>
         <file alias="olbaflinx-logo">olbaflinx.png</file>
         <file alias="olbaflinx-storage">database/olbaflinx_storage.sql</file>
-        <file alias="olbaflinx-bankdata">database/olbaflinx-bankdata.sdb</file>
+        <file alias="olbaflinx-bankdata">database/olbaflinx-bankdata.obfx</file>
         <file alias="olbaflinx-categories">database/olbaflinx-categories.xml</file>
         <file alias="olbaflinx-desktop">olbaflinx.desktop</file>
+    </qresource>
+    <qresource prefix="/fonts">
+        <file alias="materialdesignicons-webfont-svg">fonts/materialdesignicons-webfont.svg</file>
+        <file alias="materialdesignicons-webfont-ttf">fonts/materialdesignicons-webfont.ttf</file>
     </qresource>
     <qresource prefix="/datavault">
         <file alias="add">images/datavault/add.png</file>

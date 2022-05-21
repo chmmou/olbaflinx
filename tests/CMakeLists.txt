@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.17 FATAL_ERROR)
 project(OlbaFlinxTests LANGUAGES CXX)
 
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Test Core Sql REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Test Core Sql REQUIRED)
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Test Core Gui Concurrent Sql Svg Xml Network REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Test Core Gui Concurrent Sql Svg Xml Network REQUIRED)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -18,6 +18,9 @@ set(CMAKE_AUTORCC ON)
 set(EXECUTABLE_OUTPUT_PATH bin/)
 
 include("Config.cmake")
+
+add_compile_definitions(QT_DEPRECATED_WARNINGS)
+add_compile_definitions(QT_DISABLE_DEPRECATED_BEFORE=0x050E20)
 
 ### Adding tests here
 add_executable(BankingTest core/BankingTest.cpp ${APP_FILES} ${TEST_APP_RCS_FILE})

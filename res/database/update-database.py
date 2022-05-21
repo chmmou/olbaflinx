@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-import sys
 import sqlite3
 import codecs
 import argparse
@@ -90,7 +89,8 @@ def processFile(fileName, valid_date, generateDB=False):
         """
         try:
             cursor.execute("INSERT INTO institutions (bankcode, bic, method, name, location, valid_upto)\
-                         VALUES(?,?,?,?,?,julianday(?))", (bankCode, bic, method, bankName, location, None))
+                         VALUES(?,?,?,?,?,julianday(?))",
+                           (bankCode, bic, method, bankName, location, None))
 
         except sqlite3.Error as e:
             print("Error: {0} while inserting {1} ({2})".format(e.args[0], bankCode, bic))
@@ -103,24 +103,33 @@ def processFile(fileName, valid_date, generateDB=False):
                            (valid_upto, oldBankCode))
             if (newBankCode != '00000000' and existCode(newBankCode) == False):
                 cursor.execute("INSERT INTO institutions (bankcode, bic, method, name, location, valid_upto)\
-                             VALUES(?,?,?,?,?,julianday(?))", (newBankCode, bic, method, bankName, location, None))
+                             VALUES(?,?,?,?,?,julianday(?))",
+                               (newBankCode, bic, method, bankName, location, None))
                 return 1
             return 0
 
         except sqlite3.Error as e:
-            print("Error: {0} while inserting {1} {2} {3} {4}".format(e.args[0], oldBankCode, newBankCode, location,
+            print("Error: {0} while inserting {1} {2} {3} {4}".format(e.args[0], oldBankCode,
+                                                                      newBankCode, location,
                                                                       valid_upto))
 
     institutesFile = codecs.open(fileName, "r", encoding=args.encoding)
     for institute in institutesFile:
         if institute[8:9] == "1":
-            if (not existCode(institute[0:8])):
-                submitInstitute(institute[0:8], institute[150:152], institute[9:67].strip(), institute[139:150],
+            if not existCode(institute[0:8]):
+                submitInstitute(institute[0:8],
+                                institute[150:152],
+                                institute[9:67].strip(),
+                                institute[139:150],
                                 institute[72:107])
                 rowsInserted += 1
             if institute[158] == 'D':
-                rowsInserted += deleteInstitute(institute[0:8], institute[160:168], institute[150:152],
-                                                institute[9:67].strip(), institute[139:150], institute[72:107],
+                rowsInserted += deleteInstitute(institute[0:8],
+                                                institute[160:168],
+                                                institute[150:152],
+                                                institute[9:67].strip(),
+                                                institute[139:150],
+                                                institute[72:107],
                                                 valid_date)
                 rowsUpdated += 1
 
@@ -132,17 +141,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Creates a SQLite database for KtoBLZCheck with information about IBAN and BICs based on a fixed-column text file from the german central bank."
                     " You can download the source file at https://www.bundesbank.de/de/aufgaben/unbarer-zahlungsverkehr/serviceangebot/bankleitzahlen/download-bankleitzahlen-602592"
-        )
+    )
     parser.add_argument(dest='file', help='File to load')
     parser.add_argument(dest='valid_date', help='Date until deletions were valid')
-    parser.add_argument('-o', '--output', default="bankdata.de.db", help='SQLite database to open/generate')
+    parser.add_argument('-o', '--output', default="bankdata.de.db",
+                        help='SQLite database to open/generate')
     parser.add_argument('-e', '--encoding', default="iso 8859-1", help='Charset of file')
     args = parser.parse_args()
 
     print("Read data from \"{0}\" with \"{1}\" encoding".format(args.file, args.encoding))
     generateDB = False
 
-    if (not existDB(args.output)):
+    if not existDB(args.output):
         generateDB = True
 
     db = sqlite3.connect(args.output)
@@ -151,15 +161,21 @@ if __name__ == '__main__':
     args.valid_date = formatDate(args.valid_date)
     (rowsUpdated, rowsInserted) = processFile(args.file, args.valid_date, generateDB)
 
-    print("Inserted {0} institutions into database \"{1}\" at date {2}".format(rowsInserted, args.output,
+    print("Inserted {0} institutions into database \"{1}\" at date {2}".format(rowsInserted,
+                                                                               args.output,
                                                                                args.valid_date))
-    print(
-        "Updated {0} institutions into database \"{1}\" at date {2}".format(rowsUpdated, args.output, args.valid_date))
+
+    print("Updated {0} institutions into database \"{1}\" at date {2}".format(rowsUpdated,
+                                                                              args.output,
+                                                                              args.valid_date))
 
     cursor = db.cursor()
     cursor.execute("ANALYZE institutions")
-    if (generateDB):
+    if generateDB:
         cursor.execute("CREATE INDEX bic_index ON institutions (bic)")
+        cursor.execute("CREATE INDEX name_index ON institutions (name)")
+        cursor.execute("CREATE INDEX location_index ON institutions (location)")
+        cursor.execute("CREATE INDEX valid_upto_index ON institutions (valid_upto)")
     cursor.execute("REINDEX")
     cursor.execute("VACUUM")
     db.commit()

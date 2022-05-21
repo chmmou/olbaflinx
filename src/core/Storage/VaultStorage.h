@@ -40,7 +40,7 @@ public:
     void setDatabaseKey(const QString &dbFileName, const QString &key);
     void initialize(bool initializeSchema = false);
     bool isStorageValid() const;
-    bool changeKey(const QString &oldKey, const QString &newKey) const;
+    bool changeKey(const QString &oldKey, const QString &newKey);
     QString storagePath() const;
     void close();
 
@@ -51,8 +51,11 @@ public:
 
     void addAccount(const Account *account);
     void addAccounts(const AccountList &accounts);
+    void addAccountBalance(const quint32 &accountId, const AccountBalance *balance);
+    void addAccountBalance(const quint32 &accountId, const AccountBalanceList &balances);
     AccountList accounts();
     AccountIds accountIds();
+    AccountBalanceList accountBalances(const quint32 accountId = 0);
 
     void addTransaction(const quint32 &accountId, const Transaction *transaction);
     void addTransactions(const quint32 &accountId, const TransactionList &transactions);

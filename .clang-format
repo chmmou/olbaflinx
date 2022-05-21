@@ -1,4 +1,7 @@
-# .clang-format for OlbaFlinx base on Qt Creator
+# Copyright (C) 2016 Olivier Goffart <ogoffart@woboq.com>
+# Copyright (C) 2021 Alexander Saal <alexander.saal@chm-projects.de>
+#
+# OlbaFlinx .clang-format is based on Qt Creator's .clang-format
 #
 # This is for clang-format >= 5.0.
 #
@@ -8,20 +11,21 @@
 # Use ../../tests/manual/clang-format-for-qtc/test.cpp for documenting problems
 # or testing changes.
 #
-# In case you update this configuration please also update the qtcStyle() in src\plugins\clangformat\clangformatutils.cpp
+# In case you update this configuration please also update the qtcStyle() in
+# src\plugins\clangformat\clangformatutils.cpp
 #
 # [1] https://doc-snapshots.qt.io/qtcreator-extending/coding-style.html
 # [2] https://clang.llvm.org/docs/ClangFormatStyleOptions.html
 #
 ---
 BasedOnStyle: WebKit
-Language:        Cpp
+Language: Cpp
 AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: None
 AlignConsecutiveDeclarations: None
 AlignEscapedNewlines: DontAlign
-AlignOperands:   true
+AlignOperands: true
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortBlocksOnASingleLine: Empty
@@ -35,20 +39,20 @@ AlwaysBreakTemplateDeclarations: No
 BinPackArguments: false
 BinPackParameters: false
 BraceWrapping:
-    AfterClass:      true
-    AfterControlStatement: Never
-    AfterEnum:       false
-    AfterFunction:   true
-    AfterNamespace:  false
-    AfterObjCDeclaration: false
-    AfterStruct:     true
-    AfterUnion:      false
-    BeforeCatch:     false
-    BeforeElse:      false
-    IndentBraces:    false
-    SplitEmptyFunction: false
-    SplitEmptyRecord: false
-    SplitEmptyNamespace: false
+  AfterClass: true
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: true
+  AfterNamespace: false
+  AfterObjCDeclaration: false
+  AfterStruct: true
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
 BreakBeforeBinaryOperators: All
 BreakBeforeBraces: Custom
 BreakBeforeInheritanceComma: false
@@ -57,35 +61,35 @@ BreakConstructorInitializersBeforeComma: false
 BreakConstructorInitializers: BeforeComma
 BreakAfterJavaFieldAnnotations: false
 BreakStringLiterals: true
-ColumnLimit:    100
-CommentPragmas:  '^ IWYU pragma:'
+ColumnLimit: 100
+CommentPragmas: '^ IWYU pragma:'
 CompactNamespaces: false
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
 Cpp11BracedListStyle: true
 DerivePointerAlignment: false
-DisableFormat:   false
+DisableFormat: false
 ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: true
 ForEachMacros:
-    - forever # avoids { wrapped to next line
-    - foreach
-    - Q_FOREACH
-    - BOOST_FOREACH
+  - forever # avoids { wrapped to next line
+  - foreach
+  - Q_FOREACH
+  - BOOST_FOREACH
 IncludeCategories:
-    - Regex:           '^<Q.*'
-      Priority:        200
+  - Regex: '^<Q.*'
+    Priority: 200
 IncludeIsMainRegex: '(Test)?$'
 IndentCaseLabels: false
-IndentWidth:     4
+IndentWidth: 4
 IndentWrappedFunctionNames: false
 JavaScriptQuotes: Leave
 JavaScriptWrapImports: true
 KeepEmptyLinesAtTheStartOfBlocks: false
 # Do not add QT_BEGIN_NAMESPACE/QT_END_NAMESPACE as this will indent lines in between.
 MacroBlockBegin: ""
-MacroBlockEnd:   ""
+MacroBlockEnd: ""
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: None
 ObjCBlockIndentWidth: 4
@@ -99,8 +103,8 @@ PenaltyBreakString: 600
 PenaltyExcessCharacter: 50
 PenaltyReturnTypeOnItsOwnLine: 300
 PointerAlignment: Right
-ReflowComments:  false
-SortIncludes:    CaseInsensitive
+ReflowComments: false
+SortIncludes: CaseInsensitive
 SortUsingDeclarations: true
 SpaceAfterCStyleCast: true
 SpaceAfterTemplateKeyword: false
@@ -108,11 +112,11 @@ SpaceBeforeAssignmentOperators: true
 SpaceBeforeParens: ControlStatements
 SpaceInEmptyParentheses: false
 SpacesBeforeTrailingComments: 1
-SpacesInAngles:  false
+SpacesInAngles: false
 SpacesInContainerLiterals: false
 SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard:        c++11
-TabWidth:        4
-UseTab:          Never
+Standard: c++11
+TabWidth: 4
+UseTab: Never

@@ -35,7 +35,7 @@ public:
     void initialize();
 
 private Q_SLOTS:
-    void openVault();
+    void vaultOpened();
     void vaultClosed();
 
 protected:

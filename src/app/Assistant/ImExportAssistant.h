@@ -31,24 +31,33 @@ class ImExportAssistant : public QWizard, private Ui::UiImExportAssistant
     Q_OBJECT
 
 public:
+    enum Page {
+        Introduction = 0,
+        ImExport = 1
+    };
+    Q_ENUM(Page)
+
     explicit ImExportAssistant(QWidget *parent = nullptr);
     ~ImExportAssistant() override;
 
     bool validateCurrentPage() override;
-    void setAccountId(quint32 id);
+    void setAccounts(const AccountList &accounts);
 
 protected:
     void done(int result) override;
+    void initializePage(int id) override;
 
 private Q_SLOTS:
     void comboboxIndexChanged(int index);
     void openImExportFile();
     void imExportProgress(qreal progress);
+    void profileLoadingProgress(qreal progress);
 
 private:
     ImExportProfileList m_imExportProfileList;
     QVector<int> m_metaTypeIds;
-    quint32 m_accountId;
+
+    bool isImport() const;
 };
 
 } // namespace olbaflinx::app::assistant
