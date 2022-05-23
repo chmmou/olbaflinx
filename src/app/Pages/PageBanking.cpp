@@ -17,6 +17,7 @@
 
 #include <QtConcurrent/QtConcurrent>
 
+#include <QtCore/QDebug>
 #include <QtCore/QVariant>
 
 #include <QtWidgets/QAction>
@@ -64,6 +65,11 @@ void PageBanking::initialize(QMainWindow *mainWindow)
 
     const auto app = d_ptr->app();
 
+    connect(app->treeWidgetBankingAccounts,
+            &QTreeWidget::itemSelectionChanged,
+            this,
+            &PageBanking::accountChanged);
+
     for (const auto account : accounts) {
         auto item = new QTreeWidgetItem();
 
@@ -97,10 +103,32 @@ void PageBanking::deInitialize()
     m_typeIds.clear();
 
     app->treeWidgetBankingAccounts->clear();
+    app->tabTransactions->reset();
+    app->tabStandingOrders->reset();
     app->appToolBar->clear();
     app->appToolBar->hide();
     app->appStatusBar->clearMessage();
     app->appStatusBar->hide();
+}
+
+void PageBanking::accountChanged()
+{
+    const auto app = d_ptr->app();
+    auto items = app->treeWidgetBankingAccounts->selectedItems();
+
+    if (items.isEmpty()) {
+        return;
+    }
+
+    const auto item = items.at(0);
+    const auto itemData = item->data(0, Qt::UserRole);
+    if (itemData.isValid() && !itemData.isNull()) {
+        const auto accountItem = itemData.value<AccountItem *>();
+        app->tabTransactions->setAccountId(accountItem->id);
+        app->tabStandingOrders->setAccountId(accountItem->id);
+    }
+
+    items.clear();
 }
 
 void PageBanking::initializeMenuBar() { }

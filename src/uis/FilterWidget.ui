@@ -207,7 +207,9 @@
   <tabstop>leSearch</tabstop>
   <tabstop>cbxSearchAsRegEx</tabstop>
  </tabstops>
- <resources/>
+ <resources>
+  <include location="../../res/olbaflinx.qrc"/>
+ </resources>
  <connections>
   <connection>
    <sender>cbxTimePeriod</sender>

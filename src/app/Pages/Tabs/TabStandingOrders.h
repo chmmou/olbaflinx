@@ -32,6 +32,7 @@ public:
     explicit TabStandingOrders(QWidget *parent = nullptr);
     ~TabStandingOrders() override;
 
+    void reset() override;
 
 };
 

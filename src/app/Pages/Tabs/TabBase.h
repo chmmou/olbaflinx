@@ -20,8 +20,9 @@
 
 #include <QtWidgets/QWidget>
 
-#include "ui_TabTransactions.h"
 #include "core/Container.h"
+
+#include "ui_TabTransactions.h"
 
 namespace olbaflinx::app::pages::tabs {
 
@@ -32,17 +33,23 @@ class TabBase : public QWidget, protected Ui::UiTabTransactions
     Q_OBJECT
 
 public:
-    explicit TabBase(QWidget *parent = nullptr);
+    explicit TabBase(QWidget *parent = nullptr, const bool isStandingOrderTab = false);
     ~TabBase() override;
 
     void setAccountId(const quint32 id);
-    TransactionList transactions(bool isStandingOrder = false, bool force = false);
-    int transactionCount(bool isStandingOrder = false);
+    TransactionList transactions();
 
+    virtual void reset() = 0;
 
-private:
+Q_SIGNALS:
+    void accountChanged(const quint32 accountId);
+
+protected:
     quint32 m_accountId;
     TransactionList m_transactions;
+
+private:
+    bool m_isStandingOrderTab;
 };
 
 } // namespace olbaflinx::app::pages::tabs

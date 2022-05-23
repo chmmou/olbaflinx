@@ -18,9 +18,13 @@
 #ifndef OLBAFLINX_TABTRANSACTIONS_H
 #define OLBAFLINX_TABTRANSACTIONS_H
 
+#include "core/Storage/Transaction/TransactionViewModel.h"
+
 #include "TabBase.h"
 
 namespace olbaflinx::app::pages::tabs {
+
+using namespace olbaflinx::core::storage::transaction;
 
 class TabTransactions : public TabBase
 {
@@ -29,6 +33,14 @@ class TabTransactions : public TabBase
 public:
     explicit TabTransactions(QWidget *parent = nullptr);
     ~TabTransactions() override;
+
+    void reset() override;
+
+private:
+    TransactionViewModel *m_transactionViewModel;
+
+private Q_SLOTS:
+    void accountWasChanged(const quint32 accountId);
 };
 
 } // namespace olbaflinx::app::pages::tabs

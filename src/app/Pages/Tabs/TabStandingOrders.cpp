@@ -20,8 +20,9 @@
 using namespace olbaflinx::app::pages::tabs;
 
 TabStandingOrders::TabStandingOrders(QWidget *parent)
-    : TabBase(parent)
-{
-}
+    : TabBase(parent, true)
+{ }
 
-TabStandingOrders::~TabStandingOrders() {}
+TabStandingOrders::~TabStandingOrders() { }
+
+void TabStandingOrders::reset() { }

@@ -40,6 +40,9 @@ public:
 Q_SIGNALS:
     void vaultClosed();
 
+private Q_SLOTS:
+    void accountChanged();
+
 private:
     friend class PageBasePrivate;
     QScopedPointer<PageBasePrivate> d_ptr;
@@ -51,6 +54,6 @@ private:
     void initializeStatusBar();
 };
 
-} // namespace pages
+} // namespace olbaflinx::app::pages
 
 #endif //OLBAFLINX_PAGEBANKING_H

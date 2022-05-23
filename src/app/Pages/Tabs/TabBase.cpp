@@ -16,7 +16,6 @@
 */
 
 #include <QtConcurrent/QtConcurrent>
-
 #include "core/Storage/VaultStorage.h"
 
 #include "TabBase.h"
@@ -25,9 +24,10 @@ using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::storage::transaction;
 using namespace olbaflinx::app::pages::tabs;
 
-TabBase::TabBase(QWidget *parent)
+TabBase::TabBase(QWidget *parent, const bool isStandingOrderTab)
     : QWidget(parent)
     , m_accountId(0)
+    , m_isStandingOrderTab(isStandingOrderTab)
     , m_transactions({})
 {
     setupUi(this);
@@ -38,14 +38,12 @@ TabBase::~TabBase() = default;
 void TabBase::setAccountId(const quint32 id)
 {
     m_accountId = id;
+    Q_EMIT accountChanged(m_accountId);
 }
 
-TransactionList TabBase::transactions(bool isStandingOrder, bool force)
+TransactionList TabBase::transactions()
 {
-    if (m_transactions.isEmpty() || force) {
-        m_transactions = VaultStorage::instance()->transactions(m_accountId);
-    }
-
+    m_transactions = VaultStorage::instance()->transactions(m_accountId);
     if (m_transactions.isEmpty()) {
         return {};
     }
@@ -64,8 +62,8 @@ TransactionList TabBase::transactions(bool isStandingOrder, bool force)
 
     transactionWatcher.setFuture(QtConcurrent::filteredReduced<TransactionList>(
         m_transactions,
-        [isStandingOrder](const Transaction *t) -> bool {
-            return isStandingOrder ? t->isStandingOrder() : !t->isStandingOrder();
+        [&](const Transaction *t) -> bool {
+            return m_isStandingOrderTab ? t->isStandingOrder() : !t->isStandingOrder();
         },
         [](TransactionList &list, const Transaction *t) { list.append(t); },
         QtConcurrent::OrderedReduce));
@@ -73,9 +71,4 @@ TransactionList TabBase::transactions(bool isStandingOrder, bool force)
     loop.exec();
 
     return transactionWatcher.result();
-}
-
-int TabBase::transactionCount(bool isStandingOrder)
-{
-    return VaultStorage::instance()->transactionCount(isStandingOrder);
 }

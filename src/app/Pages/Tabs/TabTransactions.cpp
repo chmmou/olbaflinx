@@ -20,8 +20,28 @@
 using namespace olbaflinx::app::pages::tabs;
 
 TabTransactions::TabTransactions(QWidget *parent)
-    : TabBase(parent)
+    : TabBase(parent, false)
+    , m_transactionViewModel(Q_NULLPTR)
 {
+    m_transactionViewModel = new TransactionViewModel(treeViewTransactions, false);
+    treeViewTransactions->setModel(m_transactionViewModel);
+    treeViewTransactions->setUniformRowHeights(true);
+
+    connect(this, &TabBase::accountChanged, this, &TabTransactions::accountWasChanged);
 }
 
-TabTransactions::~TabTransactions() {}
+TabTransactions::~TabTransactions() = default;
+
+void TabTransactions::accountWasChanged(const quint32 accountId)
+{
+    m_transactionViewModel->clear();
+
+    const auto items = transactions();
+    m_transactionViewModel->setTransactions(accountId, items);
+}
+
+void TabTransactions::reset()
+{
+    m_transactionViewModel->clear();
+    treeViewTransactions->reset();
+}

@@ -99,7 +99,8 @@
 #define StorageSqlTransactionByAccountIdQuery \
     QString("%1 WHERE account_id = :account_id").arg(StorageSqlTransactionSelectQuery)
 #define StorageSqlTransactionByAccountIdWithLimitQuery \
-    QString("%1 LIMIT :limit OFFSET :offset").arg(StorageSqlTransactionByAccountIdQuery)
+    QString("%1 ORDER BY valuta_date DESC LIMIT :limit OFFSET :offset") \
+        .arg(StorageSqlTransactionByAccountIdQuery)
 
 #define StorageSqlTransactionExists \
     "SELECT COUNT(id) AS CNT FROM transactions WHERE account_id = :account_id AND hash = :hash"
