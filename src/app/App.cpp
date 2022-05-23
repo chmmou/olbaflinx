@@ -73,7 +73,7 @@ void App::vaultClosed()
 {
     qApp->setOverrideCursor(Qt::WaitCursor);
 
-    pageBanking->deInitialize();
+    pageBanking->reset();
     stackedWidgetMain->setCurrentIndex(0);
     VaultStorage::instance()->close();
 

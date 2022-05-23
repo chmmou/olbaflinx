@@ -96,7 +96,7 @@ void PageBanking::initialize(QMainWindow *mainWindow)
     // app->tabJobs
 }
 
-void PageBanking::deInitialize()
+void PageBanking::reset()
 {
     const auto app = d_ptr->app();
 

@@ -39,7 +39,7 @@ public:
     ~PageBanking() override;
 
     void initialize(QMainWindow *mainWindow);
-    void deInitialize();
+    void reset();
 
 Q_SIGNALS:
     void vaultClosed();
