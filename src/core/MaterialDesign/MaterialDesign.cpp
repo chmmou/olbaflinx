@@ -1,6 +1,5 @@
 /**
- * Original code adapted from
- * https://codereview.qt-project.org/c/pyside/pyside-setup/+/335828/2/examples/widgets/icons/fonticons/fonticons.py
+ * Original code licensed under MIT - https://github.com/sthlm58/QtMaterialDesignIcons
  *
  * Copyright (C) 2021-2022, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
@@ -21,6 +20,7 @@
 #include <QtCore/QDebug>
 #include <QtCore/QFile>
 #include <QtCore/QHash>
+#include <QtCore/QObject>
 #include <QtGui/QPainter>
 #include <QtSvg/QSvgRenderer>
 #include <QtXml/QXmlDefaultHandler>
@@ -33,53 +33,53 @@ using namespace olbaflinx::core::material::design;
 
 QPixmap MaterialDesign::icon(const QString &name, const QSize &size, const QColor &color)
 {
-    static QHash<QString, QString> svg_paths;
+    static QHash<QString, QString> svgPaths;
     static std::once_flag runOnce;
 
     std::call_once(runOnce, [&] {
         class SvgGlyphReader : public QXmlDefaultHandler
         {
         public:
-            bool startElement(const QString &namespace_uri,
-                              const QString &local_name,
-                              const QString &qualified_name,
+            bool startElement(const QString &namespaceURI,
+                              const QString &localName,
+                              const QString &qName,
                               const QXmlAttributes &atts) override
             {
-                if (local_name != "glyph") {
+                if (localName != "glyph") {
                     return true;
                 }
 
-                auto glyph_name = atts.value("glyph-name");
-                auto path_data = atts.value("d");
+                const auto glyphName = atts.value("glyph-name");
+                const auto pathData = atts.value("d");
 
-                if (glyph_name == ".notdef") {
+                if (glyphName == ".notdef") {
                     return true;
                 }
 
-                if (glyph_name.isEmpty() || path_data.isEmpty()) {
-                    qDebug() << "glyph_name or SVG path data not found in the SVG Font";
+                if (glyphName.isEmpty() || pathData.isEmpty()) {
+                    qDebug() << QObject::tr("glyphName or SVG path data not found in the SVG Font");
                     return false;
                 }
 
-                if (!svg_paths.contains(glyph_name)) {
-                    svg_paths.insert(glyph_name, path_data);
+                if (!svgPaths.contains(glyphName)) {
+                    svgPaths.insert(glyphName, pathData);
                 }
 
                 return true;
             }
         };
 
-        SvgGlyphReader glyph_reader;
-        QXmlSimpleReader xml_parser;
-        xml_parser.setContentHandler(&glyph_reader);
+        SvgGlyphReader glyphReader;
+        QXmlSimpleReader xmlParser;
+        xmlParser.setContentHandler(&glyphReader);
 
-        QFile svg_font(":/fonts/materialdesignicons-webfont-svg");
-        svg_font.open(QFile::ReadOnly);
-        QXmlInputSource xml_source(&svg_font);
+        QFile svgFont(":/fonts/materialdesignicons-webfont-svg");
+        svgFont.open(QFile::ReadOnly);
+        QXmlInputSource xmlSource(&svgFont);
 
-        bool parse_ok = xml_parser.parse(&xml_source);
+        bool parse_ok = xmlParser.parse(&xmlSource);
         if (!parse_ok) {
-            qDebug() << "SVG parsing failed! Something changed in the SVG Font?";
+            qDebug() << QObject::tr("SVG parsing failed! Something changed in the SVG Font?");
         }
     });
 
@@ -87,8 +87,9 @@ QPixmap MaterialDesign::icon(const QString &name, const QSize &size, const QColo
     pix.fill(Qt::transparent);
 
     const auto svg = [](const QString &path, QColor color) {
-        // The magic part is to do the proper adjustments according to how the original SVG font is created
-        // (i.e. do some offsets, view-box correction, translate & scale, and color fill on top of that)
+        // The magic part is to do the proper adjustments according to how the original SVG font is
+        // created (i.e. do some offsets, view-box correction, translate & scale, and color fill on
+        // top of that)
         return QString(
                    R"(<?xml version="1.0" encoding="utf-8"?>)"
                    R"(<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">)"
@@ -102,9 +103,9 @@ QPixmap MaterialDesign::icon(const QString &name, const QSize &size, const QColo
     };
 
     QPainter painter(&pix);
-    QSvgRenderer svg_renderer;
-    svg_renderer.load(svg(svg_paths[name], color));
-    svg_renderer.render(&painter);
+    QSvgRenderer svgRenderer;
+    svgRenderer.load(svg(svgPaths[name], color));
+    svgRenderer.render(&painter);
 
     return pix;
 }

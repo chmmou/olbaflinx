@@ -33,15 +33,23 @@
 
 #include "core/Container.h"
 #include "core/Storage/VaultStorage.h"
+#include "core/MaterialDesign/MaterialDesign.h"
+#include "core/MaterialDesign/MaterialDesignNames.h"
 
 using namespace olbaflinx::app::datavault;
 using namespace olbaflinx::core;
+using namespace olbaflinx::core::material::design;
+using namespace olbaflinx::core::material::design::names;
 using namespace olbaflinx::core::storage;
 
 DataVaultItem::DataVaultItem(QWidget *parent)
     : QWidget(parent)
 {
     setupUi(this);
+
+    pushButtonDataVaultMenu->setIcon(MaterialDesign::icon(MaterialDesignNames::Menu));
+    pushButtonDataVaultOpen->setIcon(
+        MaterialDesign::icon(MaterialDesignNames::ShieldLockOpenOutline));
 }
 
 DataVaultItem::~DataVaultItem() = default;

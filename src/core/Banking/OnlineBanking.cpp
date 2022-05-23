@@ -177,20 +177,11 @@ public:
         m_isInitialized = false;
     }
 
-    AB_BANKING *abBanking() const
-    {
-        return m_abBanking;
-    }
+    AB_BANKING *abBanking() const { return m_abBanking; }
 
-    QT5_Gui *qtGui() const
-    {
-        return m_qtGui;
-    }
+    QT5_Gui *qtGui() const { return m_qtGui; }
 
-    bool isInitialized() const
-    {
-        return m_isInitialized;
-    }
+    bool isInitialized() const { return m_isInitialized; }
 
     AB_IMEXPORTER_ACCOUNTINFO *createImExporterAccountInfo(AB_TRANSACTION_COMMAND cmd,
                                                            quint32 uniqueId,
@@ -489,7 +480,7 @@ ImExportProfileList OnlineBanking::importExportProfiles(bool import)
     }));
     loop.exec();
 
-    GWEN_PluginDescription_List2_freeAll(pluginList);
+    GWEN_PluginDescription_List2_free(pluginList);
 
     return imExporterWatcher.result();
 }
@@ -695,7 +686,7 @@ TransactionList banking::OnlineBanking::importTransactionsFromFile(const QString
         return {};
     }
 
-    const auto imExporterCtx = AB_ImExporterContext_new();
+    auto imExporterCtx = AB_ImExporterContext_new();
     const int result = AB_Banking_ImportFromFile(d_ptr->abBanking(),
                                                  importerName.toLatin1().constData(),
                                                  imExporterCtx,
@@ -706,11 +697,17 @@ TransactionList banking::OnlineBanking::importTransactionsFromFile(const QString
     }
 
     const auto accountInfo = AB_ImExporterContext_GetFirstAccountInfo(imExporterCtx);
-    const auto transactionList = d_ptr->transactions(accountInfo,
-                                                     AB_Transaction_CommandGetTransactions,
-                                                     [&](qreal value) -> void {
-                                                         Q_EMIT progress(value);
-                                                     });
+    if (accountInfo == Q_NULLPTR) {
+        return {};
+    }
+
+    auto transactionList = d_ptr->transactions(accountInfo,
+                                               AB_Transaction_CommandGetTransactions,
+                                               [&](qreal value) -> void { Q_EMIT progress(value); });
+
+    transactionList << d_ptr->transactions(accountInfo,
+                                           AB_Transaction_CommandGetStandingOrders,
+                                           [&](qreal value) -> void { Q_EMIT progress(value); });
 
     AB_ImExporterAccountInfo_free(accountInfo);
     AB_ImExporterContext_free(imExporterCtx);

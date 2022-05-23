@@ -1,6 +1,5 @@
 /**
- * Original code from
- * https://github.com/sthlm58/QtMaterialDesignIcons
+ * Original code licensed under MIT - https://github.com/sthlm58/QtMaterialDesignIcons
  *
  * Copyright (C) 2021-2022, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *

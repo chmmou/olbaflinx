@@ -23,7 +23,11 @@
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QWidget>
 
+#include "core/Container.h"
+
 namespace olbaflinx::app::pages {
+
+using namespace olbaflinx::core;
 
 class PageBasePrivate;
 class PageBanking : public QWidget
@@ -48,6 +52,7 @@ private:
     QScopedPointer<PageBasePrivate> d_ptr;
 
     QVector<int> m_typeIds;
+    AccountList m_accounts;
 
     void initializeMenuBar();
     void initializeToolbar();

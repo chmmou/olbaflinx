@@ -28,23 +28,29 @@
 #include <QtWidgets/QToolButton>
 #include <QtWidgets/QTreeWidgetItem>
 
+#include "core/Banking/OnlineBanking.h"
 #include "core/MaterialDesign/MaterialDesign.h"
 #include "core/MaterialDesign/MaterialDesignNames.h"
 #include "core/Storage/VaultStorage.h"
 
+#include "app/Assistant/ImExportAssistant.h"
+#include "app/Assistant/SetupAssistant.h"
+
 #include "PageBanking.h"
 #include "PageBasePrivate.h"
 
-using namespace olbaflinx::core;
+using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::material::design;
 using namespace olbaflinx::core::material::design::names;
 using namespace olbaflinx::core::storage;
+using namespace olbaflinx::app::assistant;
 using namespace olbaflinx::app::pages;
 
 PageBanking::PageBanking(QWidget *parent)
     : QWidget(parent)
     , d_ptr(new PageBasePrivate())
     , m_typeIds({})
+    , m_accounts({})
 { }
 
 PageBanking::~PageBanking() { }
@@ -58,8 +64,8 @@ void PageBanking::initialize(QMainWindow *mainWindow)
     initializeToolbar();
     initializeStatusBar();
 
-    auto accounts = VaultStorage::instance()->accounts();
-    if (accounts.isEmpty()) {
+    m_accounts = VaultStorage::instance()->accounts();
+    if (m_accounts.isEmpty()) {
         return;
     }
 
@@ -70,7 +76,7 @@ void PageBanking::initialize(QMainWindow *mainWindow)
             this,
             &PageBanking::accountChanged);
 
-    for (const auto account : accounts) {
+    for (const auto account : m_accounts) {
         auto item = new QTreeWidgetItem();
 
         const auto accountItem = new AccountItem();
@@ -88,9 +94,6 @@ void PageBanking::initialize(QMainWindow *mainWindow)
     // app->tabStandingOrder
     // app->tabDocuments
     // app->tabJobs
-
-    qDeleteAll(accounts);
-    accounts.clear();
 }
 
 void PageBanking::deInitialize()
@@ -109,6 +112,11 @@ void PageBanking::deInitialize()
     app->appToolBar->hide();
     app->appStatusBar->clearMessage();
     app->appStatusBar->hide();
+
+    if (!m_accounts.isEmpty()) {
+        qDeleteAll(m_accounts);
+        m_accounts.clear();
+    }
 }
 
 void PageBanking::accountChanged()
@@ -136,10 +144,44 @@ void PageBanking::initializeMenuBar() { }
 void PageBanking::initializeToolbar()
 {
     const auto app = d_ptr->app();
+    app->appToolBar->setMovable(false);
     app->appToolBar->show();
-    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Close), "Close", [&]() {
-        Q_EMIT vaultClosed();
-    });
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::ShieldLockOutline),
+                               "Close",
+                               [&]() { Q_EMIT vaultClosed(); });
+
+    app->appToolBar->addSeparator();
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::AccountCheck),
+                               tr("Account check"),
+                               [&]() { OnlineBanking::instance()->setupAccounts(this); });
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Import),
+                               tr("Import"),
+                               [&]() {
+                                   auto imExportAssistant = new ImExportAssistant(this);
+                                   imExportAssistant->setAccounts(m_accounts);
+                                   imExportAssistant->exec();
+                               });
+
+    app->appToolBar->addSeparator();
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Reload),
+                               tr("Reload"),
+                               [&]() {});
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::CashFast),
+                               tr("Transfer"),
+                               [&]() {});
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Transfer),
+                               tr("Rebooking"),
+                               [&]() {});
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Finance),
+                               tr("Status"),
+                               [&]() {});
 }
 
 void PageBanking::initializeStatusBar()

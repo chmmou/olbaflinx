@@ -250,6 +250,7 @@ void PageDataVaults::openDataVaultItem(const QString &filePath, const QString &p
                 this,
                 [&](const AccountList &accounts) {
                     VaultStorage::instance()->addAccounts(accounts);
+                    d_ptr->app()->pageBanking->deInitialize();
                     d_ptr->app()->pageBanking->initialize(d_ptr->app());
                 });
         setupAssistant->exec();
