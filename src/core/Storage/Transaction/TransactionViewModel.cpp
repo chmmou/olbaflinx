@@ -61,18 +61,14 @@ QVariant TransactionViewModel::data(const QModelIndex &index, int role) const
         default:
             break;
         }
-    }
-
-    if (role == Qt::TextAlignmentRole) {
+    } else if (role == Qt::TextAlignmentRole) {
         switch (index.column()) {
         case Columns::ColumnValue:
             return Qt::AlignCenter;
         default:
             break;
         }
-    }
-
-    if (role == Qt::DisplayRole) {
+    } else if (role == Qt::DisplayRole) {
         switch (index.column()) {
         case Columns::ColumnValutaDate:
             return transaction->valutaDate().toString("dd.MM.yyyy");
@@ -140,7 +136,7 @@ void TransactionViewModel::fetchMore(const QModelIndex &parent)
 
     beginInsertRows(QModelIndex(), m_transactionCount, m_transactionCount + itemsToFetch - 1);
     m_transactionCount += itemsToFetch;
-    m_transactions << VaultStorage::instance()->transactions(m_accountId, 100, itemsToFetch);
+    m_transactions << VaultStorage::instance()->transactions(m_accountId, 100, m_transactionCount);
     endInsertRows();
 }
 
