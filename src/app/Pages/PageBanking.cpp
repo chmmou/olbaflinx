@@ -153,12 +153,18 @@ void PageBanking::initializeToolbar()
 
     app->appToolBar->addSeparator();
 
-    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::AccountCheck),
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::AccountArrowLeftOutline),
+                               tr("Import Accounts"),
+                               [&]() { OnlineBanking::instance()->setupAccounts(this); });
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::AccountCheckOutline),
                                tr("Account check"),
                                [&]() { OnlineBanking::instance()->setupAccounts(this); });
 
-    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Import),
-                               tr("Import"),
+    app->appToolBar->addSeparator();
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::FolderArrowUpDownOutline),
+                               tr("Import Transactions"),
                                [&]() {
                                    auto imExportAssistant = new ImExportAssistant(this);
                                    imExportAssistant->setAccounts(m_accounts);
@@ -167,12 +173,18 @@ void PageBanking::initializeToolbar()
 
     app->appToolBar->addSeparator();
 
-    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Reload),
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::ProgressDownload),
                                tr("Reload"),
                                [&]() {});
 
+    app->appToolBar->addSeparator();
+
     app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::CashFast),
-                               tr("Transfer"),
+                               tr("Realtime Transfer"),
+                               [&]() {});
+
+    app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Cash),
+                               tr("SEPA Transfer"),
                                [&]() {});
 
     app->appToolBar->addAction(MaterialDesign::icon(MaterialDesignNames::Transfer),
