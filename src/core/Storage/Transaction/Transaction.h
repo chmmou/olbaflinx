@@ -125,6 +125,8 @@ public:
 
 private:
     AB_TRANSACTION *abTransaction;
+
+    QMap<QString, QVariant> toInternalMap() const;
 };
 
 } // namespace olbaflinx::core::storage::transaction

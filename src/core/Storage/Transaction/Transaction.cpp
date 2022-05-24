@@ -436,9 +436,15 @@ QString Transaction::calculateTransactionHash() const
         return hash();
     }
 
-    const QString purpose = this->purpose().append(
-        QDateTime::currentDateTime().toString(" - dd.MM.yyyy hh:mm:ss.z"));
-    const QByteArray hash = QCryptographicHash::hash(purpose.toUtf8(), QCryptographicHash::Sha1);
+    QByteArray buffer;
+    QDataStream out(&buffer, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_15);
+    out << toInternalMap();
+
+    const QByteArray hash = QCryptographicHash::hash(buffer, QCryptographicHash::Sha1);
+
+    buffer.clear();
+
     return QString("%1").arg(QString(hash.toHex()));
 }
 
@@ -751,4 +757,82 @@ Transaction *Transaction::create(const QMap<QString, QVariant> &row)
     abTransaction = nullptr;
 
     return transaction;
+}
+QMap<QString, QVariant> Transaction::toInternalMap() const
+{
+    QMap<QString, QVariant> internalMap = {};
+
+    internalMap["type"] = type();
+    internalMap["subType"] = subType();
+    internalMap["command"] = command();
+    internalMap["status"] = status();
+    internalMap["uniqueAccountId"] = uniqueAccountId();
+    internalMap["uniqueId"] = uniqueId();
+    internalMap["refUniqueId"] = refUniqueId();
+    internalMap["idForApplication"] = idForApplication();
+    internalMap["stringIdForApplication"] = stringIdForApplication();
+    internalMap["sessionId"] = sessionId();
+    internalMap["groupId"] = groupId();
+    internalMap["fiId"] = fiId();
+    internalMap["localIban"] = localIban();
+    internalMap["localBic"] = localBic();
+    internalMap["localCountry"] = localCountry();
+    internalMap["localBankCode"] = localBankCode();
+    internalMap["localBranchId"] = localBranchId();
+    internalMap["localAccountNumber"] = localAccountNumber();
+    internalMap["localSuffix"] = localSuffix();
+    internalMap["localName"] = localName();
+    internalMap["remoteCountry"] = remoteCountry();
+    internalMap["remoteBankCode"] = remoteBankCode();
+    internalMap["remoteBranchId"] = remoteBranchId();
+    internalMap["remoteAccountNumber"] = remoteAccountNumber();
+    internalMap["remoteSuffix"] = remoteSuffix();
+    internalMap["remoteIban"] = remoteIban();
+    internalMap["remoteBic"] = remoteBic();
+    internalMap["remoteName"] = remoteName();
+    internalMap["date"] = date();
+    internalMap["valutaDate"] = valutaDate();
+    internalMap["value"] = value();
+    internalMap["currency"] = currency();
+    internalMap["fees"] = fees();
+    internalMap["transactionCode"] = transactionCode();
+    internalMap["transactionText"] = transactionText();
+    internalMap["transactionKey"] = transactionKey();
+    internalMap["textKey"] = textKey();
+    internalMap["primanota"] = primanota();
+    internalMap["purpose"] = purpose();
+    internalMap["category"] = category();
+    internalMap["customerReference"] = customerReference();
+    internalMap["bankReference"] = bankReference();
+    internalMap["endToEndReference"] = endToEndReference();
+    internalMap["creditorSchemeId"] = creditorSchemeId();
+    internalMap["originatorId"] = originatorId();
+    internalMap["mandateId"] = mandateId();
+    internalMap["mandateDate"] = mandateDate();
+    internalMap["mandateDebitorName"] = mandateDebitorName();
+    internalMap["originalCreditorSchemeId"] = originalCreditorSchemeId();
+    internalMap["originalMandateId"] = originalMandateId();
+    internalMap["originalCreditorName"] = originalCreditorName();
+    internalMap["sequence"] = sequence();
+    internalMap["charge"] = charge();
+    internalMap["remoteAddrStreet"] = remoteAddrStreet();
+    internalMap["remoteAddrZipcode"] = remoteAddrZipcode();
+    internalMap["remoteAddrCity"] = remoteAddrCity();
+    internalMap["remoteAddrPhone"] = remoteAddrPhone();
+    internalMap["period"] = period();
+    internalMap["cycle"] = cycle();
+    internalMap["executionDay"] = executionDay();
+    internalMap["firstDate"] = firstDate();
+    internalMap["lastDate"] = lastDate();
+    internalMap["nextDate"] = nextDate();
+    internalMap["unitId"] = unitId();
+    internalMap["unitIdNameSpace"] = unitIdNameSpace();
+    internalMap["tickerSymbol"] = tickerSymbol();
+    internalMap["units"] = units();
+    internalMap["unitPriceValue"] = unitPriceValue();
+    internalMap["unitPriceDate"] = unitPriceDate();
+    internalMap["commissionValue"] = commissionValue();
+    internalMap["memo"] = memo();
+
+    return internalMap;
 }
