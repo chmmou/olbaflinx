@@ -1,0 +1,26 @@
+diff --git a/.cmake.conf b/.cmake.conf
+index 7f030d1..6d83b08 100644
+--- a/.cmake.conf
++++ b/.cmake.conf
+@@ -1 +1 @@
+-set(QT_REPO_MODULE_VERSION "6.6.1")
++set(QT_REPO_MODULE_VERSION "6.9.1")
+diff --git a/3rdparty/libtomcrypt b/3rdparty/libtomcrypt
+--- a/3rdparty/libtomcrypt
++++ b/3rdparty/libtomcrypt
+@@ -1 +1 @@
+-Subproject commit 7e863d21429f94ed6a720e24499a12a3f852bb31
++Subproject commit 7e863d21429f94ed6a720e24499a12a3f852bb31-dirty
+diff --git a/qsqlcipher/CMakeLists.txt b/qsqlcipher/CMakeLists.txt
+index 4af778e..57ed70d 100644
+--- a/qsqlcipher/CMakeLists.txt
++++ b/qsqlcipher/CMakeLists.txt
+@@ -3,7 +3,7 @@
+ #####################################################################
+ 
+ qt_internal_add_plugin(QSQLCipherPlugin
+-    OUTPUT_NAME qsqlitecipher
++    OUTPUT_NAME qsqlcipher
+     PLUGIN_TYPE sqldrivers
+     SOURCES
+         qsql_sqlite.cpp qsql_sqlite_p.h

@@ -21,6 +21,7 @@ object_script.*.Debug
 *.qbs.user
 *.qbs.user.*
 *.moc
+*.qm
 moc_*.cpp
 moc_*.h
 qrc_*.cpp
@@ -29,8 +30,9 @@ ui_*.h
 *.jsc
 Makefile*
 *build-*
-*.qm
 *.prl
+*.qhc
+*.qch
 
 # Qt unit tests
 target_wrapper.*
@@ -60,8 +62,8 @@ compile_commands.json
 [bB]uild/
 cbuild/
 settings.cmake
-res/*.txt
-res/*.qm
-res/*.ts
-res/database/*.txt
+/app/res/*.txt
+/app/res/database/*.txt
+/app/res/help/*.html
+PKGBUILD
 *.~

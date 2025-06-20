@@ -1,0 +1,12 @@
+--- libchipcard-client.pc       2025-05-08 22:09:44.677079000 +0000
++++ libchipcard-client.pc.new   2025-05-08 22:13:50.208717000 +0000
+@@ -6,9 +6,9 @@
+ exec_prefix=${prefix}
+ libdir=${exec_prefix}/lib
+ includedir=${prefix}/include
+-pkgdatadir=${datadir}/chipcard
+ datarootdir=${prefix}/share
+ datadir=${datarootdir}
++pkgdatadir=${datadir}/chipcard
+ bindir=${exec_prefix}/bin
+ sysconfdir=${prefix}/etc

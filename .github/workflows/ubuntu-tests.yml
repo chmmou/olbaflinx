@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checking out the code
@@ -75,22 +75,24 @@ jobs:
         id: cache-qt
         uses: actions/cache@v1
         with:
-          path: ${{ github.workspace }}/.Qt5
-          key: ${{ runner.os }}-QtCache-v2
+          path: ${{ github.workspace }}/.Qt6
+          key: ${{ runner.os }}-QtCache-v4
       - name: Install Qt
-        uses: jurplel/install-qt-action@v2.14.0
+        uses: jurplel/install-qt-action@v4
         env:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
         timeout-minutes: 10
         with:
-          version: 5.15.2
+          version: 6.8.3
           target: desktop
           host: linux
-          dir: ${{ github.workspace }}/.Qt5
+          dir: ${{ github.workspace }}/.Qt6
           set-env: true
           install-deps: true
           modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
-          cached: ${{ steps.cache-qt.outputs.cache-hit }}
+          email: ${{ secrets.QT_EMAIL }}
+          pw: ${{ secrets.QT_PW }}
+          cache: ${{ steps.cache-qt.outputs.cache-hit }}
       - name: Install Qt SQL Cipher for Qt 5.15
         shell: bash
         run: |

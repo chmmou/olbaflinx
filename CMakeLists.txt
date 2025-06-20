@@ -1,81 +1,40 @@
-cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
-option(BUILD_TESTS "Build test" OFF)
+#/**
+# * Copyright (C) 2022-2025, Alexander Saal <developer@olbaflinx.chm-projects.de>
+# *
+# * This program is free software: you can redistribute it and/or modify
+# * it under the terms of the GNU General Public License as published by
+# * the Free Software Foundation, either version 3 of the License, or
+# * (at your option) any later version.
+# *
+# * This program is distributed in the hope that it will be useful,
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# * GNU General Public License for more details.
+# *
+# * You should have received a copy of the GNU General Public License
+# * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# */
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
-project(olbaflinx VERSION 1.0.0 LANGUAGES CXX)
+project(OlbaFlinxProject)
 
-set(GWENHYWFAR_MIN_VERSION 5.7.3)
-set(GWENGUI_CPP_MIN_VERSION 5.7.3)
-set(GWENGUI_QT5_MIN_VERSION 5.7.3)
-set(AQBANKING_MIN_VERSION 6.3.2)
-set(QT5_MIN_VERSION 5.15.2)
-set(KTOBLZCHECK_MIN_VERSION 1.53.0)
-set(LIBCHIPCARD_MIN_VERSION 5.1.6)
-set(EXECUTABLE_OUTPUT_PATH "bin/")
-
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Xml Network REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets Concurrent LinguistTools Sql Svg Xml Network REQUIRED)
-find_package(PkgConfig REQUIRED)
-
-# Check if we have the required Qt5 plugin installed
-message(STATUS "Checking for qsqlcipher >= ${QT5_MIN_VERSION}")
-if (NOT "Qt5::QSQLCipherDriverPlugin" IN_LIST Qt${QT_VERSION_MAJOR}Sql_PLUGINS)
-    message(SEND_ERROR "QSQL Cipher Driver not installed! Please install qsqlcipher-qt5 >= ${QT5_MIN_VERSION}
-    https://github.com/sjemens/qsqlcipher-qt5.git")
-else ()
-    message(STATUS "\tFound qsqlcipher in plugin list")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.${PROJECT_NAME}")
 endif ()
 
-message(STATUS "Checking for KtoBlzCheck >= ${KTOBLZCHECK_MIN_VERSION}")
-find_package(KtoBlzCheck ${KTOBLZCHECK_MIN_VERSION})
-if (NOT KtoBlzCheck_FOUND)
-    message(SEND_ERROR "KtoBlzCheck >= ${KTOBLZCHECK_MIN_VERSION} not found! Please install KtoBlzCheck >= ${KTOBLZCHECK_MIN_VERSION}
-    https://sourceforge.net/projects/ktoblzcheck/")
-else ()
-    message(STATUS "\tFound KtoBlzCheck >= ${KtoBlzCheck_VERSION}")
-endif ()
+set(PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-message(STATUS "Checking for gwenhywfar ${GWENHYWFAR_MIN_VERSION}")
-find_package(gwenhywfar ${GWENHYWFAR_MIN_VERSION})
-if (NOT GWENHYWFAR_FOUND)
-    message(SEND_ERROR "gwenhywfar >= ${GWENHYWFAR_MIN_VERSION} not found! Please install gwenhywfar >= ${GWENHYWFAR_MIN_VERSION}
-    https://github.com/aqbanking/gwenhywfar.git or https://git.aquamaniac.de/git/gwenhywfar")
-else ()
-    message(STATUS "\tFound gwenhywfar >= ${gwenhywfar_VERSION}")
-endif ()
+add_subdirectory(${PROJECT_DIR}/lib)
+add_subdirectory(${PROJECT_DIR}/app)
 
-message(STATUS "Checking for gwengui-cpp >= ${GWENGUI_CPP_MIN_VERSION}")
-find_package(gwengui-cpp ${GWENGUI_CPP_MIN_VERSION})
-if (NOT GWENGUI_CPP_FOUND)
-    message(SEND_ERROR "gwengui-cpp >= ${GWENGUI_CPP_MIN_VERSION} not found! Please install gwengui-cpp >= ${GWENGUI_CPP_MIN_VERSION}
-    https://github.com/aqbanking/gwenhywfar.git or https://git.aquamaniac.de/git/gwenhywfar")
-else ()
-    message(STATUS "\tFound gwengui-cpp >= ${gwengui-cpp_VERSION}")
-endif ()
+add_dependencies(OlbaFlinxApp OlbaFlinxCore)
 
-message(STATUS "Checking for gwengui-qt5 >= ${GWENGUI_QT5_MIN_VERSION}")
-find_package(gwengui-qt5 ${GWENGUI_QT5_MIN_VERSION})
-if (NOT gwengui-qt5_FOUND)
-    message(SEND_ERROR "gwengui-qt5 >= ${GWENGUI_QT5_MIN_VERSION} not found! Please install gwengui-qt5 >= ${GWENGUI_QT5_MIN_VERSION}
-    https://github.com/aqbanking/gwenhywfar.git or https://git.aquamaniac.de/git/gwenhywfar")
-else ()
-    message(STATUS "\tFound gwengui-qt5 >= ${gwengui-qt5_VERSION}")
-endif ()
+option(BUILD_TESTS "Build test programs" ON)
 
-message(STATUS "Checking for aqbanking >= ${AQBANKING_MIN_VERSION}")
-find_package(aqbanking ${AQBANKING_MIN_VERSION})
-if (NOT AQBANKING_FOUND)
-    message(SEND_ERROR "aqbanking >= ${AQBANKING_MIN_VERSION} not found! Please install aqbanking >= ${AQBANKING_MIN_VERSION}
-    https://github.com/aqbanking/aqbanking.git or https://git.aquamaniac.de/git/aqbanking")
-else ()
-    message(STATUS "\tFound aqbanking >= ${aqbanking_VERSION}")
-endif ()
-
-pkg_check_modules(LibChipCardc REQUIRED IMPORTED_TARGET libchipcard-client>=${LIBCHIPCARD_MIN_VERSION})
-pkg_check_modules(LibChipCards REQUIRED IMPORTED_TARGET libchipcard-server>=${LIBCHIPCARD_MIN_VERSION})
-
-add_subdirectory(src)
-
-if (BUILD_TESTS)
+if(BUILD_TESTS)
     enable_testing()
-    add_subdirectory(tests)
-endif (BUILD_TESTS)
+    add_subdirectory(${PROJECT_DIR}/tests)
+    add_dependencies(OlbaFlinxTests OlbaFlinxCore)
+endif(BUILD_TESTS)
+
+include(CPackConfig.cmake)

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QHelpCollectionProject version="1.0">
+    <assistant>
+        <title>OlbaFlinx Application</title>
+        <applicationIcon>images/olbaflinx.png</applicationIcon>
+        <cacheDirectory>QtProject/OlbaFlinxApp</cacheDirectory>
+        <startPage>qthelp://de.chm-projects.olbaflinx.1.0.0/doc/index.html</startPage>
+        <aboutMenuText>
+            <text>About OlbaFlinx Application</text>
+        </aboutMenuText>
+        <aboutDialog>
+            <file>about.txt</file>
+            <icon>images/olbaflinx.ico</icon>
+        </aboutDialog>
+        <enableDocumentationManager>false</enableDocumentationManager>
+        <enableAddressBar>false</enableAddressBar>
+        <enableFilterFunctionality>false</enableFilterFunctionality>
+    </assistant>
+    <docFiles>
+        <generate>
+            <file>
+                <input>OlbaFlinxApp.qhp</input>
+                <output>OlbaFlinxApp.qch</output>
+            </file>
+        </generate>
+        <register>
+            <file>OlbaFlinxApp.qch</file>
+        </register>
+    </docFiles>
+</QHelpCollectionProject>

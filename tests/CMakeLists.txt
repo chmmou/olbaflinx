@@ -1,15 +1,46 @@
-cmake_minimum_required(VERSION 3.17 FATAL_ERROR)
-project(OlbaFlinxTests LANGUAGES CXX)
+#/**
+# * Copyright (C) 2021-2025, Alexander Saal <developer@olbaflinx.chm-projects.de>
+# *
+# * This program is free software: you can redistribute it and/or modify
+# * it under the terms of the GNU General Public License as published by
+# * the Free Software Foundation, either version 3 of the License, or
+# * (at your option) any later version.
+# *
+# * This program is distributed in the hope that it will be useful,
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# * GNU General Public License for more details.
+# *
+# * You should have received a copy of the GNU General Public License
+# * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# */
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Test Core Gui Concurrent Sql Svg Xml Network REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Test Core Gui Concurrent Sql Svg Xml Network REQUIRED)
+project(OlbaFlinxTests VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 ${CMAKE_CXX_FLAGS} --coverage")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(QT_COMPONENTS Test Core Gui)
+find_package(Qt6 REQUIRED COMPONENTS ${QT_COMPONENTS})
+
+set(QT_LIBS
+        ${Qt6Core_LIBRARIES}
+        ${Qt6Gui_LIBRARIES}
+        ${Qt6Test_LIBRARIES}
+)
+
+set(QT_INCLUDES
+        ${Qt6Core_INCLUDE_DIRS}
+        ${Qt6Gui_INCLUDE_DIRS}
+        ${Qt6Test_INCLUDE_DIRS}
+)
+
+include_directories(${QT_INCLUDES})
 
 set(CMAKE_AUTOUIC OFF)
 set(CMAKE_AUTOMOC ON)
@@ -17,23 +48,19 @@ set(CMAKE_AUTORCC ON)
 
 set(EXECUTABLE_OUTPUT_PATH bin/)
 
-include("Config.cmake")
-
-add_compile_definitions(QT_DEPRECATED_WARNINGS)
-add_compile_definitions(QT_DISABLE_DEPRECATED_BEFORE=0x050E20)
+include_directories(${EXPORTED_LIB_TS_DIRS})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 ### Adding tests here
-add_executable(BankingTest core/BankingTest.cpp ${APP_FILES} ${TEST_APP_RCS_FILE})
-add_test(NAME BankingTest COMMAND BankingTest)
-target_link_libraries(BankingTest PRIVATE ${QT_LIBS} ${AQ_LIBS})
+add_executable(${PROJECT_NAME} lib/StorageTest.cpp)
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
-add_executable(StorageTest core/StorageTest.cpp ${APP_FILES} ${TEST_APP_RCS_FILE})
-add_test(NAME StorageTest COMMAND StorageTest)
-target_link_libraries(StorageTest PRIVATE ${QT_LIBS} ${AQ_LIBS})
-### Adding tests here
+target_include_directories(${PROJECT_NAME} PRIVATE ${EXPORTED_LIB_TS_DIRS})
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    add_compile_options(--coverage)
-    #Uncomment in case of linker errors
-    link_libraries(gcov)
+    add_compile_options(-fprofile-arcs -ftest-coverage)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBS} OlbaFlinxCore::OlbaFlinxCore gcov)
+else ()
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBS} OlbaFlinxCore::OlbaFlinxCore)
 endif ()
+### Adding tests here

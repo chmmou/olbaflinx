@@ -1,0 +1,320 @@
+/**
+ * Copyright (C) 2021-2022, Alexander Saal <developer@olbaflinx.chm-projects.de>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef OLBAFLINX_CORE_THEMEICONNAMES_H
+#define OLBAFLINX_CORE_THEMEICONNAMES_H
+
+#include "OlbaFlinxCore.h"
+
+#include <QtCore/QString>
+
+namespace olbaflinx::core::themes {
+
+struct OLBAFLINX_CORE_EXPORT ThemeManagerIconNames
+{
+    inline static const QString Activity = "activity";
+    inline static const QString Airplay = "airplay";
+    inline static const QString AlertCircle = "alert-circle";
+    inline static const QString AlertOctagon = "alert-octagon";
+    inline static const QString AlertTriangle = "alert-triangle";
+    inline static const QString AlignCenter = "align-center";
+    inline static const QString AlignJustify = "align-justify";
+    inline static const QString AlignLeft = "align-left";
+    inline static const QString AlignRight = "align-right";
+    inline static const QString Anchor = "anchor";
+    inline static const QString Aperture = "aperture";
+    inline static const QString Archive = "archive";
+    inline static const QString ArrowDown = "arrow-down";
+    inline static const QString ArrowDownCircle = "arrow-down-circle";
+    inline static const QString ArrowDownLeft = "arrow-down-left";
+    inline static const QString ArrowDownRight = "arrow-down-right";
+    inline static const QString ArrowLeft = "arrow-left";
+    inline static const QString ArrowLeftCircle = "arrow-left-circle";
+    inline static const QString ArrowRight = "arrow-right";
+    inline static const QString ArrowRightCircle = "arrow-right-circle";
+    inline static const QString ArrowUp = "arrow-up";
+    inline static const QString ArrowUpCircle = "arrow-up-circle";
+    inline static const QString ArrowUpLeft = "arrow-up-left";
+    inline static const QString ArrowUpRight = "arrow-up-right";
+    inline static const QString AtSign = "at-sign";
+    inline static const QString Award = "award";
+    inline static const QString BarChart = "bar-chart";
+    inline static const QString BarChart2 = "bar-chart-2";
+    inline static const QString Battery = "battery";
+    inline static const QString BatteryCharging = "battery-charging";
+    inline static const QString Bell = "bell";
+    inline static const QString BellOff = "bell-off";
+    inline static const QString Bluetooth = "bluetooth";
+    inline static const QString Bold = "bold";
+    inline static const QString Book = "book";
+    inline static const QString BookOpen = "book-open";
+    inline static const QString Bookmark = "bookmark";
+    inline static const QString Box = "box";
+    inline static const QString Briefcase = "briefcase";
+    inline static const QString Calendar = "calendar";
+    inline static const QString Camera = "camera";
+    inline static const QString CameraOff = "camera-off";
+    inline static const QString Cast = "cast";
+    inline static const QString Check = "check";
+    inline static const QString CheckCircle = "check-circle";
+    inline static const QString CheckSquare = "check-square";
+    inline static const QString ChevronDown = "chevron-down";
+    inline static const QString ChevronLeft = "chevron-left";
+    inline static const QString ChevronRight = "chevron-right";
+    inline static const QString ChevronUp = "chevron-up";
+    inline static const QString ChevronsDown = "chevrons-down";
+    inline static const QString ChevronsLeft = "chevrons-left";
+    inline static const QString ChevronsRight = "chevrons-right";
+    inline static const QString ChevronsUp = "chevrons-up";
+    inline static const QString Chrome = "chrome";
+    inline static const QString Circle = "circle";
+    inline static const QString Clipboard = "clipboard";
+    inline static const QString Clock = "clock";
+    inline static const QString Cloud = "cloud";
+    inline static const QString CloudDrizzle = "cloud-drizzle";
+    inline static const QString CloudLightning = "cloud-lightning";
+    inline static const QString CloudOff = "cloud-off";
+    inline static const QString CloudRain = "cloud-rain";
+    inline static const QString CloudSnow = "cloud-snow";
+    inline static const QString Code = "code";
+    inline static const QString Codepen = "codepen";
+    inline static const QString Codesandbox = "codesandbox";
+    inline static const QString Coffee = "coffee";
+    inline static const QString Columns = "columns";
+    inline static const QString Command = "command";
+    inline static const QString Compass = "compass";
+    inline static const QString Copy = "copy";
+    inline static const QString CornerDownLeft = "corner-down-left";
+    inline static const QString CornerDownRight = "corner-down-right";
+    inline static const QString CornerLeftDown = "corner-left-down";
+    inline static const QString CornerLeftUp = "corner-left-up";
+    inline static const QString CornerRightDown = "corner-right-down";
+    inline static const QString CornerRightUp = "corner-right-up";
+    inline static const QString CornerUpLeft = "corner-up-left";
+    inline static const QString CornerUpRight = "corner-up-right";
+    inline static const QString Cpu = "cpu";
+    inline static const QString CreditCard = "credit-card";
+    inline static const QString Crop = "crop";
+    inline static const QString Crosshair = "crosshair";
+    inline static const QString Database = "database";
+    inline static const QString Delete = "delete";
+    inline static const QString Disc = "disc";
+    inline static const QString Divide = "divide";
+    inline static const QString DivideCircle = "divide-circle";
+    inline static const QString DivideSquare = "divide-square";
+    inline static const QString DollarSign = "dollar-sign";
+    inline static const QString Download = "download";
+    inline static const QString DownloadCloud = "download-cloud";
+    inline static const QString Dribbble = "dribbble";
+    inline static const QString Droplet = "droplet";
+    inline static const QString Edit = "edit";
+    inline static const QString Edit2 = "edit-2";
+    inline static const QString Edit3 = "edit-3";
+    inline static const QString ExternalLink = "external-link";
+    inline static const QString Eye = "eye";
+    inline static const QString EyeOff = "eye-off";
+    inline static const QString Facebook = "facebook";
+    inline static const QString FastForward = "fast-forward";
+    inline static const QString Feather = "feather";
+    inline static const QString Figma = "figma";
+    inline static const QString File = "file";
+    inline static const QString FileMinus = "file-minus";
+    inline static const QString FilePlus = "file-plus";
+    inline static const QString FileText = "file-text";
+    inline static const QString Film = "film";
+    inline static const QString Filter = "filter";
+    inline static const QString Flag = "flag";
+    inline static const QString Folder = "folder";
+    inline static const QString FolderMinus = "folder-minus";
+    inline static const QString FolderPlus = "folder-plus";
+    inline static const QString Framer = "framer";
+    inline static const QString Frown = "frown";
+    inline static const QString Gift = "gift";
+    inline static const QString GitBranch = "git-branch";
+    inline static const QString GitCommit = "git-commit";
+    inline static const QString GitMerge = "git-merge";
+    inline static const QString GitPullRequest = "git-pull-request";
+    inline static const QString Github = "github";
+    inline static const QString Gitlab = "gitlab";
+    inline static const QString Globe = "globe";
+    inline static const QString Grid = "grid";
+    inline static const QString HardDrive = "hard-drive";
+    inline static const QString Hash = "hash";
+    inline static const QString Headphones = "headphones";
+    inline static const QString Heart = "heart";
+    inline static const QString HelpCircle = "help-circle";
+    inline static const QString Hexagon = "hexagon";
+    inline static const QString Home = "home";
+    inline static const QString Image = "image";
+    inline static const QString Inbox = "inbox";
+    inline static const QString Info = "info";
+    inline static const QString Instagram = "instagram";
+    inline static const QString Italic = "italic";
+    inline static const QString Key = "key";
+    inline static const QString Layers = "layers";
+    inline static const QString Layout = "layout";
+    inline static const QString LifeBuoy = "life-buoy";
+    inline static const QString Link = "link";
+    inline static const QString Link2 = "link-2";
+    inline static const QString Linkedin = "linkedin";
+    inline static const QString List = "list";
+    inline static const QString Loader = "loader";
+    inline static const QString Lock = "lock";
+    inline static const QString LogIn = "log-in";
+    inline static const QString LogOut = "log-out";
+    inline static const QString Mail = "mail";
+    inline static const QString Map = "map";
+    inline static const QString MapPin = "map-pin";
+    inline static const QString Maximize = "maximize";
+    inline static const QString Maximize2 = "maximize-2";
+    inline static const QString Meh = "meh";
+    inline static const QString Menu = "menu";
+    inline static const QString MessageCircle = "message-circle";
+    inline static const QString MessageSquare = "message-square";
+    inline static const QString Mic = "mic";
+    inline static const QString MicOff = "mic-off";
+    inline static const QString Minimize = "minimize";
+    inline static const QString Minimize2 = "minimize-2";
+    inline static const QString Minus = "minus";
+    inline static const QString MinusCircle = "minus-circle";
+    inline static const QString MinusSquare = "minus-square";
+    inline static const QString Monitor = "monitor";
+    inline static const QString Moon = "moon";
+    inline static const QString MoreHorizontal = "more-horizontal";
+    inline static const QString MoreVertical = "more-vertical";
+    inline static const QString MousePointer = "mouse-pointer";
+    inline static const QString Move = "move";
+    inline static const QString Music = "music";
+    inline static const QString Navigation = "navigation";
+    inline static const QString Navigation2 = "navigation-2";
+    inline static const QString Octagon = "octagon";
+    inline static const QString Package = "package";
+    inline static const QString Paperclip = "paperclip";
+    inline static const QString Pause = "pause";
+    inline static const QString PauseCircle = "pause-circle";
+    inline static const QString PenTool = "pen-tool";
+    inline static const QString Percent = "percent";
+    inline static const QString Phone = "phone";
+    inline static const QString PhoneCall = "phone-call";
+    inline static const QString PhoneForwarded = "phone-forwarded";
+    inline static const QString PhoneIncoming = "phone-incoming";
+    inline static const QString PhoneMissed = "phone-missed";
+    inline static const QString PhoneOff = "phone-off";
+    inline static const QString PhoneOutgoing = "phone-outgoing";
+    inline static const QString PieChart = "pie-chart";
+    inline static const QString Play = "play";
+    inline static const QString PlayCircle = "play-circle";
+    inline static const QString Plus = "plus";
+    inline static const QString PlusCircle = "plus-circle";
+    inline static const QString PlusSquare = "plus-square";
+    inline static const QString Pocket = "pocket";
+    inline static const QString Power = "power";
+    inline static const QString Printer = "printer";
+    inline static const QString Radio = "radio";
+    inline static const QString RefreshCcw = "refresh-ccw";
+    inline static const QString RefreshCw = "refresh-cw";
+    inline static const QString Repeat = "repeat";
+    inline static const QString Rewind = "rewind";
+    inline static const QString RotateCcw = "rotate-ccw";
+    inline static const QString RotateCw = "rotate-cw";
+    inline static const QString Rss = "rss";
+    inline static const QString Save = "save";
+    inline static const QString Scissors = "scissors";
+    inline static const QString Search = "search";
+    inline static const QString Send = "send";
+    inline static const QString Server = "server";
+    inline static const QString Settings = "settings";
+    inline static const QString Share = "share";
+    inline static const QString Share2 = "share-2";
+    inline static const QString Shield = "shield";
+    inline static const QString ShieldOff = "shield-off";
+    inline static const QString ShoppingBag = "shopping-bag";
+    inline static const QString ShoppingCart = "shopping-cart";
+    inline static const QString Shuffle = "shuffle";
+    inline static const QString Sidebar = "sidebar";
+    inline static const QString SkipBack = "skip-back";
+    inline static const QString SkipForward = "skip-forward";
+    inline static const QString Slack = "slack";
+    inline static const QString Slash = "slash";
+    inline static const QString Sliders = "sliders";
+    inline static const QString Smartphone = "smartphone";
+    inline static const QString Smile = "smile";
+    inline static const QString Speaker = "speaker";
+    inline static const QString Square = "square";
+    inline static const QString Star = "star";
+    inline static const QString StopCircle = "stop-circle";
+    inline static const QString Sun = "sun";
+    inline static const QString Sunrise = "sunrise";
+    inline static const QString Sunset = "sunset";
+    inline static const QString Table = "table";
+    inline static const QString Tablet = "tablet";
+    inline static const QString Tag = "tag";
+    inline static const QString Target = "target";
+    inline static const QString Terminal = "terminal";
+    inline static const QString Thermometer = "thermometer";
+    inline static const QString ThumbsDown = "thumbs-down";
+    inline static const QString ThumbsUp = "thumbs-up";
+    inline static const QString ToggleLeft = "toggle-left";
+    inline static const QString ToggleRight = "toggle-right";
+    inline static const QString Tool = "tool";
+    inline static const QString Trash = "trash";
+    inline static const QString Trash2 = "trash-2";
+    inline static const QString Trello = "trello";
+    inline static const QString TrendingDown = "trending-down";
+    inline static const QString TrendingUp = "trending-up";
+    inline static const QString Triangle = "triangle";
+    inline static const QString Truck = "truck";
+    inline static const QString Tv = "tv";
+    inline static const QString Twitch = "twitch";
+    inline static const QString Twitter = "twitter";
+    inline static const QString Type = "type";
+    inline static const QString Umbrella = "umbrella";
+    inline static const QString Underline = "underline";
+    inline static const QString Unlock = "unlock";
+    inline static const QString Upload = "upload";
+    inline static const QString UploadCloud = "upload-cloud";
+    inline static const QString User = "user";
+    inline static const QString UserCheck = "user-check";
+    inline static const QString UserMinus = "user-minus";
+    inline static const QString UserPlus = "user-plus";
+    inline static const QString UserX = "user-x";
+    inline static const QString Users = "users";
+    inline static const QString Video = "video";
+    inline static const QString VideoOff = "video-off";
+    inline static const QString Voicemail = "voicemail";
+    inline static const QString Volume = "volume";
+    inline static const QString Volume1 = "volume-1";
+    inline static const QString Volume2 = "volume-2";
+    inline static const QString VolumeX = "volume-x";
+    inline static const QString Watch = "watch";
+    inline static const QString Wifi = "wifi";
+    inline static const QString WifiOff = "wifi-off";
+    inline static const QString Wind = "wind";
+    inline static const QString X = "x";
+    inline static const QString XCircle = "x-circle";
+    inline static const QString XOctagon = "x-octagon";
+    inline static const QString XSquare = "x-square";
+    inline static const QString Youtube = "youtube";
+    inline static const QString Zap = "zap";
+    inline static const QString ZapOff = "zap-off";
+    inline static const QString ZoomIn = "zoom-in";
+    inline static const QString ZoomOut = "zoom-out";
+};
+
+} // namespace olbaflinx::core::themes
+
+#endif //OLBAFLINX_CORE_THEMEICONNAMES_H

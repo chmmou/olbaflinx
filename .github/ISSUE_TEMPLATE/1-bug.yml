@@ -1,0 +1,71 @@
+name: "Bug report"
+title: "[Bug]: "
+description: "Report a bug"
+labels: ["bug", "issue"]
+projects: ["chmmou/olbaflinx"]
+assignees: ["chmmou"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: input
+    attributes:
+      label: Operating System
+      placeholder: e.g. Ubuntu 22.04 LTS, Debian 12
+    validations:
+      required: true
+  - type: dropdown
+    id: installations
+    attributes:
+      label: Distribution
+      description: How did you install the application?
+      options:
+        - AppImage (Default)
+        - FlatPack
+        - Other
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: What version of our software are you running?
+      options:
+        - Other
+        - 1.0.0 (Default / vx.y.z Git Tag)
+        - develop (Git Branch)
+      default: 1
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clear and concise description of the problem
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |-
+        1. Open '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error or it is crashed
+        5. ...
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional Details
+      description: A clear and concise additional description that may be relevant
+      value: e.g. screenshots, logs, etc
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell

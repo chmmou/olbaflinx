@@ -1,7 +1,7 @@
 # Copyright (C) 2016 Olivier Goffart <ogoffart@woboq.com>
 # Copyright (C) 2021 Alexander Saal <alexander.saal@chm-projects.de>
 #
-# OlbaFlinx .clang-format is based on Qt Creator's .clang-format
+# OlbaFlinx Project .clang-format is adapted from Qt Creator's .clang-format
 #
 # This is for clang-format >= 5.0.
 #
@@ -18,14 +18,13 @@
 # [2] https://clang.llvm.org/docs/ClangFormatStyleOptions.html
 #
 ---
-BasedOnStyle: WebKit
 Language: Cpp
 AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: None
 AlignConsecutiveDeclarations: None
 AlignEscapedNewlines: DontAlign
-AlignOperands: true
+AlignOperands: Align
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortBlocksOnASingleLine: Empty
@@ -117,6 +116,6 @@ SpacesInContainerLiterals: false
 SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard: c++11
+Standard: c++17
 TabWidth: 4
 UseTab: Never

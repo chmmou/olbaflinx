@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2021, Alexander Saal <developer@olbaflinx.chm-projects.de>
+ * Copyright (C) 2021-2025, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -77,7 +77,7 @@ void BankingTest::initTestCase()
 
 void BankingTest::cleanupTestCase()
 {
-    for (const int id : qAsConst(metaTypeIds)) {
+    for (const int id : std::as_const(metaTypeIds)) {
         QMetaType::unregisterType(id);
     }
     metaTypeIds.clear();
