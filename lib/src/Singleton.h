@@ -30,7 +30,7 @@ public:
         return _instance;
     }
 
-    virtual ~Singleton() { _instance = nullptr; }
+    virtual ~Singleton() { delete _instance; _instance = nullptr; }
 
 private:
     static S *_instance;

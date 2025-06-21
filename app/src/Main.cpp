@@ -59,6 +59,7 @@ int main(int argc, char *argv[])
 
     const int result = a.exec();
 
+    delete storageDialog;
     delete app;
 
     return result;
