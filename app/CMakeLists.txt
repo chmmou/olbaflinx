@@ -104,7 +104,6 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Assistant
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Assistant/Pages
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Storage
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/Assistant

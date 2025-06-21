@@ -84,7 +84,7 @@ public:
     void setKey(const QString &key);
 
     /**
-     * @brief Change storage key
+     * @brief Change a storage key
      *
      * @param oldKey Old storage key
      * @param newKey New storage key
@@ -98,7 +98,7 @@ public:
      * @Brief Initializing the storage backend
      *
      * @param withSchema If we do not want to initialize the storage space with the database default
-     *  schema, then set it to false; otherwise it is safe to set it to true since we only initialize
+     *  schema, then set it to false; otherwise, it is safe to set it to true since we only initialize
      *  the database default schema once.
      *
      * @return If a error occurred false returned and the errorOccurred signal is emitted;
@@ -114,7 +114,7 @@ public:
     [[nodiscard]] bool isValid();
 
     /**
-     * @brief Get user storage configuration path
+     * @brief Get a user storage configuration path
      *
      * @return User storage configuration path
      */
@@ -135,7 +135,7 @@ public:
     void storeSetting(const QString &key, const QVariant &value, const QString &group = QString());
 
     /**
-     * @brief Get setting from key
+     * @brief Get setting from a key
      *
      * @param key Settings key
      * @param group Optional setting group

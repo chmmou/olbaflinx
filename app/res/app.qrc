@@ -13,10 +13,6 @@
         <file alias="olbaflinx-logo-1024">olbaflinx-1024.png</file>
         <file alias="olbaflinx-desktop">olbaflinx.desktop</file>
     </qresource>
-    <qresource prefix="/help">
-        <file alias="qch">help/OlbaFlinxApp.qch</file>
-        <file alias="qhc">help/OlbaFlinxApp.qhc</file>
-    </qresource>
     <qresource prefix="/datavault">
         <file alias="add">images/datavault/add.png</file>
         <file alias="menu">images/datavault/menu.png</file>

@@ -40,12 +40,6 @@ public:
     /**
      * Closes the database connection associated with the current instance of StorageConnection.
      *
-     * This method performs the following:
-     * - Closes the active database connection.
-     * - Removes the database connection using the specified connection name.
-     *
-     * It ensures that the storage connection is properly closed and cleaned up.
-     *
      * Note: Invoking this method on an already closed connection or an invalid connection
      * results in no action.
      */
@@ -54,19 +48,12 @@ public:
     /**
      * Checks if the current storage connection is valid.
      *
-     * This function validates the underlying database connection
-     * by verifying its consistency and whether it has been properly initialized.
-     *
      * @return true if the storage connection is valid; false otherwise.
      */
     bool isValid();
 
     /**
      * Checks if the storage connection is currently open and usable.
-     *
-     * This method validates that the storage connection is both valid and open.
-     * It first ensures that the database connection is valid using the `isValid` method,
-     * and then checks if the database object is currently open.
      *
      * @return True if the storage connection is valid and open; otherwise, false.
      */
@@ -75,11 +62,6 @@ public:
     /**
      * Initiates a database transaction if the connection is open.
      *
-     * A transaction allows multiple operations to be performed as a single unit of work,
-     * ensuring that all operations either succeed or fail together. This method checks
-     * if the connection to the database is open and, if so, initiates a transaction
-     * using the underlying database.
-     *
      * @return true if the transaction was successfully started, false if the
      *         connection is not open or the transaction initiation failed.
      */
@@ -87,10 +69,6 @@ public:
 
     /**
      * Commits the current active transaction in the database.
-     *
-     * This method attempts to commit the transaction on the associated database connection
-     * if the connection is currently open. If the connection is not open, the commit operation
-     * does not occur, and the method returns false.
      *
      * @return true if the transaction was successfully committed; false otherwise.
      */
