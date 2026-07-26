@@ -18,7 +18,9 @@
 #ifndef OLBAFLINX_CORE_SINGLETON_H
 #define OLBAFLINX_CORE_SINGLETON_H
 
-template<typename S> class Singleton
+#include <OlbaFlinxCore.h>
+
+template<typename S> class OLBAFLINX_CORE_EXPORT Singleton
 {
 public:
     static S *instance()
@@ -39,6 +41,6 @@ protected:
     Singleton() = default;
 };
 
-template<typename S> S *Singleton<S>::_instance = nullptr;
+template<typename S> OLBAFLINX_CORE_EXPORT S *Singleton<S>::_instance = nullptr;
 
 #endif //OLBAFLINX_CORE_SINGLETON_H

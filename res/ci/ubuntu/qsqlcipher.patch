@@ -4,7 +4,7 @@ index 7f030d1..6d83b08 100644
 +++ b/.cmake.conf
 @@ -1 +1 @@
 -set(QT_REPO_MODULE_VERSION "6.6.1")
-+set(QT_REPO_MODULE_VERSION "6.9.1")
++set(QT_REPO_MODULE_VERSION "6.11.1")
 diff --git a/3rdparty/libtomcrypt b/3rdparty/libtomcrypt
 --- a/3rdparty/libtomcrypt
 +++ b/3rdparty/libtomcrypt

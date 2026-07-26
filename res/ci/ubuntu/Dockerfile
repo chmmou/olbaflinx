@@ -14,7 +14,7 @@
 # * You should have received a copy of the GNU General Public License
 # * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # */
-FROM ubuntu:24.04 AS verify
+FROM ubuntu:26.04 AS verify
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -31,12 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgnutls28-dev \
     libgnutls30 \
     libgnutls-openssl27 \
-    libxmlsec1-gnutls \
+    libxmlsec1-gnutls1 \
     libxmlsec1-dev \
-    libxmlsec1-gcrypt \
-    libxmlsec1-nss \
-    libxmlsec1-openssl \
-    libxmlsec1 \
+    libxmlsec1-nss1 \
+    libxmlsec1-openssl1 \
+    libxmlsec1-1 \
     xmlsec1 \
     libgl1-mesa-dev \
     libc6-i386 \
@@ -91,7 +90,7 @@ RUN update-locale LC_ALL=en_US.UTF-8 \
     LC_TIME=en_US.UTF-8
 
 RUN pip install --break-system-packages aqtinstall
-RUN aqt install-qt linux desktop 6.9.1 linux_gcc_64 --outputdir /opt/qt -m qt5compat qtnetworkauth qtpdf qtwebchannel qtwebengine qtwebsockets qtwebview
+RUN aqt install-qt linux desktop 6.11.1 linux_gcc_64 --outputdir /opt/qt -m qt5compat qtnetworkauth qtpdf qtwebchannel qtwebengine qtwebsockets qtwebview
 
 FROM scratch AS root
 
@@ -104,7 +103,7 @@ LABEL org.opencontainers.image.source="https://github.com/chmmou/olbaflinx/tree/
 LABEL org.opencontainers.image.licenses="GPL-3.0-or-later"
 LABEL org.opencontainers.image.version="1.0"
 LABEL org.opencontainers.image.revision="1"
-LABEL org.opencontainers.image.created="2025-06-20 01:56 pm"
+LABEL org.opencontainers.image.created="2026-07-10 01:39 pm"
 
 COPY --from=verify / /
 
@@ -123,7 +122,7 @@ ENV LC_TELEPHONE=en_US.UTF-8
 ENV LC_TIME=en_US.UTF-8
 
 ENV QT_QPA_PLATFORM="offscreen"
-ENV PATH="/opt/qt/6.9.1/gcc_64/bin:/opt/qt/6.9.1/gcc_64/libexec:${PATH}"
+ENV PATH="/opt/qt/6.11.1/gcc_64/bin:/opt/qt/6.11.1/gcc_64/libexec:${PATH}"
 
 WORKDIR /workspace
 
@@ -134,7 +133,7 @@ COPY ./requirements.sh .
 RUN ./requirements.sh
 
 RUN patch -p1 /usr/lib/pkgconfig/libchipcard-client.pc < ./libchipcard-client.pc.patch
-RUN patchelf --set-rpath '$ORIGIN:/opt/qt/6.9.1/gcc_64/lib' /usr/lib/x86_64-linux-gnu/libqtadvanceddocking-qt6.so.4.4.0
+RUN patchelf --set-rpath '$ORIGIN:/opt/qt/6.11.1/gcc_64/lib' /usr/lib/x86_64-linux-gnu/libqtadvanceddocking-qt6.so.5.0.0
 
 RUN rm ./libchipcard-client.pc.patch
 RUN rm ./qsqlcipher.patch

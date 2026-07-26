@@ -24,8 +24,7 @@ currentDirectory="$(dirname $(readlink -f ${BASH_SOURCE:-$0}))"
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/gwenhywfar
 cd gwenhywfar
-#git checkout $(git tag --sort=-creatordate | head -n 1)
-git checkout thb-202505-qt6
+git checkout $(git tag --sort=-creatordate | head -n 1)
 make -f Makefile.cvs
 ./configure --prefix=/usr --with-guis="cpp qt5"
 make --jobs=$(nproc) all

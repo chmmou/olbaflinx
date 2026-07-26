@@ -54,8 +54,8 @@ int main(int argc, char *argv[])
     storageDialog->initialize(app);
     storageDialog->show();
 
-    /*const auto setup = new assistant::SetupAssistant(app);
-    setup->exec();*/
+    const auto setup = new assistant::SetupAssistant(app);
+    setup->exec();
 
     const int result = a.exec();
 
