@@ -14,67 +14,48 @@
 # * You should have received a copy of the GNU General Public License
 # * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # */
-cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
-
-project(OlbaFlinxTests VERSION 1.0.0 LANGUAGES CXX)
-
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(QT_COMPONENTS Test Core Gui)
-find_package(Qt6 REQUIRED COMPONENTS ${QT_COMPONENTS})
-
-set(QT_LIBS
-        ${Qt6Core_LIBRARIES}
-        ${Qt6Gui_LIBRARIES}
-        ${Qt6Test_LIBRARIES}
-)
-
-set(QT_INCLUDES
-        ${Qt6Core_INCLUDE_DIRS}
-        ${Qt6Gui_INCLUDE_DIRS}
-        ${Qt6Test_INCLUDE_DIRS}
-)
-
-include_directories(${QT_INCLUDES})
-
-set(CMAKE_AUTOUIC OFF)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-
-set(EXECUTABLE_OUTPUT_PATH bin/)
-
-include_directories(${EXPORTED_LIB_TS_DIRS})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
+find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS Test)
 
 ### Adding tests here
-add_executable(${PROJECT_NAME} lib/StorageTest.cpp)
-add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+qt_add_executable(OlbaFlinxTests core/StorageTest.cpp)
+add_test(NAME OlbaFlinxTests COMMAND OlbaFlinxTests)
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${EXPORTED_LIB_TS_DIRS})
-
-add_executable(TransactionTests lib/tst_transaction.cpp)
+qt_add_executable(TransactionTests core/tst_transaction.cpp)
 add_test(NAME TransactionTests COMMAND TransactionTests)
 
-target_include_directories(TransactionTests PRIVATE ${EXPORTED_LIB_TS_DIRS})
-
-add_executable(StorageLifetimeTests lib/tst_storage_lifetime.cpp)
+qt_add_executable(StorageLifetimeTests core/tst_storage_lifetime.cpp)
 add_test(NAME StorageLifetimeTests COMMAND StorageLifetimeTests)
 
-target_include_directories(StorageLifetimeTests PRIVATE ${EXPORTED_LIB_TS_DIRS})
+foreach (test_target OlbaFlinxTests TransactionTests StorageLifetimeTests)
+    # Fuer "BaseTest.h", das neben den Testquellen liegt.
+    target_include_directories(${test_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    add_compile_options(-fprofile-arcs -ftest-coverage)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBS} OlbaFlinxCore::OlbaFlinxCore gcov)
-    target_link_libraries(TransactionTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore gcov)
-    target_link_libraries(StorageLifetimeTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore gcov)
-else ()
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBS} OlbaFlinxCore::OlbaFlinxCore)
-    target_link_libraries(TransactionTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore)
-    target_link_libraries(StorageLifetimeTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore)
-endif ()
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+        target_link_libraries(${test_target} PRIVATE gcov)
+    endif ()
+endforeach ()
+
+# QTEST_MAIN erzeugt eine QGuiApplication, sobald Qt6::Gui gelinkt ist.
+target_link_libraries(OlbaFlinxTests PRIVATE
+        OlbaFlinxCore::OlbaFlinxCore
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Test
+)
+
+# QTEST_APPLESS_MAIN, beide Ziele brauchen keine Anzeige.
+target_link_libraries(TransactionTests PRIVATE
+        OlbaFlinxCore::OlbaFlinxCore
+        Qt6::Core
+        Qt6::Test
+)
+
+target_link_libraries(StorageLifetimeTests PRIVATE
+        OlbaFlinxCore::OlbaFlinxCore
+        Qt6::Core
+        Qt6::Test
+)
 ### Adding tests here

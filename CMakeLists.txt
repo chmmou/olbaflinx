@@ -16,25 +16,45 @@
 # */
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
-project(OlbaFlinxProject)
+project(OlbaFlinx
+        VERSION 1.0.0
+        DESCRIPTION "OlbaFlinx is an multibank-capable online banking software for Linux"
+        HOMEPAGE_URL "https://olbaflinx.chm-projects.de"
+        LANGUAGES CXX
+)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.${PROJECT_NAME}")
 endif ()
 
-set(PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(OLBAFLINX_QT_MIN_VERSION 6.8)
 
-add_subdirectory(${PROJECT_DIR}/lib)
-add_subdirectory(${PROJECT_DIR}/app)
+find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS
+        Concurrent
+        Core
+        Core5Compat
+        Gui
+        Help
+        LinguistTools
+        Network
+        Sql
+        Svg
+        Widgets
+        Xml
+)
+qt_standard_project_setup(REQUIRES ${OLBAFLINX_QT_MIN_VERSION})
 
-add_dependencies(OlbaFlinxApp OlbaFlinxCore)
+add_subdirectory(src)
 
 option(BUILD_TESTS "Build test programs" ON)
 
-if(BUILD_TESTS)
+if (BUILD_TESTS)
     enable_testing()
-    add_subdirectory(${PROJECT_DIR}/tests)
-    add_dependencies(OlbaFlinxTests OlbaFlinxCore)
-endif(BUILD_TESTS)
+    add_subdirectory(tests)
+endif ()
 
 include(CPackConfig.cmake)

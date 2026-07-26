@@ -62,8 +62,8 @@ compile_commands.json
 [bB]uild/
 cbuild/
 settings.cmake
-/app/res/*.txt
-/app/res/database/*.txt
-/app/res/help/*.html
+/res/*.txt
+/res/database/*.txt
+/res/help/*.html
 PKGBUILD
 *.~

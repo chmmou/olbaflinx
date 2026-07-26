@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2021-2022, Alexander Saal <developer@olbaflinx.chm-projects.de>
+ * Copyright (C) 2021-2025, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,54 +14,70 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#pragma once
+
+#include <cstdlib>
+
+#include "core/Banking/Account/Account.h"
 
 #include <QtCore/QMap>
+#include <QtCore/QRandomGenerator>
 
-#include <aqbanking/account_type.h>
-
-#ifndef OLBAFLINX_BASETEST_H
-#define OLBAFLINX_BASETEST_H
+using namespace olbaflinx::core::banking::account;
 
 namespace olbaflinx::core::tests {
 
 class BaseTest
 {
 public:
-    static Account *createFakeAccount(int accountType = AB_AccountType_Bank)
+    static Account *createFakeAccount(const int accountType = 1)
     {
-        const auto map = createFakeAccountMap(accountType);
-        return Account::create(map);
+        auto map = createFakeAccountMap(accountType);
+
+        const auto acc = new Account();
+        const auto account = dynamic_cast<Account *>(acc->create(map));
+
+        delete acc;
+        map.clear();
+
+        return account;
     }
 
-    static QMap<QString, QVariant> createFakeAccountMap(int accountType = AB_AccountType_Bank)
+    static QMap<QString, QVariant> createFakeAccountMap(const int accountType = 1)
     {
         QMap<QString, QVariant> map = {};
 
         // Test fake data: https://ibanvalidieren.de/beispiele.html
-        map["type"] = accountType;
-        map["uniqueId"] = QRandomGenerator::system()->generate();
-        map["backendName"] = "aqhbci";
-        map["ownerName"] = "Test User";
-        map["accountName"] = "Kontokorrent";
-        map["currency"] = "";
-        map["memo"] = "";
-        map["iban"] = "DE02500105170137075030";
-        map["bic"] = "INGDDEFF";
-        map["country"] = "";
-        map["bankCode"] = "50010517";
-        map["bankName"] = "ING-DIBA";
-        map["branchId"] = "";
-        map["accountNumber"] = "0137075030";
-        map["subAccountNumber"] = "";
-        map["balance"] = 0.0;
+        map[":type"] = accountType;
+        map[":uniqueId"] = QRandomGenerator::system()->generate();
+        map[":backend_name"] = "aqhbci";
+        map[":owner_name"] = randomString();
+        map[":account_name"] = randomString();
+        map[":currency"] = "EURO";
+        map[":memo"] = "";
+        map[":iban"] = "DE02500105170137075030";
+        map[":bic"] = "INGDDEFF";
+        map[":country"] = "";
+        map[":bank_code"] = "50010517";
+        map[":bank_name"] = "ING-DIBA";
+        map[":branch_id"] = "";
+        map[":account_number"] = "0137075030";
+        map[":sub_account_number"] = "";
+        map[":balance"] = (rand() * 1.01);
 
         return map;
     }
 
-    static AccountBalance *createFakeAccountBalance() { return Q_NULLPTR; }
-    static Transaction *createFakeTransaction() { return Q_NULLPTR; }
+    static QString randomString()
+    {
+        QString randomString;
+        for (int i = 0; i < 12; ++i) {
+            const auto letter = 'A' + (rand() % (2 * 26));
+            randomString.append(QChar(letter));
+        }
+
+        return randomString;
+    }
 };
 
-} // namespace olbaflinx::core::storage::tests
-
-#endif //OLBAFLINX_BASETEST_H
+} // namespace olbaflinx::core::tests
