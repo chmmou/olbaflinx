@@ -57,10 +57,24 @@ add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${EXPORTED_LIB_TS_DIRS})
 
+add_executable(TransactionTests lib/tst_transaction.cpp)
+add_test(NAME TransactionTests COMMAND TransactionTests)
+
+target_include_directories(TransactionTests PRIVATE ${EXPORTED_LIB_TS_DIRS})
+
+add_executable(StorageLifetimeTests lib/tst_storage_lifetime.cpp)
+add_test(NAME StorageLifetimeTests COMMAND StorageLifetimeTests)
+
+target_include_directories(StorageLifetimeTests PRIVATE ${EXPORTED_LIB_TS_DIRS})
+
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options(-fprofile-arcs -ftest-coverage)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBS} OlbaFlinxCore::OlbaFlinxCore gcov)
+    target_link_libraries(TransactionTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore gcov)
+    target_link_libraries(StorageLifetimeTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore gcov)
 else ()
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBS} OlbaFlinxCore::OlbaFlinxCore)
+    target_link_libraries(TransactionTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore)
+    target_link_libraries(StorageLifetimeTests PRIVATE Qt6::Test Qt6::Core OlbaFlinxCore::OlbaFlinxCore)
 endif ()
 ### Adding tests here

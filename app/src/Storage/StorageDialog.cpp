@@ -62,10 +62,6 @@ public:
     {
         storage->close();
         storage->deleteLater();
-
-        btnNewStorageItem->deleteLater();
-        storageInfoLabel->deleteLater();
-        storageContentsLayout->deleteLater();
     }
 
     void initialize(QMainWindow *window)
@@ -261,6 +257,7 @@ private:
         if (indexOf >= 0) {
             auto item = storageContentsLayout->takeAt(indexOf);
             delete item->widget();
+            storageInfoLabel = nullptr;
             delete item;
 
             createStorageInfoLabel();
@@ -283,7 +280,7 @@ private:
     void createStorageInfoLabel()
     {
         if (storageInfoLabel == nullptr) {
-            storageInfoLabel = new QLabel();
+            storageInfoLabel = new QLabel(q_ptr);
             storageInfoLabel->setTextFormat(Qt::RichText);
             storageInfoLabel->setAlignment(Qt::AlignCenter);
             storageInfoLabel->setText(

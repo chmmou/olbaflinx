@@ -132,7 +132,9 @@ public:
 
     ~Private()
     {
-        m_settings->sync();
+        if (m_settings != nullptr) {
+            m_settings->sync();
+        }
         delete m_settings;
 
         close();

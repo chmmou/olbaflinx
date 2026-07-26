@@ -641,9 +641,17 @@ BankingItem *Transaction::create(QMap<QString, QVariant> &map) const
     return transaction;
 }
 
-bool Transaction::isValid() const {}
+bool Transaction::isValid() const
+{
+    return type() != AB_Transaction_TypeUnknown && type() != AB_Transaction_TypeNone;
+}
 
-QString Transaction::toString() const {}
+QString Transaction::toString() const
+{
+    // Deliberately without IBAN, account number or name, this ends up in the log.
+    return QObject::tr("Transaction %1 - %2 %3")
+        .arg(QString::number(uniqueId()), QString::number(value()), currency());
+}
 
 QMap<QString, QVariant> Transaction::toMap() const
 {

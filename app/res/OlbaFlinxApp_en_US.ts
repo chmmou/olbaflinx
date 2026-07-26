@@ -63,6 +63,11 @@
         <source>Account %1 [%2] - %3 - %4</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../../lib/src/Banking/Transaction/Transaction.cpp" line="652"/>
+        <source>Transaction %1 - %2 %3</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UiApp</name>
@@ -438,27 +443,27 @@ This can not be undone!</source>
 <context>
     <name>olbaflinx::app::storage::StorageDialog</name>
     <message>
-        <location filename="../src/Storage/StorageDialog.cpp" line="100"/>
+        <location filename="../src/Storage/StorageDialog.cpp" line="96"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/Storage/StorageDialog.cpp" line="191"/>
+        <location filename="../src/Storage/StorageDialog.cpp" line="187"/>
         <source>Created on %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/Storage/StorageDialog.cpp" line="209"/>
+        <location filename="../src/Storage/StorageDialog.cpp" line="205"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/Storage/StorageDialog.cpp" line="210"/>
+        <location filename="../src/Storage/StorageDialog.cpp" line="206"/>
         <source>Your data vault is corrupted and or not readable / writeable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/Storage/StorageDialog.cpp" line="290"/>
+        <location filename="../src/Storage/StorageDialog.cpp" line="287"/>
         <source>&lt;h1&gt;Welcome to OlbaFlinx&lt;/h1&gt;&lt;p&gt;Click the plus sign or type Ctrl+N to create a new data storage.&lt;/p&gt;&lt;p&gt;You can create as many vaults as you like, each with its own password, e.g. for different user and or accounts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -489,12 +494,12 @@ This can not be undone!</source>
 <context>
     <name>olbaflinx::core::storage::Storage</name>
     <message>
-        <location filename="../../lib/src/Storage/Storage.cpp" line="524"/>
+        <location filename="../../lib/src/Storage/Storage.cpp" line="526"/>
         <source>Not columns for store item found.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../lib/src/Storage/Storage.cpp" line="571"/>
+        <location filename="../../lib/src/Storage/Storage.cpp" line="573"/>
         <source>No items found</source>
         <translation type="unfinished"></translation>
     </message>
