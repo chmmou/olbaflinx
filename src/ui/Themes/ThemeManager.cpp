@@ -1,5 +1,5 @@
 /**
-* Copyright (C) 2022-2025, Alexander Saal <developer@olbaflinx.chm-projects.de>
+ * Copyright (C) 2022-2026, Alexander Saal <developer@olbaflinx.chm-projects.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
