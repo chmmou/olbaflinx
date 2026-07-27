@@ -79,7 +79,6 @@ target_link_libraries(OlbaFlinxCore
         PkgConfig::PKG_AQBANKING
         PRIVATE
         Qt6::Concurrent
-        Qt6::Core5Compat
         Qt6::Network
         Qt6::Xml
         # Storage und Banking greifen noch auf QApplication zu. Solange das so ist,
@@ -90,11 +89,14 @@ target_link_libraries(OlbaFlinxCore
         PkgConfig::PKG_LIBCHIPCARD_CLIENT
 )
 
-target_compile_definitions(OlbaFlinxCore PUBLIC
-        QT_DEPRECATED_WARNINGS
-        QT_DISABLE_DEPRECATED_BEFORE=0x060500
+target_compile_definitions(OlbaFlinxCore
+        PUBLIC
         BUILD_OLBAFLINX_CORE_LIB
+        PRIVATE
+        ${OLBAFLINX_QT_DEPRECATION}
 )
+
+target_compile_options(OlbaFlinxCore PRIVATE ${OLBAFLINX_WARNINGS})
 
 install(TARGETS OlbaFlinxCore
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -151,8 +153,11 @@ qt_add_executable(OlbaFlinxApp
 set_target_properties(OlbaFlinxApp PROPERTIES OUTPUT_NAME "olbaflinx")
 
 target_compile_definitions(OlbaFlinxApp PRIVATE
-        QT_DISABLE_DEPRECATED_BEFORE=0x060500
+        ${OLBAFLINX_QT_DEPRECATION}
+        OLBAFLINX_VERSION="${PROJECT_VERSION}"
 )
+
+target_compile_options(OlbaFlinxApp PRIVATE ${OLBAFLINX_WARNINGS})
 
 target_link_libraries(OlbaFlinxApp PRIVATE
         OlbaFlinxCore::OlbaFlinxCore

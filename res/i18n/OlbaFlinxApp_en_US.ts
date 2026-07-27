@@ -81,6 +81,16 @@
         <source>toolBar</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../../src/ui/App.ui" line="39"/>
+        <source>&amp;Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/App.ui" line="47"/>
+        <source>&amp;About OlbaFlinx</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UiAppCentralWidget</name>
@@ -387,6 +397,19 @@
     <message>
         <location filename="../../src/core/Storage/Storage.cpp" line="573"/>
         <source>No items found</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>olbaflinx::ui::App</name>
+    <message>
+        <location filename="../../src/ui/App.cpp" line="87"/>
+        <source>About %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/App.cpp" line="88"/>
+        <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;Multibank-capable online banking software for Linux.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%3&quot;&gt;%3&lt;/a&gt;&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

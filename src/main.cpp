@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 #endif
 
     QApplication::setApplicationName("OlbaFlinx");
-    QApplication::setApplicationVersion("1.0");
+    QApplication::setApplicationVersion(QStringLiteral(OLBAFLINX_VERSION));
     QApplication::setOrganizationName("de.chm-projects.olbaflinx");
     QApplication::setOrganizationDomain("https://olbaflinx.chm-projects.de");
 

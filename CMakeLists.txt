@@ -33,10 +33,20 @@ endif ()
 
 set(OLBAFLINX_QT_MIN_VERSION 6.8)
 
+# Gilt fuer alle Ziele des Projekts, gesetzt wird es je Ziel als PRIVATE.
+if (MSVC)
+    set(OLBAFLINX_WARNINGS /W4)
+else ()
+    set(OLBAFLINX_WARNINGS -Wall -Wextra)
+endif ()
+
+# Qt 6.8 ist die Mindestversion. Wer eine aeltere veraltete API verwendet,
+# bekommt einen Kompilierfehler statt einer stillen Uebernahme.
+set(OLBAFLINX_QT_DEPRECATION QT_DISABLE_DEPRECATED_UP_TO=0x060800)
+
 find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS
         Concurrent
         Core
-        Core5Compat
         Gui
         Help
         LinguistTools

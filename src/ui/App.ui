@@ -33,6 +33,20 @@
     <bool>false</bool>
    </attribute>
   </widget>
+  <widget class="QMenuBar" name="appMenuBar">
+   <widget class="QMenu" name="appHelpMenu">
+    <property name="title">
+     <string>&amp;Help</string>
+    </property>
+    <addaction name="appAboutAction"/>
+   </widget>
+   <addaction name="appHelpMenu"/>
+  </widget>
+  <action name="appAboutAction">
+   <property name="text">
+    <string>&amp;About OlbaFlinx</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>

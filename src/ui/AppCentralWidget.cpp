@@ -31,9 +31,9 @@ class AppCentralWidget::Private
 {
 public:
     explicit Private(AppCentralWidget *widget)
-        : app(nullptr)
+        : ui(new Ui::UiAppCentralWidget)
+        , app(nullptr)
         , q_ptr(widget)
-        , ui(new Ui::UiAppCentralWidget)
     {
         ui->setupUi(q_ptr);
     }

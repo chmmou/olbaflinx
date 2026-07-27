@@ -33,6 +33,9 @@ foreach (test_target OlbaFlinxTests TransactionTests StorageLifetimeTests)
     # Fuer "BaseTest.h", das neben den Testquellen liegt.
     target_include_directories(${test_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 
+    target_compile_options(${test_target} PRIVATE ${OLBAFLINX_WARNINGS})
+    target_compile_definitions(${test_target} PRIVATE ${OLBAFLINX_QT_DEPRECATION})
+
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
         target_link_libraries(${test_target} PRIVATE gcov)
     endif ()

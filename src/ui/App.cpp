@@ -26,6 +26,8 @@
 
 #include <QtCore/QDir>
 
+#include <QtWidgets/QMessageBox>
+
 #include <qtadvanceddocking-qt6/AutoHideDockContainer.h>
 #include <qtadvanceddocking-qt6/DockAreaWidget.h>
 #include <qtadvanceddocking-qt6/DockManager.h>
@@ -60,6 +62,8 @@ public:
 
         QApplication::setWindowIcon(QIcon(":/app/olbaflinx-logo-128"));
         q_ptr->setWindowIconText(QApplication::applicationName());
+
+        QObject::connect(ui->appAboutAction, &QAction::triggered, q_ptr, [this] { showAbout(); });
     }
 
     ~Private()
@@ -75,6 +79,18 @@ public:
         }
 
         delete ui;
+    }
+
+    void showAbout() const
+    {
+        QMessageBox::about(q_ptr,
+                           App::tr("About %1").arg(QApplication::applicationName()),
+                           App::tr("<h3>%1 %2</h3>"
+                                   "<p>Multibank-capable online banking software for Linux.</p>"
+                                   "<p><a href=\"%3\">%3</a></p>")
+                               .arg(QApplication::applicationName(),
+                                    QApplication::applicationVersion(),
+                                    QApplication::organizationDomain()));
     }
 
     void initialize(const QApplication *application)
