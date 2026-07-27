@@ -92,3 +92,5 @@ Der OlbaFlinx App Quellcode wird unter der [GNU General Public License Version 3
 | qsqlcipher-qt6-cmake       | [LGPL v3](https://github.com/bAmpT/qsqlcipher-qt6-cmake/blob/6.6-cmake/LICENSE)                               |
 | Qt Advanced Docking System | [LGPL v2.1](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System?tab=LGPL-2.1-1-ov-file)            |
 | Qt 6                       | [Mehrfach Lizenz](https://www.qt.io/qt-licensing)                                                             |
+
+Versionen, SPDX-Bezeichner und Bezugsquellen der Drittanbieterkomponenten stehen in [THIRD_PARTY.md](THIRD_PARTY.md).
