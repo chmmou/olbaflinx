@@ -72,7 +72,7 @@ StorageTest::StorageTest()
     : storageFile(QDir::tempPath().append("/olbaflinx_test.obfx"))
     , storagePassword("M'yF13\"stP\\$44W0$3d/")
 {
-    // Haelt QSettings aus der Konfiguration des Benutzers heraus.
+    // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
 
     QCoreApplication::setApplicationName("OlbaFlinx");
@@ -247,8 +247,8 @@ void StorageTest::testStoreItems()
     auto list = qvariant_cast<BankingItems>(arguments[0]);
     QCOMPARE(list.size(), 2);
 
-    // Der Empfaenger besitzt die Datensaetze. Sie muessen den Ruecklauf aus dem
-    // Signal ueberleben; frueher gab Storage sie unmittelbar danach frei.
+    // The receiver owns the records. They have to survive the return from the
+    // signal; Storage used to release them right afterwards.
     QVERIFY(list.at(0) != nullptr);
     QVERIFY(!list.at(0)->itemType().isEmpty());
 

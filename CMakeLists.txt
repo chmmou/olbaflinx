@@ -33,15 +33,15 @@ endif ()
 
 set(OLBAFLINX_QT_MIN_VERSION 6.8)
 
-# Gilt fuer alle Ziele des Projekts, gesetzt wird es je Ziel als PRIVATE.
+# Applies to every target of the project, set per target as PRIVATE.
 if (MSVC)
     set(OLBAFLINX_WARNINGS /W4)
 else ()
     set(OLBAFLINX_WARNINGS -Wall -Wextra)
 endif ()
 
-# Qt 6.8 ist die Mindestversion. Wer eine aeltere veraltete API verwendet,
-# bekommt einen Kompilierfehler statt einer stillen Uebernahme.
+# Qt 6.8 is the minimum version. Using an API deprecated before that yields a
+# compile error instead of a silent carry over.
 set(OLBAFLINX_QT_DEPRECATION QT_DISABLE_DEPRECATED_UP_TO=0x060800)
 
 find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS
@@ -58,8 +58,8 @@ find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS
 )
 qt_standard_project_setup(REQUIRES ${OLBAFLINX_QT_MIN_VERSION})
 
-# Muss im Wurzelbereich stehen. Sonst kennt tests/ das Ziel nicht, obwohl die
-# ui-Tests ueber OlbaFlinxUi davon abhaengen.
+# Has to sit in the root scope. Otherwise tests/ does not know the target, even
+# though the ui tests depend on it through OlbaFlinxUi.
 find_package(qtadvanceddocking-qt6 REQUIRED)
 
 add_subdirectory(src)

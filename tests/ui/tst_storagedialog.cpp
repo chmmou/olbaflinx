@@ -55,13 +55,13 @@ void StorageDialogTest::initTestCase()
 }
 
 /**
- * Nachholung des Tests zu B00-03b: removeStorageInfo() gab das Label frei, ohne
- * den Member auf nullptr zu setzen. Der zweite Durchlauf traf damit auf einen
- * freigegebenen Zeiger. Der Fehler zeigt sich nur als Absturz, nicht als
- * fehlgeschlagene Zusicherung.
+ * removeStorageInfo() used to release the label without setting the member to
+ * nullptr. The second run therefore hit a released pointer. The fault only ever
+ * shows up as a crash, never as a failed assertion.
  *
- * Der Pfad ist ueber reload() erreichbar, weil loadStorageItems() bei leerer
- * Liste removeStorageInfo() und addStorageInfo() nacheinander aufruft.
+ * The path is reachable through reload(), because loadStorageItems() calls
+ * removeStorageInfo() and addStorageInfo() one after the other for an empty
+ * list.
  */
 void StorageDialogTest::repeatedReloadKeepsTheInfoLabelUsable()
 {
@@ -83,9 +83,8 @@ void StorageDialogTest::repeatedReloadKeepsTheInfoLabelUsable()
 }
 
 /**
- * Der Dialog besass den Datenspeicher frueher mit und gab ihn im eigenen
- * Destruktor frei. Nach dem Umbau bleibt er nach der Zerstoerung des Fensters
- * benutzbar.
+ * The dialog used to co-own the storage and released it in its own destructor.
+ * It now stays usable once the window is gone.
  */
 void StorageDialogTest::dialogDoesNotCloseTheStorageItDoesNotOwn()
 {

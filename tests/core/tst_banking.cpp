@@ -43,9 +43,9 @@ private Q_SLOTS:
 };
 
 /**
- * Nachweis von QT-ARCH-002 und QT-ARCH-003: Banking bezieht Name und Version aus
- * ApplicationInfo. Dieses Testziel bindet QTEST_APPLESS_MAIN, es existiert also
- * keine Anwendungsinstanz, aus der die Werte sonst kaemen.
+ * Shows that Banking takes name and version from ApplicationInfo. This target
+ * uses QTEST_APPLESS_MAIN, so there is no application instance the values could
+ * otherwise come from.
  */
 void BankingTest::bankingIsConstructibleWithoutAnyApplicationInstance()
 {
@@ -57,8 +57,8 @@ void BankingTest::bankingIsConstructibleWithoutAnyApplicationInstance()
 }
 
 /**
- * Fehlerfall nach QT-TEST-023: Ohne Aufbau des Backends darf accounts() keine
- * Konten melden, sondern muss den Fehler weiterreichen.
+ * The failure case: without the backend being set up, accounts() must report no
+ * accounts and pass the error on instead.
  */
 void BankingTest::accountsWithoutInitializationReportsAnError()
 {

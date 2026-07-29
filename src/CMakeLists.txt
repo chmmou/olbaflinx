@@ -66,8 +66,8 @@ set_target_properties(OlbaFlinxCore PROPERTIES
         SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
-# src/ ist die Include-Wurzel. Projektinterne Includes lauten damit
-# "core/..." beziehungsweise "ui/...".
+# src/ is the include root. Project internal includes therefore read
+# "core/..." and "ui/..." respectively.
 target_include_directories(OlbaFlinxCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(OlbaFlinxCore
@@ -100,8 +100,8 @@ install(TARGETS OlbaFlinxCore
 # ----------------------------------------------------------------------------
 # OlbaFlinxUi, GPLv3, see src/ui/LICENSE
 #
-# Eigenes Ziel, damit die Praesentationsmodelle und die Dialoge von den Tests
-# gelinkt werden koennen. Ein add_executable ist dafuer nicht linkbar.
+# A target of its own so that the presentation models and the dialogs can be
+# linked by the tests. An executable cannot be linked against.
 # ----------------------------------------------------------------------------
 
 qt_add_library(OlbaFlinxUi STATIC

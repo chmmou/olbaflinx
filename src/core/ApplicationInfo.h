@@ -24,12 +24,12 @@
 namespace olbaflinx::core {
 
 /**
- * @brief Die Kenndaten der Anwendung, die core fuer Einstellungen und fuer die
- *  Anmeldung am Bankbackend braucht.
+ * @brief The application details core needs for its settings and for signing on
+ *  to the banking backend.
  *
- * Die Werte werden uebergeben, statt sie aus der laufenden Anwendungsinstanz zu
- * lesen. Nur so laesst sich core ohne QCoreApplication aufbauen und pruefen.
- * Eigentum: Wertetyp, kein QObject, wird kopiert.
+ * The values are passed in instead of being read from the running application
+ * instance. Only that way can core be built and tested without a
+ * QCoreApplication. Ownership: a value type, not a QObject, it is copied.
  */
 struct OLBAFLINX_CORE_EXPORT ApplicationInfo
 {

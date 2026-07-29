@@ -77,9 +77,9 @@ void StorageLifetimeTest::destroyingStorageWithSettingsDoesNotCrash()
 }
 
 /**
- * Solange Storage ein Singleton war, gab der Destruktor der Basisklasse dieselbe
- * Instanz ein zweites Mal frei. Der zweite Durchlauf traf damit auf einen bereits
- * freigegebenen Zeiger. Auch dieser Fehler zeigt sich nur als Absturz.
+ * While Storage was a singleton, the destructor of the base class released the
+ * very same instance a second time. The second run therefore hit an already
+ * released pointer. This fault, too, only ever shows up as a crash.
  */
 void StorageLifetimeTest::twoConsecutiveStoragesDoNotCrash()
 {
@@ -97,9 +97,8 @@ void StorageLifetimeTest::twoConsecutiveStoragesDoNotCrash()
 }
 
 /**
- * Nachweis von QT-ARCH-002: Der Ablagepfad kommt aus ApplicationInfo, nicht aus
- * einer laufenden Anwendungsinstanz. Dieses Testziel bindet QTEST_APPLESS_MAIN,
- * es existiert also keine.
+ * Shows that the storage path comes from ApplicationInfo and not from a running
+ * application instance. This target uses QTEST_APPLESS_MAIN, so there is none.
  */
 void StorageLifetimeTest::storageIsUsableWithoutAnyApplicationInstance()
 {

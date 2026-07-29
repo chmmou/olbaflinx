@@ -27,11 +27,11 @@
 namespace olbaflinx::ui::models {
 
 /**
- * @brief Bildet die von core gemeldeten Konten auf Anzeigerollen ab.
+ * @brief Maps the accounts reported by core onto display roles.
  *
- * Eigentum: Das Modell haelt die Datensaetze, die es ueber setItems erhaelt.
- * Das ist keine zweite Kopie der Wahrheit im Sinne von QT-ARCH-022, denn
- * Storage gibt sie nach dem Signal aus der Hand und haelt sie selbst nicht.
+ * Ownership: the model holds the records it receives through setItems. That is
+ * not a second copy of the truth, because Storage lets go of them once the
+ * signal is emitted and holds none of them itself.
  */
 class AccountListModel final : public QAbstractListModel
 {
@@ -59,9 +59,9 @@ public:
 
 public Q_SLOTS:
     /**
-     * @brief Uebernimmt die gemeldeten Datensaetze.
+     * @brief Takes over the reported records.
      *
-     * Datensaetze, die kein Konto sind, werden uebergangen.
+     * Records that are not an account are skipped.
      */
     void setItems(const olbaflinx::core::banking::BankingItems &items);
 

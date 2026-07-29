@@ -25,9 +25,9 @@ class Storage;
 namespace olbaflinx::ui::storage {
 
 /**
- * @brief Ein Eintrag in der Uebersicht der Datenspeicher.
+ * @brief One entry in the overview of storages.
  *
- * Eigentum: Der Datenspeicher wird nur beobachtet und gehoert dem Erzeuger.
+ * Ownership: the storage is observed only and belongs to its creator.
  */
 class NewStorageItem : public QWidget
 {
@@ -35,9 +35,9 @@ class NewStorageItem : public QWidget
 
 public:
     /**
-     * @param storage Fremdverwalteter Datenspeicher, muss den Eintrag ueberleben.
-     * @param parent Optionaler Eigentuemer.
-     * @param f Fensterflaggen.
+     * @param storage Externally owned storage, has to outlive the entry.
+     * @param parent Optional owner.
+     * @param f Window flags.
      */
     explicit NewStorageItem(olbaflinx::core::storage::Storage *storage,
                             QWidget *parent = nullptr,

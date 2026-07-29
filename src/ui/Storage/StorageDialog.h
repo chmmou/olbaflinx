@@ -26,10 +26,10 @@ class Storage;
 namespace olbaflinx::ui::storage {
 
 /**
- * @brief Die Uebersicht der angelegten Datenspeicher.
+ * @brief The overview of the storages that have been set up.
  *
- * Eigentum: Der Datenspeicher wird nur beobachtet. Er gehoert dem Erzeuger des
- * Dialogs und wird von diesem geschlossen und freigegeben.
+ * Ownership: the storage is observed only. It belongs to whoever created the
+ * dialog, and that owner closes and releases it.
  */
 class StorageDialog : public QWidget
 {
@@ -37,8 +37,8 @@ class StorageDialog : public QWidget
 
 public:
     /**
-     * @param storage Fremdverwalteter Datenspeicher, muss den Dialog ueberleben.
-     * @param parent Optionaler Eigentuemer.
+     * @param storage Externally owned storage, has to outlive the dialog.
+     * @param parent Optional owner.
      */
     explicit StorageDialog(olbaflinx::core::storage::Storage *storage, QWidget *parent = nullptr);
     ~StorageDialog() override;
@@ -46,7 +46,7 @@ public:
     void initialize(QMainWindow *window);
 
     /**
-     * @brief Liest die Liste der Datenspeicher neu ein.
+     * @brief Reads the list of storages again.
      */
     void reload();
 

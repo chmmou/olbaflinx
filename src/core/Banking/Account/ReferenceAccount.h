@@ -31,11 +31,10 @@ using namespace olbaflinx::core::banking;
 namespace olbaflinx::core::banking::account {
 
 /**
- * @brief Ein bei einem Konto hinterlegtes Referenzkonto.
+ * @brief A reference account held with an account.
  *
- * Eigentum: Der Erzeuger besitzt die Instanz. Aus der Datenbank gelesene
- * Referenzkonten entstehen ueber fromMap und werden als BankingItemPtr
- * weitergereicht.
+ * Ownership: the creator owns the instance. Reference accounts read from the
+ * database are created through fromMap and handed on as a BankingItemPtr.
  */
 class OLBAFLINX_CORE_EXPORT ReferenceAccount : public BankingItem
 {
@@ -44,11 +43,11 @@ public:
     ~ReferenceAccount() override;
 
     /**
-     * @brief Erzeugt ein Referenzkonto aus den Spaltenwerten einer Datenbankzeile.
+     * @brief Creates a reference account from the column values of a database row.
      *
-     * @param map Spaltenwerte der Zeile.
+     * @param map Column values of the row.
      *
-     * @return Das neue Referenzkonto, oder ein leerer Zeiger bei leerer Tabelle.
+     * @return The new reference account, or an empty pointer if the map is empty.
      */
     [[nodiscard]] static std::shared_ptr<ReferenceAccount> fromMap(
         const QMap<QString, QVariant> &map);

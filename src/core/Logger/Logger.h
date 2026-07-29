@@ -23,11 +23,11 @@
 namespace olbaflinx::core::logger {
 
 /**
- * @brief Bindet den Gwenhywfar-Logger an die Anwendung.
+ * @brief Binds the Gwenhywfar logger to the application.
  *
- * Eigentum: Der Erzeuger besitzt die Instanz. Wird ein Parent gesetzt, gibt
- * dieser sie frei, sonst der umgebende Geltungsbereich. Die Klasse haelt keine
- * eigene Instanz und gibt keine fremde frei.
+ * Ownership: the creator owns the instance. If a parent is set, the parent
+ * releases it, otherwise the enclosing scope does. The class holds no instance
+ * of its own and releases none that belongs to someone else.
  */
 class OLBAFLINX_CORE_EXPORT Logger : public QObject
 {

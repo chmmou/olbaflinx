@@ -45,7 +45,7 @@ set(OLBAFLINX_CORE_TESTS OlbaFlinxTests TransactionTests StorageLifetimeTests Ba
 set(OLBAFLINX_UI_TESTS AccountListModelTests TransactionListModelTests StorageDialogTests)
 
 foreach (test_target ${OLBAFLINX_CORE_TESTS} ${OLBAFLINX_UI_TESTS})
-    # Fuer "BaseTest.h", das neben den Testquellen liegt.
+    # For "BaseTest.h", which sits next to the test sources.
     target_include_directories(${test_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 
     target_compile_options(${test_target} PRIVATE ${OLBAFLINX_WARNINGS})
@@ -56,8 +56,8 @@ foreach (test_target ${OLBAFLINX_CORE_TESTS} ${OLBAFLINX_UI_TESTS})
     endif ()
 endforeach ()
 
-# core-Ziele linken ausschliesslich gegen Qt6::Core, Qt6::Test und OlbaFlinxCore.
-# Kaeme Qt6::Widgets hinzu, waere QT-ARCH-002 verletzt.
+# The core targets link against Qt6::Core, Qt6::Test and OlbaFlinxCore only.
+# Adding Qt6::Widgets here would break the layering of core.
 foreach (test_target ${OLBAFLINX_CORE_TESTS})
     target_link_libraries(${test_target} PRIVATE
             OlbaFlinxCore::OlbaFlinxCore
@@ -66,7 +66,7 @@ foreach (test_target ${OLBAFLINX_CORE_TESTS})
     )
 endforeach ()
 
-# ui-Ziele brauchen Widgets. Sie laufen ohne Anzeige, siehe QT-TEST-003.
+# The ui targets need Widgets. They run without a display.
 foreach (test_target ${OLBAFLINX_UI_TESTS})
     target_link_libraries(${test_target} PRIVATE
             OlbaFlinxUi::OlbaFlinxUi

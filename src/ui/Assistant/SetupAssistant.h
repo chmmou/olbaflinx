@@ -28,9 +28,9 @@ class SetupAssistant : public QWizard
 
 public:
     /**
-     * @param applicationInfo Kenndaten, die die Bankseite zum Aufbau braucht.
-     * @param parent Optionaler Eigentuemer.
-     * @param flags Fensterflaggen.
+     * @param applicationInfo Details the banking page needs to set itself up.
+     * @param parent Optional owner.
+     * @param flags Window flags.
      */
     explicit SetupAssistant(const olbaflinx::core::ApplicationInfo &applicationInfo,
                             QWidget *parent = Q_NULLPTR,

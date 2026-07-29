@@ -69,8 +69,8 @@ public:
 
     ~Private()
     {
-        // Logger und Storage gehoeren dem Erzeuger des Fensters. Hier wird der
-        // Logger nur stillgelegt, freigegeben wird keines der beiden.
+        // Logger and Storage belong to whoever created the window. The logger is
+        // only shut down here, neither of the two is released.
         logger->disable();
 
         if (dockManager) {

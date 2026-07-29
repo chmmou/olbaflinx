@@ -33,10 +33,11 @@ public:
     ~OptionBankingPage() override;
 
     /**
-     * @brief Baut die Verbindung zum Bankbackend auf und liest die Konten.
+     * @brief Sets up the connection to the banking backend and reads the accounts.
      *
-     * Der Aufbau erfolgt hier und nicht im Konstruktor, weil uic die Seite ohne
-     * Argumente erzeugt und die Kenndaten der Anwendung erst danach vorliegen.
+     * The setup happens here and not in the constructor because uic creates the
+     * page without arguments and the application details are only available
+     * afterwards.
      */
     void initialize(const olbaflinx::core::ApplicationInfo &applicationInfo);
     bool isComplete() const override;

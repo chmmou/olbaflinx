@@ -30,10 +30,10 @@
 namespace olbaflinx::core::banking {
 
 /**
- * @brief Gemeinsame Schnittstelle aller Bankdatensaetze.
+ * @brief The common interface of every banking record.
  *
- * Eigentum: Instanzen entstehen ueber die statischen Fabrikmethoden der
- * abgeleiteten Klassen und werden ausschliesslich in BankingItemPtr gehalten.
+ * Ownership: instances are created through the static factory methods of the
+ * derived classes and are held in a BankingItemPtr only.
  */
 class OLBAFLINX_CORE_EXPORT BankingItem
 {
@@ -71,10 +71,10 @@ public:
 };
 
 /**
- * Storage und Banking erzeugen die Datensaetze und reichen sie per Signal
- * weiter. Ein geteilter Zeiger macht den Uebergang des Eigentums sichtbar und
- * ueberlebt den Wegfall des Erzeugers. Ein roher Zeiger tat das nicht: der
- * Erzeuger gab die Liste unmittelbar nach dem Signal wieder frei.
+ * Storage and Banking create the records and hand them on through a signal. A
+ * shared pointer makes the transfer of ownership visible and survives the
+ * creator. A raw pointer did not: the creator released the list right after
+ * emitting the signal.
  */
 using BankingItemPtr = std::shared_ptr<BankingItem>;
 using BankingItems = QList<BankingItemPtr>;

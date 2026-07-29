@@ -34,10 +34,10 @@ class Storage;
 namespace olbaflinx::ui {
 
 /**
- * @brief Das Hauptfenster der Anwendung.
+ * @brief The main window of the application.
  *
- * Eigentum: Logger und Storage werden nur beobachtet. Ihre Lebensdauer
- * umschliesst die des Fensters, freigegeben werden sie vom Erzeuger.
+ * Ownership: Logger and Storage are observed only. Their lifetime encloses the
+ * one of the window, and the creator releases them.
  */
 class App : public QMainWindow
 {
@@ -45,10 +45,10 @@ class App : public QMainWindow
 
 public:
     /**
-     * @param logger Fremdverwalteter Logger, muss das Fenster ueberleben.
-     * @param storage Fremdverwalteter Datenspeicher, muss das Fenster ueberleben.
-     * @param parent Optionaler Eigentuemer.
-     * @param flags Fensterflaggen.
+     * @param logger Externally owned logger, has to outlive the window.
+     * @param storage Externally owned storage, has to outlive the window.
+     * @param parent Optional owner.
+     * @param flags Window flags.
      */
     explicit App(core::logger::Logger *logger,
                  core::storage::Storage *storage,

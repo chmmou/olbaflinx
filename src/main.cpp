@@ -57,8 +57,8 @@ int main(int argc, char *argv[])
                                           QApplication::applicationName(),
                                           QApplication::applicationVersion()};
 
-    // Logger und Storage liegen auf dem Stack von main. Ihre Lebensdauer
-    // umschliesst die aller Fenster, damit gibt es genau einen Eigentuemer.
+    // Logger and Storage live on the stack of main. Their lifetime encloses the
+    // one of every window, which leaves exactly one owner.
     Logger logger;
     Storage storage(applicationInfo);
 

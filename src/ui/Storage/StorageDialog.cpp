@@ -58,8 +58,8 @@ public:
         q_ptr->setMinimumSize(QSize(930, 646));
     }
 
-    // Der Datenspeicher gehoert dem Erzeuger des Dialogs. Wann er geschlossen
-    // wird, entscheidet die Anwendung, nicht ein Fenster.
+    // The storage belongs to whoever created the dialog. When it is closed is
+    // for the application to decide, not for a window.
     ~Private() = default;
 
     void initialize(QMainWindow *window)
@@ -214,9 +214,9 @@ private:
                     storage->receiveItems(Storage::StorageAccount);
                 });
 
-        // Der dritte Parameter traegt die Fehlermeldung. Sie bleibt hier
-        // vorerst ungenutzt und deshalb unbenannt; ihre Auswertung gehoert zur
-        // Fehlerbehandlung, die noch nicht steht.
+        // The third parameter carries the error message. It stays unused for
+        // now and is therefore unnamed; acting on it belongs to the error
+        // handling, which is not in place yet.
         connect(storageItem,
                 &NewStorageItem::storageDeleted,
                 q_ptr,

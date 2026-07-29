@@ -31,12 +31,12 @@ using namespace olbaflinx::core::banking;
 namespace olbaflinx::core::storage {
 
 /**
- * @brief Der verschluesselte Datenspeicher der Anwendung samt Einstellungen.
+ * @brief The encrypted storage of the application, settings included.
  *
- * Eigentum: Der Erzeuger besitzt die Instanz. Wird ein Parent gesetzt, gibt
- * dieser sie frei, sonst der umgebende Geltungsbereich. Die ueber
- * itemsReceived gemeldeten Datensaetze gehen in das Eigentum des Empfaengers
- * ueber; Storage haelt sie danach nicht mehr.
+ * Ownership: the creator owns the instance. If a parent is set, the parent
+ * releases it, otherwise the enclosing scope does. The records reported through
+ * itemsReceived pass into the ownership of the receiver; Storage does not hold
+ * them afterwards.
  */
 class OLBAFLINX_CORE_EXPORT Storage : public QObject
 {
@@ -44,8 +44,8 @@ class OLBAFLINX_CORE_EXPORT Storage : public QObject
 
 public:
     /**
-     * @param applicationInfo Kenndaten fuer den Einstellungs- und Ablagepfad.
-     * @param parent Optionaler Eigentuemer.
+     * @param applicationInfo Details for the settings and the storage path.
+     * @param parent Optional owner.
      */
     explicit Storage(ApplicationInfo applicationInfo, QObject *parent = nullptr);
     ~Storage() override;
@@ -195,7 +195,7 @@ Q_SIGNALS:
     /**
      * @brief This signal is emitted when we have received one or more entries.
      *
-     * @param items Die gelesenen Datensaetze. Der Empfaenger uebernimmt sie.
+     * @param items The records that were read. The receiver takes them over.
      */
     void itemsReceived(const BankingItems &items);
 

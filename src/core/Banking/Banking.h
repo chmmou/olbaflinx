@@ -39,8 +39,8 @@ using namespace ::account;
  * @version 1.0
  * @package olbaflinx::core::banking
  *
- * Eigentum: Der Erzeuger besitzt die Instanz. Die ueber itemsReceived
- * gemeldeten Konten gehen in das Eigentum des Empfaengers ueber.
+ * Ownership: the creator owns the instance. The accounts reported through
+ * itemsReceived pass into the ownership of the receiver.
  */
 class OLBAFLINX_CORE_EXPORT Banking : public QObject
 {
@@ -48,9 +48,9 @@ class OLBAFLINX_CORE_EXPORT Banking : public QObject
 
 public:
     /**
-     * @param applicationInfo Kenndaten fuer die Anmeldung am Kartenleserdienst
-     *  und fuer den Titel des Einrichtungsdialogs.
-     * @param parent Optionaler Eigentuemer.
+     * @param applicationInfo Details used to sign on to the chip card service
+     *  and for the title of the setup dialog.
+     * @param parent Optional owner.
      */
     explicit Banking(ApplicationInfo applicationInfo, QObject *parent = Q_NULLPTR);
     ~Banking() override;

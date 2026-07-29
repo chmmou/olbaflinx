@@ -44,7 +44,7 @@ public:
             return;
         }
 
-        // Die Seite ist Parent, damit sie das Backend freigibt.
+        // The page is the parent so that it releases the backend.
         banking = new Banking(applicationInfo, q_ptr);
         banking->initialize(applicationInfo.name,
                             applicationInfo.version,

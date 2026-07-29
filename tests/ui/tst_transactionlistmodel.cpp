@@ -37,7 +37,7 @@ private:
     {
         QMap<QString, QVariant> map = {};
 
-        // Die Spaltennamen tragen hier kein Praefix, siehe Transaction::fromMap.
+        // The column names carry no prefix here, see Transaction::fromMap.
         map[QStringLiteral("type")] = 1;
         map[QStringLiteral("unique_id")] = 4711;
         map[QStringLiteral("purpose")] = purpose;
@@ -77,8 +77,8 @@ void TransactionListModelTest::setItemsCountsOnlyTransactions()
 
     model.setItems(items);
 
-    // Account::fromMap liefert bei leerer Tabelle einen leeren Zeiger, der beim
-    // Umsetzen uebergangen wird.
+    // Account::fromMap returns an empty pointer for an empty map, which the
+    // model skips.
     QCOMPARE(model.rowCount(), 2);
 }
 

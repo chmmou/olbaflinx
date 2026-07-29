@@ -11,10 +11,10 @@
 namespace olbaflinx::ui::themes {
 
 /**
- * @brief Laedt Stilvorlagen und rendert die Symbole der Oberflaeche.
+ * @brief Loads style sheets and renders the icons of the user interface.
  *
- * Eigentum: Der Erzeuger besitzt die Instanz. Die zu gestaltende
- * QApplication wird nur beobachtet, nicht besessen.
+ * Ownership: the creator owns the instance. The QApplication that is styled is
+ * observed only, not owned.
  */
 class ThemeManager final : public QObject
 {
