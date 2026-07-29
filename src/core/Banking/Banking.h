@@ -19,6 +19,7 @@
 
 #include "core/OlbaFlinxCore.h"
 
+#include "core/ApplicationInfo.h"
 #include "core/Banking/Account/Account.h"
 
 #include <QtCore/QObject>
@@ -37,13 +38,21 @@ using namespace ::account;
  * @author Alexander Saal
  * @version 1.0
  * @package olbaflinx::core::banking
+ *
+ * Eigentum: Der Erzeuger besitzt die Instanz. Die ueber itemsReceived
+ * gemeldeten Konten gehen in das Eigentum des Empfaengers ueber.
  */
 class OLBAFLINX_CORE_EXPORT Banking : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit Banking(QObject *parent = Q_NULLPTR);
+    /**
+     * @param applicationInfo Kenndaten fuer die Anmeldung am Kartenleserdienst
+     *  und fuer den Titel des Einrichtungsdialogs.
+     * @param parent Optionaler Eigentuemer.
+     */
+    explicit Banking(ApplicationInfo applicationInfo, QObject *parent = Q_NULLPTR);
     ~Banking() override;
 
     /**
@@ -80,7 +89,7 @@ Q_SIGNALS:
     void errorOccurred(qint32 code, const QString &reason);
 
     void progressValueChanged(qreal progress);
-    void itemsReceived(const QList<BankingItem *> &items);
+    void itemsReceived(const BankingItems &items);
     void finished();
 
 private:

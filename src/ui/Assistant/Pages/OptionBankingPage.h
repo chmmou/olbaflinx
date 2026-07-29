@@ -16,6 +16,8 @@
  */
 #pragma once
 
+#include "core/ApplicationInfo.h"
+
 #include <QtCore/QList>
 
 #include <QtWidgets/QWizardPage>
@@ -30,7 +32,13 @@ public:
     explicit OptionBankingPage(QWidget *parent = Q_NULLPTR);
     ~OptionBankingPage() override;
 
-    void initialize();
+    /**
+     * @brief Baut die Verbindung zum Bankbackend auf und liest die Konten.
+     *
+     * Der Aufbau erfolgt hier und nicht im Konstruktor, weil uic die Seite ohne
+     * Argumente erzeugt und die Kenndaten der Anwendung erst danach vorliegen.
+     */
+    void initialize(const olbaflinx::core::ApplicationInfo &applicationInfo);
     bool isComplete() const override;
 
     QList<quint32> selectedAccountIds();

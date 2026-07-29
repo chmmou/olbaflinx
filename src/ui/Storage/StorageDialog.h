@@ -16,20 +16,39 @@
  */
 #pragma once
 
-#include <QtWidgets/QWidget>
 #include <QtWidgets/QMainWindow>
+#include <QtWidgets/QWidget>
+
+namespace olbaflinx::core::storage {
+class Storage;
+}
 
 namespace olbaflinx::ui::storage {
 
+/**
+ * @brief Die Uebersicht der angelegten Datenspeicher.
+ *
+ * Eigentum: Der Datenspeicher wird nur beobachtet. Er gehoert dem Erzeuger des
+ * Dialogs und wird von diesem geschlossen und freigegeben.
+ */
 class StorageDialog : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit StorageDialog(QWidget *parent = nullptr);
+    /**
+     * @param storage Fremdverwalteter Datenspeicher, muss den Dialog ueberleben.
+     * @param parent Optionaler Eigentuemer.
+     */
+    explicit StorageDialog(olbaflinx::core::storage::Storage *storage, QWidget *parent = nullptr);
     ~StorageDialog() override;
 
     void initialize(QMainWindow *window);
+
+    /**
+     * @brief Liest die Liste der Datenspeicher neu ein.
+     */
+    void reload();
 
 protected:
     void moveEvent(QMoveEvent *event) override;

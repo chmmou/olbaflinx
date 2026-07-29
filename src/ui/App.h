@@ -18,25 +18,47 @@
 
 #include "core/Banking/BankingItem.h"
 
-#include <QtWidgets/QApplication>
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QPushButton>
 
 using namespace olbaflinx::core::banking;
 
+namespace olbaflinx::core::logger {
+class Logger;
+}
+
+namespace olbaflinx::core::storage {
+class Storage;
+}
+
 namespace olbaflinx::ui {
 
+/**
+ * @brief Das Hauptfenster der Anwendung.
+ *
+ * Eigentum: Logger und Storage werden nur beobachtet. Ihre Lebensdauer
+ * umschliesst die des Fensters, freigegeben werden sie vom Erzeuger.
+ */
 class App : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    explicit App(QWidget *parent = Q_NULLPTR, const Qt::WindowFlags &flags = Qt::WindowFlags());
+    /**
+     * @param logger Fremdverwalteter Logger, muss das Fenster ueberleben.
+     * @param storage Fremdverwalteter Datenspeicher, muss das Fenster ueberleben.
+     * @param parent Optionaler Eigentuemer.
+     * @param flags Fensterflaggen.
+     */
+    explicit App(core::logger::Logger *logger,
+                 core::storage::Storage *storage,
+                 QWidget *parent = nullptr,
+                 const Qt::WindowFlags &flags = Qt::WindowFlags());
     ~App() override;
 
-    void initialize(const QApplication *app);
+    void initialize();
 
-    void setAccounts(const QList<BankingItem *> &items);
+    void setAccounts(const BankingItems &items);
 
 protected:
     bool event(QEvent *event) override;

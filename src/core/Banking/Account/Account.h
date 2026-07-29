@@ -38,11 +38,26 @@ typedef AB_TRANSACTION_LIMITS TransactionLimits;
 typedef AB_TRANSACTION_LIMITS_LIST TransactionLimitsList;
 typedef AB_TRANSACTION_COMMAND TransactionCommand;
 
+/**
+ * @brief Ein von AqBanking gemeldetes Konto.
+ *
+ * Eigentum: Der Erzeuger besitzt die Instanz. Aus der Datenbank gelesene Konten
+ * entstehen ueber fromMap und werden als BankingItemPtr weitergereicht.
+ */
 class OLBAFLINX_CORE_EXPORT Account : public BankingItem
 {
 public:
     explicit Account(const AB_ACCOUNT_SPEC *accountSpec = nullptr, double balance = 0.0);
     ~Account() override;
+
+    /**
+     * @brief Erzeugt ein Konto aus den Spaltenwerten einer Datenbankzeile.
+     *
+     * @param map Spaltenwerte, benannt wie die Bindungsnamen der Abfrage.
+     *
+     * @return Das neue Konto, oder ein leerer Zeiger, wenn die Tabelle leer ist.
+     */
+    [[nodiscard]] static std::shared_ptr<Account> fromMap(const QMap<QString, QVariant> &map);
 
     [[nodiscard]] qint32 type() const;
     [[nodiscard]] QString typeString() const;
@@ -65,7 +80,6 @@ public:
     [[nodiscard]] ReferenceAccounts referenceAccounts() const;
     [[nodiscard]] TransactionLimits *transactionLimitsForCommand(const TransactionCommand &cmd) const;
 
-    [[nodiscard]] BankingItem *create(QMap<QString, QVariant> &map) const override;
     [[nodiscard]] bool isValid() const override;
     [[nodiscard]] QString toString() const override;
     [[nodiscard]] QMap<QString, QVariant> toMap() const override;

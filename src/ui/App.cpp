@@ -19,13 +19,14 @@
 #include "core/Logger/Logger.h"
 #include "core/Storage/Storage.h"
 #include "ui/Assistant/SetupAssistant.h"
-#include "ui/Themes/ThemeManager.h"
+#include "ui/Models/AccountListModel.h"
 #include "ui/Themes/ThemeManagerIconNames.h"
 
 #include "ui_App.h"
 
 #include <QtCore/QDir>
 
+#include <QtWidgets/QApplication>
 #include <QtWidgets/QMessageBox>
 
 #include <qtadvanceddocking-qt6/AutoHideDockContainer.h>
@@ -39,17 +40,17 @@ using namespace olbaflinx::ui::assistant;
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::logger;
-using namespace olbaflinx::ui::themes;
+using namespace olbaflinx::ui::models;
 
 using namespace ads;
 
 class App::Private
 {
 public:
-    explicit Private(App *app)
-        : logger(Logger::instance())
-        , storage(Storage::instance())
-        , themeManager(ThemeManager::instance())
+    explicit Private(App *app, Logger *appLogger, Storage *appStorage)
+        : logger(appLogger)
+        , storage(appStorage)
+        , accountListModel(new AccountListModel(app))
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
@@ -68,11 +69,9 @@ public:
 
     ~Private()
     {
+        // Logger und Storage gehoeren dem Erzeuger des Fensters. Hier wird der
+        // Logger nur stillgelegt, freigegeben wird keines der beiden.
         logger->disable();
-        logger->deleteLater();
-
-        storage->close();
-        storage->deleteLater();
 
         if (dockManager) {
             dockManager->deleteLater();
@@ -93,9 +92,8 @@ public:
                                     QApplication::organizationDomain()));
     }
 
-    void initialize(const QApplication *application)
+    void initialize()
     {
-        //themeManager->apply(application, ":/lib/olbaflinx-darktheme");
         ui->appCentralWidget->initialize(q_ptr);
 
         /*CDockManager::setConfigFlags(CDockManager::DefaultBaseConfig);
@@ -149,7 +147,7 @@ public:
 
     Logger *logger;
     Storage *storage;
-    ThemeManager *themeManager;
+    AccountListModel *accountListModel;
     Ui::UiApp *ui;
 
     CDockManager *dockManager;
@@ -160,9 +158,9 @@ private:
     App *q_ptr;
 };
 
-App::App(QWidget *parent, const Qt::WindowFlags &flags)
+App::App(Logger *logger, Storage *storage, QWidget *parent, const Qt::WindowFlags &flags)
     : QMainWindow(parent, flags)
-    , d_ptr(new Private(this))
+    , d_ptr(new Private(this, logger, storage))
 {}
 
 App::~App()
@@ -170,7 +168,7 @@ App::~App()
     delete d_ptr;
 }
 
-void App::initialize(const QApplication *app)
+void App::initialize()
 {
     const QPoint pos = d_ptr->storage->setting("Position", "App", QPoint()).toPoint();
     if (!pos.isNull()) {
@@ -182,13 +180,14 @@ void App::initialize(const QApplication *app)
         resize(size);
     }
 
-    d_ptr->initialize(app);
+    d_ptr->initialize();
 }
 
-void App::setAccounts(const QList<BankingItem *> &items)
+void App::setAccounts(const BankingItems &items)
 {
-    //d_ptr->ui->appCentralWidget->setAccounts(items);
+    d_ptr->accountListModel->setItems(items);
 }
+
 bool App::event(QEvent *event)
 {
     return QMainWindow::event(event);

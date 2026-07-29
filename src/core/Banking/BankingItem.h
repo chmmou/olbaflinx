@@ -19,27 +19,27 @@
 
 #include "core/OlbaFlinxCore.h"
 
+#include <QtCore/QList>
 #include <QtCore/QMap>
 #include <QtCore/QMetaType>
 #include <QtCore/QString>
 #include <QtCore/QVariant>
 
+#include <memory>
+
 namespace olbaflinx::core::banking {
 
+/**
+ * @brief Gemeinsame Schnittstelle aller Bankdatensaetze.
+ *
+ * Eigentum: Instanzen entstehen ueber die statischen Fabrikmethoden der
+ * abgeleiteten Klassen und werden ausschliesslich in BankingItemPtr gehalten.
+ */
 class OLBAFLINX_CORE_EXPORT BankingItem
 {
 public:
     explicit BankingItem() = default;
     virtual ~BankingItem() = default;
-
-    /**
-     * @brief Creates a new BankingItem object from the passed map for the corresponding class.
-     *
-     * @param map
-     *
-     * @return New BankingItem object from the corresponding class.
-     */
-    [[nodiscard]] virtual BankingItem *create(QMap<QString, QVariant> &map) const = 0;
 
     /**
      * @brief Checks whether the corresponding class is valid
@@ -70,7 +70,17 @@ public:
     [[nodiscard]] virtual QString itemType() const = 0;
 };
 
+/**
+ * Storage und Banking erzeugen die Datensaetze und reichen sie per Signal
+ * weiter. Ein geteilter Zeiger macht den Uebergang des Eigentums sichtbar und
+ * ueberlebt den Wegfall des Erzeugers. Ein roher Zeiger tat das nicht: der
+ * Erzeuger gab die Liste unmittelbar nach dem Signal wieder frei.
+ */
+using BankingItemPtr = std::shared_ptr<BankingItem>;
+using BankingItems = QList<BankingItemPtr>;
+
 } // namespace olbaflinx::core::banking
 
 Q_DECLARE_METATYPE(olbaflinx::core::banking::BankingItem *)
 Q_DECLARE_METATYPE(const olbaflinx::core::banking::BankingItem *)
+Q_DECLARE_METATYPE(olbaflinx::core::banking::BankingItems)

@@ -58,6 +58,10 @@ find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS
 )
 qt_standard_project_setup(REQUIRES ${OLBAFLINX_QT_MIN_VERSION})
 
+# Muss im Wurzelbereich stehen. Sonst kennt tests/ das Ziel nicht, obwohl die
+# ui-Tests ueber OlbaFlinxUi davon abhaengen.
+find_package(qtadvanceddocking-qt6 REQUIRED)
+
 add_subdirectory(src)
 
 option(BUILD_TESTS "Build test programs" ON)

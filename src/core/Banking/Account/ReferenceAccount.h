@@ -22,19 +22,36 @@
 
 #include <aqbanking/types/refaccount.h>
 
+#include <QtCore/QList>
 #include <QtCore/QMetaType>
 #include <QtCore/QtGlobal>
-#include <QtCore/QList>
 
 using namespace olbaflinx::core::banking;
 
 namespace olbaflinx::core::banking::account {
 
+/**
+ * @brief Ein bei einem Konto hinterlegtes Referenzkonto.
+ *
+ * Eigentum: Der Erzeuger besitzt die Instanz. Aus der Datenbank gelesene
+ * Referenzkonten entstehen ueber fromMap und werden als BankingItemPtr
+ * weitergereicht.
+ */
 class OLBAFLINX_CORE_EXPORT ReferenceAccount : public BankingItem
 {
 public:
     explicit ReferenceAccount(const AB_REFERENCE_ACCOUNT *refAccount = nullptr);
     ~ReferenceAccount() override;
+
+    /**
+     * @brief Erzeugt ein Referenzkonto aus den Spaltenwerten einer Datenbankzeile.
+     *
+     * @param map Spaltenwerte der Zeile.
+     *
+     * @return Das neue Referenzkonto, oder ein leerer Zeiger bei leerer Tabelle.
+     */
+    [[nodiscard]] static std::shared_ptr<ReferenceAccount> fromMap(
+        const QMap<QString, QVariant> &map);
 
     [[nodiscard]] qint32 accountType() const;
     [[nodiscard]] QString ownerName() const;
@@ -47,7 +64,6 @@ public:
     [[nodiscard]] QString accountNumber() const;
     [[nodiscard]] QString subAccountNumber() const;
 
-    [[nodiscard]] BankingItem *create(QMap<QString, QVariant> &map) const override;
     [[nodiscard]] bool isValid() const override;
     [[nodiscard]] QString toString() const override;
     [[nodiscard]] QMap<QString, QVariant> toMap() const override;

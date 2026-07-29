@@ -18,14 +18,30 @@
 
 #include <QtWidgets/QWidget>
 
+namespace olbaflinx::core::storage {
+class Storage;
+}
+
 namespace olbaflinx::ui::storage {
 
+/**
+ * @brief Ein Eintrag in der Uebersicht der Datenspeicher.
+ *
+ * Eigentum: Der Datenspeicher wird nur beobachtet und gehoert dem Erzeuger.
+ */
 class NewStorageItem : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit NewStorageItem(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
+    /**
+     * @param storage Fremdverwalteter Datenspeicher, muss den Eintrag ueberleben.
+     * @param parent Optionaler Eigentuemer.
+     * @param f Fensterflaggen.
+     */
+    explicit NewStorageItem(olbaflinx::core::storage::Storage *storage,
+                            QWidget *parent = nullptr,
+                            Qt::WindowFlags f = Qt::WindowFlags());
     ~NewStorageItem() override;
 
     void setTitle(const QString &title) const;

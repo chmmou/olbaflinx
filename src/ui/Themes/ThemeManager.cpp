@@ -72,12 +72,12 @@ public:
         }
     }
 
-    void applyTheme(const QApplication *app, const QString &name)
+    void applyTheme(QApplication *app, const QString &name)
     {
         registerTheme(name);
 
         if (!application) {
-            application = const_cast<QApplication *>(app);
+            application = app;
         }
 
         if (const auto themKey = themeName(name); themes.contains(themKey)) {
@@ -102,8 +102,8 @@ private:
     ThemeManager *q_ptr = Q_NULLPTR;
 };
 
-ThemeManager::ThemeManager()
-    : QObject(Q_NULLPTR)
+ThemeManager::ThemeManager(QObject *parent)
+    : QObject(parent)
     , d_ptr(new Private(this))
 {}
 
@@ -117,7 +117,7 @@ void ThemeManager::reload() const
     d_ptr->reloadTheme();
 }
 
-void ThemeManager::apply(const QApplication *application, const QString &filename) const
+void ThemeManager::apply(QApplication *application, const QString &filename) const
 {
     d_ptr->applyTheme(application, filename);
 }

@@ -22,13 +22,11 @@
 #include "core/Banking/Account/ReferenceAccount.h"
 #include "core/Banking/Transaction/Transaction.h"
 
-#include <QtConcurrent/QtConcurrent>
-
 #include <QtCore/QCryptographicHash>
-#include <QtCore/QEventLoop>
 #include <QtCore/QFile>
 #include <QtCore/QScopedPointer>
 #include <QtCore/QSettings>
+#include <QtCore/QStandardPaths>
 #include <QtCore/QStringList>
 #include <QtCore/QTextStream>
 #include <QtCore/QVariant>
@@ -38,7 +36,7 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 
-#include <QtWidgets/QApplication>
+#include <utility>
 
 /**
  * Password regular expression
@@ -114,20 +112,17 @@ inline void cleanupResource()
 class Storage::Private
 {
 public:
-    explicit Private(Storage *storage)
+    explicit Private(Storage *storage, ApplicationInfo applicationInfo)
         : m_key("")
         , m_storageFileName("")
+        , m_applicationInfo(std::move(applicationInfo))
         , m_settings(Q_NULLPTR)
         , m_connection(Q_NULLPTR)
         , q_ptr(storage)
     {
         initResource();
 
-        qRegisterMetaType<Account *>();
-        qRegisterMetaType<ReferenceAccount *>();
-        qRegisterMetaType<Transaction *>();
-        qRegisterMetaType<BankingItem *>();
-        qRegisterMetaType<const BankingItem *>();
+        qRegisterMetaType<BankingItems>();
     }
 
     ~Private()
@@ -292,8 +287,8 @@ public:
         if (m_settings == nullptr) {
             m_settings = new QSettings(QSettings::IniFormat,
                                        QSettings::UserScope,
-                                       QApplication::organizationName(),
-                                       QApplication::applicationName());
+                                       m_applicationInfo.organization,
+                                       m_applicationInfo.name);
         }
 
         return m_settings;
@@ -302,7 +297,7 @@ public:
     QString storagePath()
     {
         QString path = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
-        return QString("%1/%2").arg(path, QApplication::organizationName());
+        return QString("%1/%2").arg(path, m_applicationInfo.organization);
     }
 
     bool setupTables()
@@ -344,6 +339,7 @@ public:
 private:
     QString m_key;
     QString m_storageFileName;
+    ApplicationInfo m_applicationInfo;
 
     QSettings *m_settings;
     StorageConnection *m_connection;
@@ -352,9 +348,9 @@ private:
     Storage *q_ptr;
 };
 
-Storage::Storage()
-    : QObject(Q_NULLPTR)
-    , d_ptr(new Private(this))
+Storage::Storage(ApplicationInfo applicationInfo, QObject *parent)
+    : QObject(parent)
+    , d_ptr(new Private(this, std::move(applicationInfo)))
 {}
 
 Storage::~Storage()
@@ -519,7 +515,7 @@ void Storage::receiveItems(Type type, int offset, int limit)
         return;
     }
 
-    auto bankingItems = QList<BankingItem *>();
+    auto bankingItems = BankingItems();
     auto map = QMap<QString, QVariant>();
 
     if (columnList.isEmpty()) {
@@ -536,29 +532,19 @@ void Storage::receiveItems(Type type, int offset, int limit)
         }
 
         switch (type) {
-        case Storage::StorageAccount: {
-            const auto account = new Account();
-            bankingItems << account->create(map);
-            delete account;
-
+        case Storage::StorageAccount:
+            bankingItems << Account::fromMap(map);
             break;
-        }
-        case Storage::StorageReferenceAccount: {
-            const auto refAccount = new ReferenceAccount();
-            bankingItems << refAccount->create(map);
-            delete refAccount;
+        case Storage::StorageReferenceAccount:
+            bankingItems << ReferenceAccount::fromMap(map);
             break;
-        }
-        case Storage::StorageTransaction: {
-            const auto transaction = new Transaction();
-            bankingItems << transaction->create(map);
-            delete transaction;
+        case Storage::StorageTransaction:
+            bankingItems << Transaction::fromMap(map);
             break;
-        }
-        case Storage::StorageCategories: {
-        } break;
-        case Storage::StorageContacts: {
-        } break;
+        case Storage::StorageCategories:
+            break;
+        case Storage::StorageContacts:
+            break;
         }
 
         const auto percentage = index * 100.0 / totalRows;
@@ -578,9 +564,6 @@ void Storage::receiveItems(Type type, int offset, int limit)
     columnList.clear();
 
     Q_EMIT itemsReceived(bankingItems);
-
-    qDeleteAll(bankingItems);
-    bankingItems.clear();
 
     Q_EMIT finished();
 }

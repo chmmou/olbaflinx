@@ -38,9 +38,9 @@ using namespace olbaflinx::core::storage;
 class NewStorageItem::Private
 {
 public:
-    explicit Private(NewStorageItem *storagePageItem)
+    explicit Private(NewStorageItem *storagePageItem, Storage *itemStorage)
         : ui(new Ui::UiNewStorageItem)
-        , storage(Storage::instance())
+        , storage(itemStorage)
     {
         ui->setupUi(storagePageItem);
     }
@@ -51,9 +51,9 @@ public:
     Storage *storage;
 };
 
-NewStorageItem::NewStorageItem(QWidget *parent, Qt::WindowFlags f)
+NewStorageItem::NewStorageItem(Storage *storage, QWidget *parent, Qt::WindowFlags f)
     : QWidget(parent, f)
-    , d_ptr(new Private(this))
+    , d_ptr(new Private(this, storage))
 {}
 
 NewStorageItem::~NewStorageItem()

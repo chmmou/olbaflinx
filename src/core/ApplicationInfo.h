@@ -19,25 +19,23 @@
 
 #include "core/OlbaFlinxCore.h"
 
-template<typename S> class OLBAFLINX_CORE_EXPORT Singleton
+#include <QtCore/QString>
+
+namespace olbaflinx::core {
+
+/**
+ * @brief Die Kenndaten der Anwendung, die core fuer Einstellungen und fuer die
+ *  Anmeldung am Bankbackend braucht.
+ *
+ * Die Werte werden uebergeben, statt sie aus der laufenden Anwendungsinstanz zu
+ * lesen. Nur so laesst sich core ohne QCoreApplication aufbauen und pruefen.
+ * Eigentum: Wertetyp, kein QObject, wird kopiert.
+ */
+struct OLBAFLINX_CORE_EXPORT ApplicationInfo
 {
-public:
-    static S *instance()
-    {
-        if (_instance == nullptr) {
-            _instance = new S();
-        }
-
-        return _instance;
-    }
-
-    virtual ~Singleton() { delete _instance; _instance = nullptr; }
-
-private:
-    static S *_instance;
-
-protected:
-    Singleton() = default;
+    QString organization;
+    QString name;
+    QString version;
 };
 
-template<typename S> OLBAFLINX_CORE_EXPORT S *Singleton<S>::_instance = nullptr;
+} // namespace olbaflinx::core

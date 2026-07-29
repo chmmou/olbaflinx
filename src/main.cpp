@@ -17,10 +17,17 @@
 
 #include "ui/App.h"
 
-#include <QtWidgets/QApplication>
-
+#include "core/ApplicationInfo.h"
+#include "core/Logger/Logger.h"
+#include "core/Storage/Storage.h"
 #include "ui/Assistant/SetupAssistant.h"
 #include "ui/Storage/StorageDialog.h"
+
+#include <QtWidgets/QApplication>
+
+using namespace olbaflinx::core;
+using namespace olbaflinx::core::logger;
+using namespace olbaflinx::core::storage;
 
 using namespace olbaflinx::ui;
 using namespace olbaflinx::ui::storage;
@@ -42,25 +49,33 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName("de.chm-projects.olbaflinx");
     QApplication::setOrganizationDomain("https://olbaflinx.chm-projects.de");
 
-    const QApplication a(argc, argv);
+    QApplication a(argc, argv);
 
     QObject::connect(&a, &QApplication::lastWindowClosed, &a, &QApplication::quit);
 
-    const auto app = new App();
-    app->initialize(&a);
-    //app->show();
+    const ApplicationInfo applicationInfo{QApplication::organizationName(),
+                                          QApplication::applicationName(),
+                                          QApplication::applicationVersion()};
 
-    const auto storageDialog = new StorageDialog;
-    storageDialog->initialize(app);
-    storageDialog->show();
+    // Logger und Storage liegen auf dem Stack von main. Ihre Lebensdauer
+    // umschliesst die aller Fenster, damit gibt es genau einen Eigentuemer.
+    Logger logger;
+    Storage storage(applicationInfo);
 
-    const auto setup = new assistant::SetupAssistant(app);
-    setup->exec();
+    App app(&logger, &storage);
+    app.initialize();
+    app.show();
 
-    const int result = a.exec();
+    StorageDialog storageDialog(&storage);
+    storageDialog.initialize(&app);
+    storageDialog.show();
 
-    delete storageDialog;
-    delete app;
+    assistant::SetupAssistant setup(applicationInfo, &app);
+    setup.exec();
+
+    const int result = QApplication::exec();
+
+    storage.close();
 
     return result;
 }

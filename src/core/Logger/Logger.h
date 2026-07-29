@@ -17,18 +17,25 @@
 #pragma once
 
 #include "core/OlbaFlinxCore.h"
-#include "core/Singleton.h"
 
 #include <QtCore/QObject>
 
 namespace olbaflinx::core::logger {
 
-class OLBAFLINX_CORE_EXPORT Logger : public QObject, public Singleton<Logger>
+/**
+ * @brief Bindet den Gwenhywfar-Logger an die Anwendung.
+ *
+ * Eigentum: Der Erzeuger besitzt die Instanz. Wird ein Parent gesetzt, gibt
+ * dieser sie frei, sonst der umgebende Geltungsbereich. Die Klasse haelt keine
+ * eigene Instanz und gibt keine fremde frei.
+ */
+class OLBAFLINX_CORE_EXPORT Logger : public QObject
 {
     Q_OBJECT
-    friend class Singleton<Logger>;
 
 public:
+    explicit Logger(QObject *parent = nullptr);
+
     enum LoggerLevel {
         Emergency = 0,
         Alert,
@@ -81,8 +88,6 @@ public:
 private:
     [[nodiscard]] bool isEnabled() const;
 
-protected:
-    Logger();
     Q_DISABLE_COPY(Logger)
 };
 

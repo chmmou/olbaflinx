@@ -24,7 +24,7 @@ class ReferenceAccount::Private
 public:
     explicit Private(const AB_REFERENCE_ACCOUNT *refAccount)
         : abRefAccount(AB_ReferenceAccount_dup(refAccount))
-    { }
+    {}
 
     ~Private()
     {
@@ -39,7 +39,7 @@ public:
 
 ReferenceAccount::ReferenceAccount(const AB_REFERENCE_ACCOUNT *refAccount)
     : d_ptr(new Private(refAccount ?: AB_ReferenceAccount_new()))
-{ }
+{}
 
 ReferenceAccount::~ReferenceAccount()
 {
@@ -96,13 +96,13 @@ QString ReferenceAccount::subAccountNumber() const
     return QString::fromUtf8(AB_ReferenceAccount_GetSubAccountNumber(d_ptr->abRefAccount));
 }
 
-BankingItem *ReferenceAccount::create(QMap<QString, QVariant> &map) const
+std::shared_ptr<ReferenceAccount> ReferenceAccount::fromMap(const QMap<QString, QVariant> &map)
 {
     if (map.isEmpty()) {
-        return Q_NULLPTR;
+        return {};
     }
 
-    return new ReferenceAccount();
+    return std::make_shared<ReferenceAccount>();
 }
 
 bool ReferenceAccount::isValid() const

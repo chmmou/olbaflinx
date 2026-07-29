@@ -29,7 +29,22 @@ add_test(NAME TransactionTests COMMAND TransactionTests)
 qt_add_executable(StorageLifetimeTests core/tst_storage_lifetime.cpp)
 add_test(NAME StorageLifetimeTests COMMAND StorageLifetimeTests)
 
-foreach (test_target OlbaFlinxTests TransactionTests StorageLifetimeTests)
+qt_add_executable(BankingTests core/tst_banking.cpp)
+add_test(NAME BankingTests COMMAND BankingTests)
+
+qt_add_executable(AccountListModelTests ui/tst_accountlistmodel.cpp)
+add_test(NAME AccountListModelTests COMMAND AccountListModelTests)
+
+qt_add_executable(TransactionListModelTests ui/tst_transactionlistmodel.cpp)
+add_test(NAME TransactionListModelTests COMMAND TransactionListModelTests)
+
+qt_add_executable(StorageDialogTests ui/tst_storagedialog.cpp)
+add_test(NAME StorageDialogTests COMMAND StorageDialogTests)
+
+set(OLBAFLINX_CORE_TESTS OlbaFlinxTests TransactionTests StorageLifetimeTests BankingTests)
+set(OLBAFLINX_UI_TESTS AccountListModelTests TransactionListModelTests StorageDialogTests)
+
+foreach (test_target ${OLBAFLINX_CORE_TESTS} ${OLBAFLINX_UI_TESTS})
     # Fuer "BaseTest.h", das neben den Testquellen liegt.
     target_include_directories(${test_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 
@@ -41,24 +56,25 @@ foreach (test_target OlbaFlinxTests TransactionTests StorageLifetimeTests)
     endif ()
 endforeach ()
 
-# QTEST_MAIN erzeugt eine QGuiApplication, sobald Qt6::Gui gelinkt ist.
-target_link_libraries(OlbaFlinxTests PRIVATE
-        OlbaFlinxCore::OlbaFlinxCore
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Test
-)
+# core-Ziele linken ausschliesslich gegen Qt6::Core, Qt6::Test und OlbaFlinxCore.
+# Kaeme Qt6::Widgets hinzu, waere QT-ARCH-002 verletzt.
+foreach (test_target ${OLBAFLINX_CORE_TESTS})
+    target_link_libraries(${test_target} PRIVATE
+            OlbaFlinxCore::OlbaFlinxCore
+            Qt6::Core
+            Qt6::Test
+    )
+endforeach ()
 
-# QTEST_APPLESS_MAIN, beide Ziele brauchen keine Anzeige.
-target_link_libraries(TransactionTests PRIVATE
-        OlbaFlinxCore::OlbaFlinxCore
-        Qt6::Core
-        Qt6::Test
-)
+# ui-Ziele brauchen Widgets. Sie laufen ohne Anzeige, siehe QT-TEST-003.
+foreach (test_target ${OLBAFLINX_UI_TESTS})
+    target_link_libraries(${test_target} PRIVATE
+            OlbaFlinxUi::OlbaFlinxUi
+            Qt6::Core
+            Qt6::Test
+            Qt6::Widgets
+    )
 
-target_link_libraries(StorageLifetimeTests PRIVATE
-        OlbaFlinxCore::OlbaFlinxCore
-        Qt6::Core
-        Qt6::Test
-)
+    set_tests_properties(${test_target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endforeach ()
 ### Adding tests here

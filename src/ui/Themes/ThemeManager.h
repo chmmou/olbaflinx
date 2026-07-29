@@ -4,25 +4,28 @@
 
 #pragma once
 
-#include "core/OlbaFlinxCore.h"
-#include "core/Singleton.h"
-
 #include <QtCore/QObject>
 
 #include <QtWidgets/QApplication>
 
 namespace olbaflinx::ui::themes {
 
-class OLBAFLINX_CORE_EXPORT ThemeManager final : public QObject, public Singleton<ThemeManager>
+/**
+ * @brief Laedt Stilvorlagen und rendert die Symbole der Oberflaeche.
+ *
+ * Eigentum: Der Erzeuger besitzt die Instanz. Die zu gestaltende
+ * QApplication wird nur beobachtet, nicht besessen.
+ */
+class ThemeManager final : public QObject
 {
     Q_OBJECT
-    friend class Singleton<ThemeManager>;
 
 public:
+    explicit ThemeManager(QObject *parent = nullptr);
+    ~ThemeManager() override;
+
     enum class Mode { Light, Dark };
     Q_ENUM(Mode)
-
-    ~ThemeManager() override;
 
     /**
      * Reloads the currently registered themes and re-applies them to the associated
@@ -47,7 +50,7 @@ public:
      * @param filename The path to the theme file to be applied.
      *                 The file must contain valid stylesheet data.
      */
-    void apply(const QApplication *application, const QString &filename) const;
+    void apply(QApplication *application, const QString &filename) const;
 
     /**
      * Retrieves a QPixmap object corresponding to the specified icon name
@@ -61,12 +64,9 @@ public:
      * @return A QPixmap representing the requested icon. Returns an empty
      *         QPixmap if the icon cannot be loaded.
      */
-    static QPixmap pixmap(const QString &name,
-                          ThemeManager::Mode mode = ThemeManager::Mode::Light);
+    static QPixmap pixmap(const QString &name, ThemeManager::Mode mode = ThemeManager::Mode::Light);
 
-protected:
-    ThemeManager();
-
+private:
     class Private;
     Private *d_ptr;
 

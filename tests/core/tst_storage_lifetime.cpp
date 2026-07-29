@@ -15,40 +15,40 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "core/ApplicationInfo.h"
 #include "core/Storage/Storage.h"
 
 #include <QtTest/QtTest>
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
 
 namespace olbaflinx::core::storage::tests {
-
-/**
- * Storage::Storage() is protected and only reachable through Singleton<Storage>::instance().
- * Deriving gives access to it without ever setting Singleton<Storage>::_instance, so
- * ~Singleton() runs "delete nullptr" and the double free of the singleton instance
- * (Singleton.h:35) stays out of the way of this test.
- */
-class TestableStorage final : public Storage
-{};
 
 class StorageLifetimeTest final : public QObject
 {
     Q_OBJECT
 
+private:
+    static ApplicationInfo applicationInfo()
+    {
+        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
+                QStringLiteral("OlbaFlinxStorageLifetimeTest"),
+                QStringLiteral("1.0.0")};
+    }
+
 private Q_SLOTS:
     void initTestCase();
     void destroyingUnusedStorageDoesNotCrash();
     void destroyingStorageWithSettingsDoesNotCrash();
+    void twoConsecutiveStoragesDoNotCrash();
+    void storageIsUsableWithoutAnyApplicationInstance();
 };
 
 void StorageLifetimeTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
-
-    QCoreApplication::setOrganizationName("de.chm-projects.olbaflinx.test");
-    QCoreApplication::setApplicationName("OlbaFlinxStorageLifetimeTest");
 }
 
 /**
@@ -58,7 +58,7 @@ void StorageLifetimeTest::initTestCase()
  */
 void StorageLifetimeTest::destroyingUnusedStorageDoesNotCrash()
 {
-    auto *storage = new TestableStorage();
+    auto *storage = new Storage(applicationInfo());
     QVERIFY(storage != nullptr);
 
     delete storage;
@@ -68,12 +68,46 @@ void StorageLifetimeTest::destroyingUnusedStorageDoesNotCrash()
 
 void StorageLifetimeTest::destroyingStorageWithSettingsDoesNotCrash()
 {
-    auto *storage = new TestableStorage();
+    auto *storage = new Storage(applicationInfo());
     storage->storeSetting("Probe", QStringList(), "Lifetime");
 
     delete storage;
 
     QVERIFY(true);
+}
+
+/**
+ * Solange Storage ein Singleton war, gab der Destruktor der Basisklasse dieselbe
+ * Instanz ein zweites Mal frei. Der zweite Durchlauf traf damit auf einen bereits
+ * freigegebenen Zeiger. Auch dieser Fehler zeigt sich nur als Absturz.
+ */
+void StorageLifetimeTest::twoConsecutiveStoragesDoNotCrash()
+{
+    {
+        Storage first(applicationInfo());
+        first.storeSetting("Probe", QStringList(), "Lifetime");
+    }
+
+    {
+        Storage second(applicationInfo());
+        second.storeSetting("Probe", QStringList(), "Lifetime");
+    }
+
+    QVERIFY(true);
+}
+
+/**
+ * Nachweis von QT-ARCH-002: Der Ablagepfad kommt aus ApplicationInfo, nicht aus
+ * einer laufenden Anwendungsinstanz. Dieses Testziel bindet QTEST_APPLESS_MAIN,
+ * es existiert also keine.
+ */
+void StorageLifetimeTest::storageIsUsableWithoutAnyApplicationInstance()
+{
+    QVERIFY(QCoreApplication::instance() == nullptr);
+
+    const Storage storage(applicationInfo());
+
+    QVERIFY(storage.storagePath().endsWith("de.chm-projects.olbaflinx.test"));
 }
 
 } // namespace olbaflinx::core::storage::tests

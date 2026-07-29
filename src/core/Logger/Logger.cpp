@@ -24,9 +24,9 @@
 
 using namespace olbaflinx::core::logger;
 
-Logger::Logger()
-    : QObject(Q_NULLPTR)
-{ }
+Logger::Logger(QObject *parent)
+    : QObject(parent)
+{}
 Logger::~Logger() = default;
 
 void Logger::enable(LoggerLevel level, const QString &logFile)

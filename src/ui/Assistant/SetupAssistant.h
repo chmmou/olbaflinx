@@ -16,6 +16,8 @@
  */
 #pragma once
 
+#include "core/ApplicationInfo.h"
+
 #include <QtWidgets/QWizard>
 
 namespace olbaflinx::ui::assistant {
@@ -25,7 +27,14 @@ class SetupAssistant : public QWizard
     Q_OBJECT
 
 public:
-    explicit SetupAssistant(QWidget *parent = Q_NULLPTR, Qt::WindowFlags flags = Qt::WindowFlags());
+    /**
+     * @param applicationInfo Kenndaten, die die Bankseite zum Aufbau braucht.
+     * @param parent Optionaler Eigentuemer.
+     * @param flags Fensterflaggen.
+     */
+    explicit SetupAssistant(const olbaflinx::core::ApplicationInfo &applicationInfo,
+                            QWidget *parent = Q_NULLPTR,
+                            Qt::WindowFlags flags = Qt::WindowFlags());
     ~SetupAssistant() override;
 
 private:

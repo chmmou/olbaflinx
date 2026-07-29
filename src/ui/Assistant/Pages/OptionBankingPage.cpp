@@ -21,8 +21,7 @@
 
 #include "ui_OptionBankingPage.h"
 
-#include <QtWidgets/QApplication>
-
+using namespace olbaflinx::core;
 using namespace olbaflinx::ui::assistant::pages;
 
 class OptionBankingPage::Private
@@ -30,33 +29,37 @@ class OptionBankingPage::Private
 public:
     explicit Private(OptionBankingPage *bankingPage)
         : isComplete(false)
-        , banking(new Banking)
+        , banking(nullptr)
         , q_ptr(bankingPage)
         , ui(new Ui::UiSetupAssistantOptionBankingPage)
     {
         ui->setupUi(q_ptr);
+    }
 
-        banking->initialize(QApplication::applicationName(),
-                            QApplication::applicationVersion(),
+    ~Private() { delete ui; }
+
+    void createBanking(const ApplicationInfo &applicationInfo)
+    {
+        if (banking != nullptr) {
+            return;
+        }
+
+        // Die Seite ist Parent, damit sie das Backend freigibt.
+        banking = new Banking(applicationInfo, q_ptr);
+        banking->initialize(applicationInfo.name,
+                            applicationInfo.version,
                             "3E1B97FF72A24783EC2215B12");
     }
 
-    ~Private()
-    {
-        banking->finalize();
-        banking->deleteLater();
-
-        delete ui;
-    }
-
-    void addItems(const QList<BankingItem *> &items)
+    void addItems(const BankingItems &items)
     {
         ui->treeWidgetAccounts->clear();
-        for (const auto item : items) {
-            if (item->isValid()) {
+        for (const auto &item : items) {
+            const auto account = std::dynamic_pointer_cast<Account>(item);
+            if (account && account->isValid()) {
                 const auto treeItem = new QTreeWidgetItem;
-                treeItem->setText(0, item->toString());
-                treeItem->setData(0, Qt::UserRole, ((Account *) item)->uniqueId());
+                treeItem->setText(0, account->toString());
+                treeItem->setData(0, Qt::UserRole, account->uniqueId());
                 ui->treeWidgetAccounts->addTopLevelItem(treeItem);
             }
         }
@@ -80,8 +83,10 @@ OptionBankingPage::~OptionBankingPage()
     delete d_ptr;
 }
 
-void OptionBankingPage::initialize()
+void OptionBankingPage::initialize(const ApplicationInfo &applicationInfo)
 {
+    d_ptr->createBanking(applicationInfo);
+
     connect(d_ptr->ui->treeWidgetAccounts, &QTreeWidget::itemSelectionChanged, this, [&]() {
         d_ptr->isComplete = false;
         const bool hasItemsSelected = !d_ptr->ui->treeWidgetAccounts->selectedItems().isEmpty();
@@ -92,7 +97,7 @@ void OptionBankingPage::initialize()
         Q_EMIT completeChanged();
     });
 
-    connect(d_ptr->banking, &Banking::itemsReceived, this, [&](const QList<BankingItem *> &items) {
+    connect(d_ptr->banking, &Banking::itemsReceived, this, [&](const BankingItems &items) {
         d_ptr->addItems(items);
     });
 

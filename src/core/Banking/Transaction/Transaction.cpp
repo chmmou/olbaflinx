@@ -493,147 +493,157 @@ QString Transaction::calculateTransactionHash() const
     return d_ptr->calculateTransactionHash();
 }
 
-BankingItem *Transaction::create(QMap<QString, QVariant> &map) const
+std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> &map)
 {
     auto abTransaction = AB_Transaction_new();
 
-    AB_Transaction_SetType(abTransaction, (TransactionType) map["type"].toInt());
-    AB_Transaction_SetSubType(abTransaction, (TransactionSubType) map["sub_type"].toInt());
-    AB_Transaction_SetCommand(abTransaction, (TransactionCommand) map["command"].toInt());
-    AB_Transaction_SetStatus(abTransaction, (TransactionStatus) map["status"].toInt());
-    AB_Transaction_SetUniqueAccountId(abTransaction, map["unique_account_id"].toUInt());
-    AB_Transaction_SetUniqueId(abTransaction, map["unique_id"].toUInt());
-    AB_Transaction_SetRefUniqueId(abTransaction, map["ref_unique_id"].toUInt());
-    AB_Transaction_SetIdForApplication(abTransaction, map["id_for_application"].toUInt());
+    AB_Transaction_SetType(abTransaction, (TransactionType) map.value("type").toInt());
+    AB_Transaction_SetSubType(abTransaction, (TransactionSubType) map.value("sub_type").toInt());
+    AB_Transaction_SetCommand(abTransaction, (TransactionCommand) map.value("command").toInt());
+    AB_Transaction_SetStatus(abTransaction, (TransactionStatus) map.value("status").toInt());
+    AB_Transaction_SetUniqueAccountId(abTransaction, map.value("unique_account_id").toUInt());
+    AB_Transaction_SetUniqueId(abTransaction, map.value("unique_id").toUInt());
+    AB_Transaction_SetRefUniqueId(abTransaction, map.value("ref_unique_id").toUInt());
+    AB_Transaction_SetIdForApplication(abTransaction, map.value("id_for_application").toUInt());
     AB_Transaction_SetStringIdForApplication(
-        abTransaction, map["string_id_for_application"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetSessionId(abTransaction, map["session_id"].toUInt());
-    AB_Transaction_SetGroupId(abTransaction, map["group_id"].toUInt());
-    AB_Transaction_SetFiId(abTransaction, map["fi_id"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("string_id_for_application").toString().toLocal8Bit().constData());
+    AB_Transaction_SetSessionId(abTransaction, map.value("session_id").toUInt());
+    AB_Transaction_SetGroupId(abTransaction, map.value("group_id").toUInt());
+    AB_Transaction_SetFiId(abTransaction, map.value("fi_id").toString().toLocal8Bit().constData());
     AB_Transaction_SetLocalIban(abTransaction,
-                                map["local_iban"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBic(abTransaction, map["local_bic"].toString().toLocal8Bit().constData());
+                                map.value("local_iban").toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalBic(abTransaction,
+                               map.value("local_bic").toString().toLocal8Bit().constData());
     AB_Transaction_SetLocalCountry(abTransaction,
-                                   map["local_country"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBankCode(abTransaction,
-                                    map["local_bank_code"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBranchId(abTransaction,
-                                    map["local_branch_id"].toString().toLocal8Bit().constData());
+                                   map.value("local_country").toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalBankCode(
+        abTransaction, map.value("local_bank_code").toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalBranchId(
+        abTransaction, map.value("local_branch_id").toString().toLocal8Bit().constData());
     AB_Transaction_SetLocalAccountNumber(
-        abTransaction, map["local_account_number"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("local_account_number").toString().toLocal8Bit().constData());
     AB_Transaction_SetLocalSuffix(abTransaction,
-                                  map["local_suffix"].toString().toLocal8Bit().constData());
+                                  map.value("local_suffix").toString().toLocal8Bit().constData());
     AB_Transaction_SetLocalName(abTransaction,
-                                map["local_name"].toString().toLocal8Bit().constData());
+                                map.value("local_name").toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteCountry(abTransaction,
-                                    map["remote_country"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBankCode(abTransaction,
-                                     map["remote_bank_code"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBranchId(abTransaction,
-                                     map["remote_branch_id"].toString().toLocal8Bit().constData());
+                                    map.value("remote_country").toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteBankCode(
+        abTransaction, map.value("remote_bank_code").toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteBranchId(
+        abTransaction, map.value("remote_branch_id").toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteAccountNumber(
-        abTransaction, map["remote_account_number"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("remote_account_number").toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteSuffix(abTransaction,
-                                   map["remote_suffix"].toString().toLocal8Bit().constData());
+                                   map.value("remote_suffix").toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteIban(abTransaction,
-                                 map["remote_iban"].toString().toLocal8Bit().constData());
+                                 map.value("remote_iban").toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteBic(abTransaction,
-                                map["remote_bic"].toString().toLocal8Bit().constData());
+                                map.value("remote_bic").toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteName(abTransaction,
-                                 map["remote_name"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetDate(abTransaction, Private::fromDate(map["date"].toDate()));
-    AB_Transaction_SetValutaDate(abTransaction, Private::fromDate(map["valuta_date"].toDate()));
+                                 map.value("remote_name").toString().toLocal8Bit().constData());
+    AB_Transaction_SetDate(abTransaction, Private::fromDate(map.value("date").toDate()));
+    AB_Transaction_SetValutaDate(abTransaction,
+                                 Private::fromDate(map.value("valuta_date").toDate()));
 
     auto value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map["value"].toDouble());
-    AB_Value_SetCurrency(value, map["currency"].toString().toLocal8Bit().constData());
+    AB_Value_SetValueFromDouble(value, map.value("value").toDouble());
+    AB_Value_SetCurrency(value, map.value("currency").toString().toLocal8Bit().constData());
     AB_Transaction_SetValue(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map["fees"].toDouble());
+    AB_Value_SetValueFromDouble(value, map.value("fees").toDouble());
     AB_Transaction_SetFees(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
-    AB_Transaction_SetTransactionCode(abTransaction, map["transaction_code"].toInt());
-    AB_Transaction_SetTransactionText(abTransaction,
-                                      map["transaction_text"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetTransactionKey(abTransaction,
-                                     map["transaction_key"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetTextKey(abTransaction, map["text_key"].toInt());
+    AB_Transaction_SetTransactionCode(abTransaction, map.value("transaction_code").toInt());
+    AB_Transaction_SetTransactionText(
+        abTransaction, map.value("transaction_text").toString().toLocal8Bit().constData());
+    AB_Transaction_SetTransactionKey(
+        abTransaction, map.value("transaction_key").toString().toLocal8Bit().constData());
+    AB_Transaction_SetTextKey(abTransaction, map.value("text_key").toInt());
     AB_Transaction_SetPrimanota(abTransaction,
-                                map["primanota"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetPurpose(abTransaction, map["purpose"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetCategory(abTransaction, map["category"].toString().toLocal8Bit().constData());
+                                map.value("primanota").toString().toLocal8Bit().constData());
+    AB_Transaction_SetPurpose(abTransaction,
+                              map.value("purpose").toString().toLocal8Bit().constData());
+    AB_Transaction_SetCategory(abTransaction,
+                               map.value("category").toString().toLocal8Bit().constData());
     AB_Transaction_SetCustomerReference(
-        abTransaction, map["customer_reference"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("customer_reference").toString().toLocal8Bit().constData());
     AB_Transaction_SetBankReference(abTransaction,
-                                    map["bank_reference"].toString().toLocal8Bit().constData());
+                                    map.value("bank_reference").toString().toLocal8Bit().constData());
     AB_Transaction_SetEndToEndReference(
-        abTransaction, map["end_to_end_reference"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("end_to_end_reference").toString().toLocal8Bit().constData());
     AB_Transaction_SetCreditorSchemeId(
-        abTransaction, map["creditor_scheme_id"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("creditor_scheme_id").toString().toLocal8Bit().constData());
     AB_Transaction_SetOriginatorId(abTransaction,
-                                   map["originator_id"].toString().toLocal8Bit().constData());
+                                   map.value("originator_id").toString().toLocal8Bit().constData());
     AB_Transaction_SetMandateId(abTransaction,
-                                map["mandate_id"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetMandateDate(abTransaction, Private::fromDate(map["mandate_date"].toDate()));
+                                map.value("mandate_id").toString().toLocal8Bit().constData());
+    AB_Transaction_SetMandateDate(abTransaction,
+                                  Private::fromDate(map.value("mandate_date").toDate()));
     AB_Transaction_SetMandateDebitorName(
-        abTransaction, map["mandate_debitor_name"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetOriginalCreditorSchemeId(
-        abTransaction, map["original_creditor_scheme_id"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("mandate_debitor_name").toString().toLocal8Bit().constData());
+    AB_Transaction_SetOriginalCreditorSchemeId(abTransaction,
+                                               map.value("original_creditor_scheme_id")
+                                                   .toString()
+                                                   .toLocal8Bit()
+                                                   .constData());
     AB_Transaction_SetOriginalMandateId(
-        abTransaction, map["original_mandate_id"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("original_mandate_id").toString().toLocal8Bit().constData());
     AB_Transaction_SetOriginalCreditorName(
-        abTransaction, map["original_creditor_name"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetSequence(abTransaction, (TransactionSequence) map["sequence"].toInt());
-    AB_Transaction_SetCharge(abTransaction, (TransactionCharge) map["charge"].toInt());
+        abTransaction, map.value("original_creditor_name").toString().toLocal8Bit().constData());
+    AB_Transaction_SetSequence(abTransaction, (TransactionSequence) map.value("sequence").toInt());
+    AB_Transaction_SetCharge(abTransaction, (TransactionCharge) map.value("charge").toInt());
     AB_Transaction_SetRemoteAddrStreet(
-        abTransaction, map["remote_addr_street"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("remote_addr_street").toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteAddrZipcode(
-        abTransaction, map["remote_addr_zipcode"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrCity(abTransaction,
-                                     map["remote_addr_city"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrPhone(abTransaction,
-                                      map["remote_addr_phone"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetPeriod(abTransaction, (TransactionPeriod) map["period"].toInt());
-    AB_Transaction_SetCycle(abTransaction, map["cycle"].toUInt());
-    AB_Transaction_SetExecutionDay(abTransaction, map["execution_day"].toUInt());
-    AB_Transaction_SetFirstDate(abTransaction, Private::fromDate(map["first_date"].toDate()));
-    AB_Transaction_SetLastDate(abTransaction, Private::fromDate(map["last_date"].toDate()));
-    AB_Transaction_SetNextDate(abTransaction, Private::fromDate(map["next_date"].toDate()));
-    AB_Transaction_SetUnitId(abTransaction, map["unit_id"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetUnitIdNameSpace(abTransaction,
-                                      map["unit_id_name_space"].toString().toLocal8Bit().constData());
+        abTransaction, map.value("remote_addr_zipcode").toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteAddrCity(
+        abTransaction, map.value("remote_addr_city").toString().toLocal8Bit().constData());
+    AB_Transaction_SetRemoteAddrPhone(
+        abTransaction, map.value("remote_addr_phone").toString().toLocal8Bit().constData());
+    AB_Transaction_SetPeriod(abTransaction, (TransactionPeriod) map.value("period").toInt());
+    AB_Transaction_SetCycle(abTransaction, map.value("cycle").toUInt());
+    AB_Transaction_SetExecutionDay(abTransaction, map.value("execution_day").toUInt());
+    AB_Transaction_SetFirstDate(abTransaction, Private::fromDate(map.value("first_date").toDate()));
+    AB_Transaction_SetLastDate(abTransaction, Private::fromDate(map.value("last_date").toDate()));
+    AB_Transaction_SetNextDate(abTransaction, Private::fromDate(map.value("next_date").toDate()));
+    AB_Transaction_SetUnitId(abTransaction,
+                             map.value("unit_id").toString().toLocal8Bit().constData());
+    AB_Transaction_SetUnitIdNameSpace(
+        abTransaction, map.value("unit_id_name_space").toString().toLocal8Bit().constData());
     AB_Transaction_SetTickerSymbol(abTransaction,
-                                   map["ticker_symbol"].toString().toLocal8Bit().constData());
+                                   map.value("ticker_symbol").toString().toLocal8Bit().constData());
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map["units"].toDouble());
+    AB_Value_SetValueFromDouble(value, map.value("units").toDouble());
     AB_Transaction_SetUnits(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map["unit_price_value"].toDouble());
+    AB_Value_SetValueFromDouble(value, map.value("unit_price_value").toDouble());
     AB_Transaction_SetUnitPriceValue(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
-    AB_Transaction_SetUnitPriceDate(abTransaction, Private::fromDate(map["unit_price_date"].toDate()));
+    AB_Transaction_SetUnitPriceDate(abTransaction,
+                                    Private::fromDate(map.value("unit_price_date").toDate()));
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map["commission_value"].toDouble());
+    AB_Value_SetValueFromDouble(value, map.value("commission_value").toDouble());
     AB_Transaction_SetCommissionValue(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
-    AB_Transaction_SetMemo(abTransaction, map["memo"].toString().toLocal8Bit().constData());
-    AB_Transaction_SetHash(abTransaction, map["hash"].toString().toLocal8Bit().constData());
+    AB_Transaction_SetMemo(abTransaction, map.value("memo").toString().toLocal8Bit().constData());
+    AB_Transaction_SetHash(abTransaction, map.value("hash").toString().toLocal8Bit().constData());
 
-    const auto transaction = new Transaction(abTransaction);
+    auto transaction = std::make_shared<Transaction>(abTransaction);
 
     AB_Transaction_free(abTransaction);
     abTransaction = nullptr;

@@ -33,7 +33,7 @@
 #include <aqbanking/gui/abgui.h>
 #include <aqbanking/types/account_spec.h>
 
-#include <QtWidgets/QApplication>
+#include <utility>
 
 #ifndef AB_SUCCESS
 #define AB_SUCCESS GWEN_SUCCESS
@@ -48,12 +48,13 @@ using namespace olbaflinx::core::banking;
 class Banking::Private
 {
 public:
-    explicit Private(Banking *banking)
+    explicit Private(Banking *banking, ApplicationInfo applicationInfo)
         : gwenGui(nullptr)
         , qtGui(nullptr)
         , aqBanking(nullptr)
         , m_isInitialized(false)
         , m_chipCardClient(nullptr)
+        , m_applicationInfo(std::move(applicationInfo))
         , q_ptr(banking)
     {}
 
@@ -100,9 +101,10 @@ public:
 
         AB_Gui_Extend(gwenGui, aqBanking);
 
-        m_chipCardClient
-            = LC_Client_new(QApplication::applicationName().toLocal8Bit().constData(),
-                            QApplication::applicationVersion().toLocal8Bit().constData());
+        const QByteArray local8BitAppName = m_applicationInfo.name.toLocal8Bit();
+        const QByteArray local8BitAppVersion = m_applicationInfo.version.toLocal8Bit();
+        m_chipCardClient = LC_Client_new(local8BitAppName.constData(),
+                                         local8BitAppVersion.constData());
 
         LC_Client_Init(m_chipCardClient);
 
@@ -152,7 +154,7 @@ public:
         }
 
         auto setupDialog = AB_Banking_CreateSetupDialog(aqBanking);
-        auto dialogTitle = tr("%1 Account Setup").arg(QApplication::applicationName()).toLocal8Bit();
+        auto dialogTitle = tr("%1 Account Setup").arg(m_applicationInfo.name).toLocal8Bit();
 
         GWEN_Dialog_SetCharProperty(setupDialog,
                                     nullptr,
@@ -169,7 +171,7 @@ public:
         return result;
     }
 
-    QList<BankingItem *> accounts(const AB_ACCOUNT_SPEC_LIST *list)
+    BankingItems accounts(const AB_ACCOUNT_SPEC_LIST *list)
     {
         auto specList = AB_AccountSpec_List_dup(list);
         const auto totalAccounts = AB_AccountSpec_List_GetCount(specList);
@@ -179,11 +181,11 @@ public:
         }
 
         quint32 index = 0;
-        auto accountList = QList<BankingItem *>();
+        auto accountList = BankingItems();
 
         auto accountSpec = AB_AccountSpec_List_First(specList);
         while (accountSpec) {
-            accountList.append(new Account(accountSpec));
+            accountList.append(std::make_shared<Account>(accountSpec));
             accountSpec = AB_AccountSpec_List_Next(accountSpec);
 
             const auto percentage = index * 100.0 / totalAccounts;
@@ -197,9 +199,9 @@ public:
 
         std::sort(accountList.begin(),
                   accountList.end(),
-                  [](const BankingItem *first, const BankingItem *second) {
-                      return ((Account *) first)->accountName()
-                             < ((Account *) second)->accountName();
+                  [](const BankingItemPtr &first, const BankingItemPtr &second) {
+                      return std::static_pointer_cast<Account>(first)->accountName()
+                             < std::static_pointer_cast<Account>(second)->accountName();
                   });
 
         return accountList;
@@ -212,18 +214,22 @@ public:
 private:
     bool m_isInitialized;
     LC_CLIENT *m_chipCardClient;
+    ApplicationInfo m_applicationInfo;
 
     friend class Banking;
     Banking *q_ptr;
 };
 
-Banking::Banking(QObject *parent)
+Banking::Banking(ApplicationInfo applicationInfo, QObject *parent)
     : QObject(parent)
 {
-    d_ptr = new Private(this);
+    d_ptr = new Private(this, std::move(applicationInfo));
 }
 
-Banking::~Banking() = default;
+Banking::~Banking()
+{
+    delete d_ptr;
+}
 
 bool Banking::initialize(const QString &name, const QString &version, const QString &key)
 {
@@ -269,9 +275,6 @@ void Banking::accounts()
     }
 
     Q_EMIT itemsReceived(accounts);
-
-    qDeleteAll(accounts);
-    accounts.clear();
 
     Q_EMIT finished();
 }

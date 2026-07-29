@@ -39,11 +39,26 @@ typedef AB_TRANSACTION_SEQUENCE TransactionSequence;
 typedef AB_TRANSACTION_CHARGE TransactionCharge;
 typedef AB_TRANSACTION_PERIOD TransactionPeriod;
 
+/**
+ * @brief Ein Umsatz eines Kontos.
+ *
+ * Eigentum: Der Erzeuger besitzt die Instanz. Aus der Datenbank gelesene
+ * Umsaetze entstehen ueber fromMap und werden als BankingItemPtr weitergereicht.
+ */
 class OLBAFLINX_CORE_EXPORT Transaction : public BankingItem
 {
 public:
     explicit Transaction(const AB_TRANSACTION *transaction = Q_NULLPTR);
     ~Transaction() override;
+
+    /**
+     * @brief Erzeugt einen Umsatz aus den Spaltenwerten einer Datenbankzeile.
+     *
+     * @param map Spaltenwerte der Zeile.
+     *
+     * @return Der neue Umsatz.
+     */
+    [[nodiscard]] static std::shared_ptr<Transaction> fromMap(const QMap<QString, QVariant> &map);
 
     [[nodiscard]] TransactionType type() const;
     [[nodiscard]] TransactionSubType subType() const;
@@ -120,7 +135,6 @@ public:
 
     [[nodiscard]] QString calculateTransactionHash() const;
 
-    [[nodiscard]] BankingItem *create(QMap<QString, QVariant> &map) const override;
     [[nodiscard]] bool isValid() const override;
     [[nodiscard]] QString toString() const override;
     [[nodiscard]] QMap<QString, QVariant> toMap() const override;

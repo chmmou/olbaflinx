@@ -17,13 +17,11 @@
 
 #pragma once
 
-#include "core/OlbaFlinxCore.h"
-
 #include <QtCore/QString>
 
 namespace olbaflinx::ui::themes {
 
-struct OLBAFLINX_CORE_EXPORT ThemeManagerIconNames
+struct ThemeManagerIconNames
 {
     inline static const QString Activity = "activity";
     inline static const QString Airplay = "airplay";

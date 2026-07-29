@@ -23,7 +23,6 @@ set(LIBCHIPCARD_MIN_VERSION 5.1)
 
 include(GNUInstallDirs)
 find_package(PkgConfig REQUIRED)
-find_package(qtadvanceddocking-qt6 REQUIRED)
 
 pkg_check_modules(PKG_GWENHYWFAR REQUIRED IMPORTED_TARGET gwenhywfar>=${GWENHYWFAR_MIN_VERSION})
 pkg_check_modules(PKG_GWENHYWFAR_QT REQUIRED IMPORTED_TARGET gwengui-qt6>=${GWENGUI_QT_MIN_VERSION})
@@ -40,7 +39,7 @@ qt_add_resources(CORE_RESOURCES ${OLBAFLINX_RES_DIR}/OlbaFlinxCore.qrc)
 
 qt_add_library(OlbaFlinxCore STATIC
         core/OlbaFlinxCore.h
-        core/Singleton.h
+        core/ApplicationInfo.h
         core/Banking/Banking.cpp
         core/Banking/Banking.h
         core/Banking/BankingItem.h
@@ -81,10 +80,6 @@ target_link_libraries(OlbaFlinxCore
         Qt6::Concurrent
         Qt6::Network
         Qt6::Xml
-        # Storage und Banking greifen noch auf QApplication zu. Solange das so ist,
-        # bleiben beide Module an core.
-        Qt6::Gui
-        Qt6::Widgets
         PkgConfig::PKG_GWENHYWFAR_QT
         PkgConfig::PKG_LIBCHIPCARD_CLIENT
 )
@@ -100,6 +95,59 @@ target_compile_options(OlbaFlinxCore PRIVATE ${OLBAFLINX_WARNINGS})
 
 install(TARGETS OlbaFlinxCore
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+# ----------------------------------------------------------------------------
+# OlbaFlinxUi, GPLv3, see src/ui/LICENSE
+#
+# Eigenes Ziel, damit die Praesentationsmodelle und die Dialoge von den Tests
+# gelinkt werden koennen. Ein add_executable ist dafuer nicht linkbar.
+# ----------------------------------------------------------------------------
+
+qt_add_library(OlbaFlinxUi STATIC
+        ui/App.cpp
+        ui/App.h
+        ui/App.ui
+        ui/AppCentralWidget.cpp
+        ui/AppCentralWidget.h
+        ui/AppCentralWidget.ui
+        ui/Assistant/SetupAssistant.cpp
+        ui/Assistant/SetupAssistant.h
+        ui/Assistant/SetupAssistant.ui
+        ui/Assistant/ImExportAssistant.ui
+        ui/Assistant/Pages/OptionBankingPage.cpp
+        ui/Assistant/Pages/OptionBankingPage.h
+        ui/Assistant/Pages/OptionBankingPage.ui
+        ui/Models/AccountListModel.cpp
+        ui/Models/AccountListModel.h
+        ui/Models/TransactionListModel.cpp
+        ui/Models/TransactionListModel.h
+        ui/Storage/NewStorageDialog.cpp
+        ui/Storage/NewStorageDialog.h
+        ui/Storage/NewStorageDialog.ui
+        ui/Storage/NewStorageItem.cpp
+        ui/Storage/NewStorageItem.h
+        ui/Storage/NewStorageItem.ui
+        ui/Storage/StorageDialog.cpp
+        ui/Storage/StorageDialog.h
+        ui/Themes/ThemeManager.cpp
+        ui/Themes/ThemeManager.h
+        ui/Themes/ThemeManagerIconNames.h
+)
+
+add_library(OlbaFlinxUi::OlbaFlinxUi ALIAS OlbaFlinxUi)
+
+target_compile_definitions(OlbaFlinxUi PRIVATE ${OLBAFLINX_QT_DEPRECATION})
+target_compile_options(OlbaFlinxUi PRIVATE ${OLBAFLINX_WARNINGS})
+
+target_link_libraries(OlbaFlinxUi
+        PUBLIC
+        OlbaFlinxCore::OlbaFlinxCore
+        Qt6::Widgets
+        PRIVATE
+        Qt6::Gui
+        Qt6::Svg
+        ads::qtadvanceddocking-qt6
 )
 
 # ----------------------------------------------------------------------------
@@ -122,30 +170,6 @@ qt6_create_translation(APP_GENERATED_TS ${CMAKE_CURRENT_SOURCE_DIR} ${APP_TS_FIL
 
 qt_add_executable(OlbaFlinxApp
         main.cpp
-        ui/App.cpp
-        ui/App.h
-        ui/App.ui
-        ui/AppCentralWidget.cpp
-        ui/AppCentralWidget.h
-        ui/AppCentralWidget.ui
-        ui/Assistant/SetupAssistant.cpp
-        ui/Assistant/SetupAssistant.h
-        ui/Assistant/SetupAssistant.ui
-        ui/Assistant/ImExportAssistant.ui
-        ui/Assistant/Pages/OptionBankingPage.cpp
-        ui/Assistant/Pages/OptionBankingPage.h
-        ui/Assistant/Pages/OptionBankingPage.ui
-        ui/Storage/NewStorageDialog.cpp
-        ui/Storage/NewStorageDialog.h
-        ui/Storage/NewStorageDialog.ui
-        ui/Storage/NewStorageItem.cpp
-        ui/Storage/NewStorageItem.h
-        ui/Storage/NewStorageItem.ui
-        ui/Storage/StorageDialog.cpp
-        ui/Storage/StorageDialog.h
-        ui/Themes/ThemeManager.cpp
-        ui/Themes/ThemeManager.h
-        ui/Themes/ThemeManagerIconNames.h
         ${APP_RESOURCES}
         ${APP_GENERATED_TS}
 )
@@ -160,11 +184,9 @@ target_compile_definitions(OlbaFlinxApp PRIVATE
 target_compile_options(OlbaFlinxApp PRIVATE ${OLBAFLINX_WARNINGS})
 
 target_link_libraries(OlbaFlinxApp PRIVATE
-        OlbaFlinxCore::OlbaFlinxCore
+        OlbaFlinxUi::OlbaFlinxUi
         Qt6::Help
-        Qt6::Svg
         Qt6::Widgets
-        ads::qtadvanceddocking-qt6
 )
 
 install(TARGETS OlbaFlinxApp DESTINATION bin)

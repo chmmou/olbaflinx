@@ -17,6 +17,7 @@
 
 #include "core/Banking/Account/Account.h"
 
+#include "core/ApplicationInfo.h"
 #include "core/Storage/Storage.h"
 
 #include "BaseTest.h"
@@ -46,6 +47,13 @@ private:
     QString storageFile;
     QString storagePassword;
 
+    static ApplicationInfo applicationInfo()
+    {
+        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
+                QStringLiteral("OlbaFlinx"),
+                QStringLiteral("1.0.0")};
+    }
+
 private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
@@ -64,6 +72,9 @@ StorageTest::StorageTest()
     : storageFile(QDir::tempPath().append("/olbaflinx_test.obfx"))
     , storagePassword("M'yF13\"stP\\$44W0$3d/")
 {
+    // Haelt QSettings aus der Konfiguration des Benutzers heraus.
+    QStandardPaths::setTestModeEnabled(true);
+
     QCoreApplication::setApplicationName("OlbaFlinx");
     QCoreApplication::setApplicationVersion("1.0.0");
     QCoreApplication::setOrganizationName("de.chm-projects.olbaflinx.test");
@@ -81,8 +92,6 @@ void StorageTest::initTestCase()
 
 void StorageTest::cleanupTestCase()
 {
-    Storage::instance()->close();
-
     if (QFile::exists(storageFile)) {
         QFile::remove(storageFile);
     }
@@ -93,33 +102,33 @@ void StorageTest::cleanupTestCase()
 
 void StorageTest::testInitializingWithoutData()
 {
-    auto storage = Storage::instance();
-    storage->close();
-    QVERIFY(!storage->isValid());
+    Storage storage(applicationInfo());
+    storage.close();
+    QVERIFY(!storage.isValid());
 }
 
 void StorageTest::testInitializingWithNoStorageFile()
 {
-    auto storage = Storage::instance();
-    storage->setKey(storagePassword);
-    storage->setStorageFile("");
-    (void) storage->initialize(true);
+    Storage storage(applicationInfo());
+    storage.setKey(storagePassword);
+    storage.setStorageFile("");
+    (void) storage.initialize(true);
 
-    QVERIFY(!storage->isValid());
-    storage->close();
+    QVERIFY(!storage.isValid());
+    storage.close();
 }
 
 void StorageTest::testInitializingWithNoPassword()
 {
     auto tmpStorage = QDir::tempPath().append("/testInitializingWithNoPassword.obfx");
-    auto storage = Storage::instance();
+    Storage storage(applicationInfo());
 
-    storage->setKey("");
-    storage->setStorageFile(tmpStorage);
-    (void) storage->initialize(true);
+    storage.setKey("");
+    storage.setStorageFile(tmpStorage);
+    (void) storage.initialize(true);
 
-    QVERIFY(!storage->isValid());
-    storage->close();
+    QVERIFY(!storage.isValid());
+    storage.close();
 
     bool removed = QFile(tmpStorage).remove();
     QVERIFY(removed);
@@ -128,15 +137,15 @@ void StorageTest::testInitializingWithNoPassword()
 void StorageTest::testInitializing()
 {
     const auto tmpStorage = QDir::tempPath().append("/testInitializing.obfx");
-    const auto storage = Storage::instance();
+    Storage storage(applicationInfo());
 
-    storage->setKey(storagePassword);
-    storage->setStorageFile(tmpStorage);
+    storage.setKey(storagePassword);
+    storage.setStorageFile(tmpStorage);
 
-    (void) storage->initialize(true);
+    (void) storage.initialize(true);
 
-    QVERIFY(storage->isValid());
-    storage->close();
+    QVERIFY(storage.isValid());
+    storage.close();
 
     const bool removed = QFile(tmpStorage).remove();
     QVERIFY(removed);
@@ -145,30 +154,30 @@ void StorageTest::testInitializing()
 void StorageTest::testChangePassword()
 {
     auto tmpStorage = QDir::tempPath().append("/testChangePassword.obfx");
-    auto storage = Storage::instance();
-    storage->setKey(storagePassword);
-    storage->setStorageFile(tmpStorage);
+    Storage storage(applicationInfo());
+    storage.setKey(storagePassword);
+    storage.setStorageFile(tmpStorage);
 
-    (void) storage->initialize(true);
+    (void) storage.initialize(true);
 
-    bool changed = storage->changeKey(storagePassword,
-                                      "eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
+    bool changed = storage.changeKey(storagePassword,
+                                     "eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
     QVERIFY(changed);
-    storage->close();
+    storage.close();
 
-    storage->setKey(storagePassword);
-    storage->setStorageFile(tmpStorage);
+    storage.setKey(storagePassword);
+    storage.setStorageFile(tmpStorage);
 
-    (void) storage->initialize(true);
+    (void) storage.initialize(true);
 
-    QVERIFY(!storage->isValid());
+    QVERIFY(!storage.isValid());
 
-    storage->setKey("eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
-    storage->setStorageFile(tmpStorage);
+    storage.setKey("eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
+    storage.setStorageFile(tmpStorage);
 
-    (void) storage->initialize(true);
-    QVERIFY(storage->isValid());
-    storage->close();
+    (void) storage.initialize(true);
+    QVERIFY(storage.isValid());
+    storage.close();
 
     bool removed = QFile(tmpStorage).remove();
     QVERIFY(removed);
@@ -176,24 +185,24 @@ void StorageTest::testChangePassword()
 
 void StorageTest::testStoreSettingWithEmptyStorageFilePath()
 {
-    auto storage = Storage::instance();
-    storage->storeSetting("Paths", QStringList(), "Vaults");
+    Storage storage(applicationInfo());
+    storage.storeSetting("Paths", QStringList(), "Vaults");
 
-    auto vaults = storage->setting("Paths", "Vaults", QStringList()).toStringList();
+    auto vaults = storage.setting("Paths", "Vaults", QStringList()).toStringList();
 
     QCOMPARE(vaults.size(), 0);
 }
 
 void StorageTest::testStoreSettingWithStorageFilePath()
 {
-    auto storage = Storage::instance();
+    Storage storage(applicationInfo());
 
     QStringList vaults;
     vaults << "/tmp/test1" << "/tmp/test2";
 
-    storage->storeSetting("Paths", vaults, "Vaults");
+    storage.storeSetting("Paths", vaults, "Vaults");
 
-    vaults = storage->setting("Paths", "Vaults", QStringList()).toStringList();
+    vaults = storage.setting("Paths", "Vaults", QStringList()).toStringList();
 
     QCOMPARE(vaults.size(), 2);
     QCOMPARE(vaults.at(0), "/tmp/test1");
@@ -207,16 +216,16 @@ void StorageTest::testStoreItems()
     QFile(tmpStorage).remove();
     //QVERIFY(removed);
 
-    auto storage = Storage::instance();
+    Storage storage(applicationInfo());
 
-    QSignalSpy spyItem(storage, &Storage::itemsReceived);
-    QSignalSpy spyFinished(storage, &Storage::finished);
+    QSignalSpy spyItem(&storage, &Storage::itemsReceived);
+    QSignalSpy spyFinished(&storage, &Storage::finished);
 
-    storage->setKey(storagePassword);
-    storage->setStorageFile(tmpStorage);
+    storage.setKey(storagePassword);
+    storage.setStorageFile(tmpStorage);
 
-    (void) storage->initialize(true);
-    QVERIFY(storage->isValid());
+    (void) storage.initialize(true);
+    QVERIFY(storage.isValid());
 
     const auto account1 = BaseTest::createFakeAccount();
     QVERIFY(account1->isValid());
@@ -224,10 +233,10 @@ void StorageTest::testStoreItems()
     const auto account2 = BaseTest::createFakeAccount();
     QVERIFY(account2->isValid());
 
-    (void) storage->storeItem(account1);
-    (void) storage->storeItem(account2);
+    (void) storage.storeItem(account1.get());
+    (void) storage.storeItem(account2.get());
 
-    storage->receiveItems(Storage::StorageAccount);
+    storage.receiveItems(Storage::StorageAccount);
     // Make sure the signal was emitted exactly one time
     QCOMPARE(spyItem.count(), 1);
 
@@ -235,15 +244,15 @@ void StorageTest::testStoreItems()
     QCOMPARE(spyFinished.count(), 3);
 
     auto arguments = spyItem.takeFirst(); // take the first signal
-    auto list = qvariant_cast<QList<BankingItem *>>(arguments[0]);
+    auto list = qvariant_cast<BankingItems>(arguments[0]);
     QCOMPARE(list.size(), 2);
 
-    storage->close();
+    // Der Empfaenger besitzt die Datensaetze. Sie muessen den Ruecklauf aus dem
+    // Signal ueberleben; frueher gab Storage sie unmittelbar danach frei.
+    QVERIFY(list.at(0) != nullptr);
+    QVERIFY(!list.at(0)->itemType().isEmpty());
 
-    storage->deleteLater();
-
-    delete account1;
-    delete account2;
+    storage.close();
 }
 
 } // namespace olbaflinx::core::storage::tests

@@ -29,7 +29,7 @@ public:
     explicit Private(const AB_ACCOUNT_SPEC *accountSpec, double balance)
         : abBalance(balance)
         , abAccountSpec(AB_AccountSpec_dup(accountSpec))
-    { }
+    {}
 
     ~Private()
     {
@@ -46,7 +46,7 @@ public:
 Account::Account(const AB_ACCOUNT_SPEC *accountSpec, double balance)
     : BankingItem()
     , d_ptr(new Private(accountSpec ?: AB_AccountSpec_new(), balance))
-{ }
+{}
 
 Account::~Account()
 {
@@ -210,37 +210,37 @@ TransactionLimits *Account::transactionLimitsForCommand(const TransactionCommand
     return AB_AccountSpec_GetTransactionLimitsForCommand(d_ptr->abAccountSpec, cmd);
 }
 
-BankingItem *Account::create(QMap<QString, QVariant> &map) const
+std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
 {
     if (map.isEmpty()) {
-        return nullptr;
+        return {};
     }
 
     auto accountSpec = AB_AccountSpec_new();
 
-    const auto backendName = map[":backend_name"].toString();
-    const auto ownerName = map[":owner_name"].toString();
-    const auto accountName = map[":account_name"].toString();
-    const auto currency = map[":currency"].toString();
-    const auto memo = map[":memo"].toString();
-    const auto iban = map[":iban"].toString();
-    const auto bic = map[":bic"].toString();
-    const auto country = map[":country"].toString();
-    const auto bankCode = map[":bank_code"].toString();
-    const auto bankName = map[":bank_name"].toString();
-    const auto branchId = map[":branch_id"].toString();
-    const auto accountNumber = map[":account_number"].toString();
-    const auto subAccountNumber = map[":sub_account_number"].toString();
-    const auto balance = map[":balance"].toDouble();
+    const auto backendName = map.value(":backend_name").toString();
+    const auto ownerName = map.value(":owner_name").toString();
+    const auto accountName = map.value(":account_name").toString();
+    const auto currency = map.value(":currency").toString();
+    const auto memo = map.value(":memo").toString();
+    const auto iban = map.value(":iban").toString();
+    const auto bic = map.value(":bic").toString();
+    const auto country = map.value(":country").toString();
+    const auto bankCode = map.value(":bank_code").toString();
+    const auto bankName = map.value(":bank_name").toString();
+    const auto branchId = map.value(":branch_id").toString();
+    const auto accountNumber = map.value(":account_number").toString();
+    const auto subAccountNumber = map.value(":sub_account_number").toString();
+    const auto balance = map.value(":balance").toDouble();
 
     auto refAccounts = ReferenceAccounts();
 
-    if (map[":refAccounts"].canConvert<ReferenceAccounts>()) {
-        refAccounts = qvariant_cast<ReferenceAccounts>(map[":refAccounts"]);
+    if (map.value(":refAccounts").canConvert<ReferenceAccounts>()) {
+        refAccounts = qvariant_cast<ReferenceAccounts>(map.value(":refAccounts"));
     }
 
-    AB_AccountSpec_SetType(accountSpec, map[":type"].toInt());
-    AB_AccountSpec_SetUniqueId(accountSpec, map[":uniqueId"].toInt());
+    AB_AccountSpec_SetType(accountSpec, map.value(":type").toInt());
+    AB_AccountSpec_SetUniqueId(accountSpec, map.value(":uniqueId").toInt());
     AB_AccountSpec_SetBackendName(accountSpec, backendName.toLocal8Bit().constData());
     AB_AccountSpec_SetOwnerName(accountSpec, ownerName.toLocal8Bit().constData());
     AB_AccountSpec_SetAccountName(accountSpec, accountName.toLocal8Bit().constData());
@@ -295,7 +295,7 @@ BankingItem *Account::create(QMap<QString, QVariant> &map) const
     qDeleteAll(refAccounts);
     refAccounts.clear();
 
-    const auto account = new Account(accountSpec, balance);
+    auto account = std::make_shared<Account>(accountSpec, balance);
 
     AB_AccountSpec_free(accountSpec);
 

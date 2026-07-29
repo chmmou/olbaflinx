@@ -45,8 +45,8 @@ using namespace olbaflinx::core::storage;
 class StorageDialog::Private
 {
 public:
-    explicit Private(StorageDialog *storageDialog)
-        : storage(Storage::instance())
+    explicit Private(StorageDialog *storageDialog, Storage *dialogStorage)
+        : storage(dialogStorage)
         , q_ptr(storageDialog)
         , app(nullptr)
         , scrollAreaSpacerTop(nullptr)
@@ -58,11 +58,9 @@ public:
         q_ptr->setMinimumSize(QSize(930, 646));
     }
 
-    ~Private()
-    {
-        storage->close();
-        storage->deleteLater();
-    }
+    // Der Datenspeicher gehoert dem Erzeuger des Dialogs. Wann er geschlossen
+    // wird, entscheidet die Anwendung, nicht ein Fenster.
+    ~Private() = default;
 
     void initialize(QMainWindow *window)
     {
@@ -172,7 +170,7 @@ public:
 private:
     void addStorageItem(const QString &title, const QString &fileName)
     {
-        auto storageItem = new NewStorageItem();
+        auto storageItem = new NewStorageItem(storage, q_ptr);
         storageItem->setTitle(title);
         storageItem->setFilePath(fileName);
 
@@ -209,20 +207,20 @@ private:
                     }
 
                     disconnect(storage, &Storage::itemsReceived, nullptr, nullptr);
-                    connect(storage,
-                            &Storage::itemsReceived,
-                            q_ptr,
-                            [&](const QList<BankingItem *> &items) {
-                                app->setAccounts(items);
-                            });
+                    connect(storage, &Storage::itemsReceived, q_ptr, [&](const BankingItems &items) {
+                        app->setAccounts(items);
+                    });
 
                     storage->receiveItems(Storage::StorageAccount);
                 });
 
+        // Der dritte Parameter traegt die Fehlermeldung. Sie bleibt hier
+        // vorerst ungenutzt und deshalb unbenannt; ihre Auswertung gehoert zur
+        // Fehlerbehandlung, die noch nicht steht.
         connect(storageItem,
                 &NewStorageItem::storageDeleted,
                 q_ptr,
-                [](bool success, NewStorageItem *item, const QString &errorMessage) {
+                [](bool success, NewStorageItem *item, const QString &) {
                     if (!success) {
                         return;
                     }
@@ -303,9 +301,9 @@ private:
     QLabel *storageInfoLabel;
 };
 
-StorageDialog::StorageDialog(QWidget *parent)
+StorageDialog::StorageDialog(Storage *storage, QWidget *parent)
     : QWidget(parent)
-    , d_ptr(new Private(this))
+    , d_ptr(new Private(this, storage))
 {}
 
 StorageDialog::~StorageDialog()
@@ -326,6 +324,11 @@ void StorageDialog::initialize(QMainWindow *window)
     }
 
     d_ptr->initialize(window);
+    d_ptr->loadStorageItems();
+}
+
+void StorageDialog::reload()
+{
     d_ptr->loadStorageItems();
 }
 

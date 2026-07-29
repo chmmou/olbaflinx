@@ -64,7 +64,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="652"/>
+        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="662"/>
         <source>Transaction %1 - %2 %3</source>
         <translation type="unfinished"></translation>
     </message>
@@ -367,22 +367,22 @@
 <context>
     <name>olbaflinx::core::banking::Banking</name>
     <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="155"/>
+        <location filename="../../src/core/Banking/Banking.cpp" line="157"/>
         <source>%1 Account Setup</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="246"/>
+        <location filename="../../src/core/Banking/Banking.cpp" line="252"/>
         <source>The backend for banking was not initialized!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="255"/>
+        <location filename="../../src/core/Banking/Banking.cpp" line="261"/>
         <source>No account list could be populated!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="266"/>
+        <location filename="../../src/core/Banking/Banking.cpp" line="272"/>
         <source>No accounts were found!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -390,12 +390,12 @@
 <context>
     <name>olbaflinx::core::storage::Storage</name>
     <message>
-        <location filename="../../src/core/Storage/Storage.cpp" line="526"/>
+        <location filename="../../src/core/Storage/Storage.cpp" line="522"/>
         <source>Not columns for store item found.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Storage/Storage.cpp" line="573"/>
+        <location filename="../../src/core/Storage/Storage.cpp" line="559"/>
         <source>No items found</source>
         <translation type="unfinished"></translation>
     </message>
@@ -403,12 +403,12 @@
 <context>
     <name>olbaflinx::ui::App</name>
     <message>
-        <location filename="../../src/ui/App.cpp" line="87"/>
+        <location filename="../../src/ui/App.cpp" line="86"/>
         <source>About %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/App.cpp" line="88"/>
+        <location filename="../../src/ui/App.cpp" line="87"/>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;Multibank-capable online banking software for Linux.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%3&quot;&gt;%3&lt;/a&gt;&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -502,27 +502,27 @@ This can not be undone!</source>
 <context>
     <name>olbaflinx::ui::storage::StorageDialog</name>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="96"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="94"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="187"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="185"/>
         <source>Created on %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="205"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="203"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="206"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="204"/>
         <source>Your data vault is corrupted and or not readable / writeable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="287"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="285"/>
         <source>&lt;h1&gt;Welcome to OlbaFlinx&lt;/h1&gt;&lt;p&gt;Click the plus sign or type Ctrl+N to create a new data storage.&lt;/p&gt;&lt;p&gt;You can create as many vaults as you like, each with its own password, e.g. for different user and or accounts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>

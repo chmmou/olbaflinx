@@ -19,9 +19,8 @@
 
 #include "core/OlbaFlinxCore.h"
 
+#include "core/ApplicationInfo.h"
 #include "core/Banking/BankingItem.h"
-
-#include "core/Singleton.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QRegularExpression>
@@ -31,12 +30,24 @@ using namespace olbaflinx::core::banking;
 
 namespace olbaflinx::core::storage {
 
-class OLBAFLINX_CORE_EXPORT Storage : public QObject, public Singleton<Storage>
+/**
+ * @brief Der verschluesselte Datenspeicher der Anwendung samt Einstellungen.
+ *
+ * Eigentum: Der Erzeuger besitzt die Instanz. Wird ein Parent gesetzt, gibt
+ * dieser sie frei, sonst der umgebende Geltungsbereich. Die ueber
+ * itemsReceived gemeldeten Datensaetze gehen in das Eigentum des Empfaengers
+ * ueber; Storage haelt sie danach nicht mehr.
+ */
+class OLBAFLINX_CORE_EXPORT Storage : public QObject
 {
     Q_OBJECT
-    friend class Singleton<Storage>;
 
 public:
+    /**
+     * @param applicationInfo Kenndaten fuer den Einstellungs- und Ablagepfad.
+     * @param parent Optionaler Eigentuemer.
+     */
+    explicit Storage(ApplicationInfo applicationInfo, QObject *parent = nullptr);
     ~Storage() override;
 
     /**
@@ -184,9 +195,9 @@ Q_SIGNALS:
     /**
      * @brief This signal is emitted when we have received one or more entries.
      *
-     * @param items
+     * @param items Die gelesenen Datensaetze. Der Empfaenger uebernimmt sie.
      */
-    void itemsReceived(const QList<BankingItem *> &items);
+    void itemsReceived(const BankingItems &items);
 
     /**
      * @brief The signal that is emitted if any progress changed
@@ -200,9 +211,7 @@ Q_SIGNALS:
      */
     void finished();
 
-protected:
-    Storage();
-
+private:
     class Private;
     Private *d_ptr;
 

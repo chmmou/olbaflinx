@@ -19,16 +19,17 @@
 
 #include "ui_SetupAssistant.h"
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::ui::assistant;
 
 class SetupAssistant::Private
 {
 public:
-    explicit Private(SetupAssistant *assistant)
+    explicit Private(SetupAssistant *assistant, const ApplicationInfo &applicationInfo)
         : ui(new Ui::UiSetupAssistant)
     {
         ui->setupUi(assistant);
-        ui->bankingPage->initialize();
+        ui->bankingPage->initialize(applicationInfo);
     }
 
     ~Private() { delete ui; }
@@ -36,10 +37,12 @@ public:
     Ui::UiSetupAssistant *ui;
 };
 
-SetupAssistant::SetupAssistant(QWidget *parent, Qt::WindowFlags flags)
+SetupAssistant::SetupAssistant(const ApplicationInfo &applicationInfo,
+                               QWidget *parent,
+                               Qt::WindowFlags flags)
     : QWizard(parent, flags)
-    , d_ptr(new Private(this))
-{ }
+    , d_ptr(new Private(this, applicationInfo))
+{}
 
 SetupAssistant::~SetupAssistant()
 {

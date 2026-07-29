@@ -30,17 +30,9 @@ namespace olbaflinx::core::tests {
 class BaseTest
 {
 public:
-    static Account *createFakeAccount(const int accountType = 1)
+    static std::shared_ptr<Account> createFakeAccount(const int accountType = 1)
     {
-        auto map = createFakeAccountMap(accountType);
-
-        const auto acc = new Account();
-        const auto account = dynamic_cast<Account *>(acc->create(map));
-
-        delete acc;
-        map.clear();
-
-        return account;
+        return Account::fromMap(createFakeAccountMap(accountType));
     }
 
     static QMap<QString, QVariant> createFakeAccountMap(const int accountType = 1)
