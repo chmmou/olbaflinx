@@ -452,64 +452,64 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="132"/>
-        <source>Choose an secure password possible with at least 6 letters, numbers and special characters.</source>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="134"/>
+        <source>Choose an secure password possible with at least 12 letters, numbers and special characters.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="139"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="141"/>
         <source>Current Password</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="142"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="144"/>
         <source>New Password</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="161"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="163"/>
         <source>The current password cannot be empty!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="169"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="171"/>
         <source>The new password cannot be empty!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="179"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="181"/>
         <source>The password you have entered does not comply with the minimum guideline.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="193"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="195"/>
         <source>The storage could not be opened. Check the current password.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="203"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="205"/>
         <source>The current password is not correct!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="214"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="216"/>
         <source>The password could not be changed!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="236"/>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="273"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="238"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="275"/>
         <source>Storage</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="237"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="239"/>
         <source>Are you sure you want to delete your storage?
 This can not be undone!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="273"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="275"/>
         <source>Not implemented yet!</source>
         <translation type="unfinished"></translation>
     </message>

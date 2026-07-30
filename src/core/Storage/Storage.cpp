@@ -28,6 +28,7 @@
 #include <QtCore/QFile>
 #include <QtCore/QMetaEnum>
 #include <QtCore/QScopedPointer>
+#include <QtCore/QSet>
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QStringList>
@@ -51,28 +52,99 @@ using namespace olbaflinx::core::banking::transaction;
 namespace {
 
 /**
+ * The store is attacked offline, its file can be copied away. The pass phrase is
+ * the only thing left in the way of whoever holds the copy, so the lower bound
+ * sits above what a password prompt usually asks for. The upper bound exists
+ * because an unbounded length is an unchecked size, see QT-SEC-004.
+ */
+constexpr int MinPasswordLength = 12;
+constexpr int MaxPasswordLength = 128;
+
+/**
+ * The widest window a single read may open. Without a bound a caller could ask
+ * for INT_MAX rows and hold a whole table in memory at once. QT-SEC-004.
+ */
+constexpr int MaxItemsPerQuery = 1000;
+
+/**
  * Password regular expression
- *
- * /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!"§$%&\/()=?´`{}\[\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>])[A-Za-z\d!"§$%&\/()=?´`{}\[\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>]{6,}$/g
  *
  * At least one lower case English letter, a-z
  * At least one upper case English letter, A-Z
- * At least one lower umlaut case letter, öäü
- * At least one upper umlaut case letter, ÖÄÜ
  * At least one digit, 0-9
- * At least one of special character, !"§$%&/()=?´`{}[]\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>
- * Minimum six in length 6 (with the anchors)
+ * At least one special character out of the class below, umlauts among them
+ * Between MinPasswordLength and MaxPasswordLength characters, with the anchors
  *
  * The pattern is compiled once. It used to be a macro and was therefore built
  * anew on every password check.
  */
 const QRegularExpression &minPasswordPattern()
 {
+    // The hyphen stands last so that it counts as a literal. It used to sit
+    // between '#' and '_', where a character class reads it as a range from 0x23
+    // to 0x5F. That range covers every digit and every capital letter, so the
+    // fourth lookahead matched on those alone and asked for nothing.
+    //
+    // The backslash, 0x5C, sat inside that range and reached the class through
+    // it. With the range gone it has to stand on its own, which is what the
+    // escaped pair in front of the 'ß' is for.
+    //
+    // The class is interpolated into both places of the pattern rather than
+    // written out twice, so that the two cannot drift apart.
+    static const QString specialCharacters
+        = QStringLiteral("!\"§$%&/()=?´`{}\\[\\]\\\\ß@€~’*'+#_.:,;µöäüÖÄÜ<|>-");
+
     static const QRegularExpression pattern(
-        QStringLiteral("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!\"§$%&/"
-                       "()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>])[A-Za-z\\d!\"§$%&/"
-                       "()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>]{6,}$"));
+        QStringLiteral("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[%1])[A-Za-z\\d%1]{%2,%3}$")
+            .arg(specialCharacters)
+            .arg(MinPasswordLength)
+            .arg(MaxPasswordLength));
+
     return pattern;
+}
+
+/**
+ * Wraps the pass phrase into a SQL string literal. Inside such a literal SQLite
+ * knows exactly one special character, the single quote, and it is escaped by
+ * doubling it. Everything else passes through as UTF-8, umlauts included.
+ *
+ * Deviation from QT-SEC-050, recorded here per QT-MAINT-012: SQLite accepts no
+ * bound parameter in a PRAGMA. Verified against Qt 6.11.1 with SQLCipher 4.5.2,
+ * where prepare("PRAGMA key = :key") fails with `near ":key": syntax error`. The
+ * rule is met in substance, because the one character that could end the literal
+ * early is escaped here and no other can.
+ *
+ * This replaces a hand written escape routine that read every character through
+ * QChar::toLatin1. That call answers with a signed char on this platform, so its
+ * own range check for the upper half of Latin-1 could never be true and every
+ * character outside 32 to 126 fell through a bare default and was dropped from
+ * the key without a word.
+ */
+QString keyLiteral(const QString &key)
+{
+    QString escaped = key;
+    escaped.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+    return QLatin1Char('\'') + escaped + QLatin1Char('\'');
+}
+
+/**
+ * The tables the storage reads from. A table name cannot be bound, so a name is
+ * checked against this list before it reaches a statement. QT-SEC-051.
+ */
+bool isKnownTable(const QString &table)
+{
+    static const QSet<QString> knownTables = {
+        QStringLiteral("accounts"),
+        QStringLiteral("balances"),
+        QStringLiteral("categories"),
+        QStringLiteral("contacts"),
+        QStringLiteral("migrations"),
+        QStringLiteral("transaction_categories"),
+        QStringLiteral("transactions"),
+    };
+
+    return knownTables.contains(table);
 }
 
 constexpr auto AccountInsertQuery = QLatin1StringView(
@@ -303,7 +375,7 @@ public:
         }
 
         query = QSqlQuery(m_connection->database());
-        if (!query.exec(QStringLiteral("PRAGMA key='%1';").arg(escapeKey(m_key)))) {
+        if (!query.exec(QStringLiteral("PRAGMA key=") + keyLiteral(m_key) + QLatin1Char(';'))) {
             // The message of the driver can carry the key on this statement.
             // Only the file is named, never the reason verbatim.
             return Error(ErrorCode::PermissionDenied,
@@ -328,6 +400,11 @@ public:
 
     QMap<int, QString> tableColumns(const QString &table)
     {
+        if (!isKnownTable(table)) {
+            qCCritical(lcStorage) << "refusing to read the columns of the unknown table" << table;
+            return {};
+        }
+
         auto columnList = QMap<int, QString>();
 
         QSqlQuery query;
@@ -336,6 +413,8 @@ public:
             return {};
         }
 
+        // The table name is interpolated because SQL knows no binding for an
+        // identifier. It passed the list above, so it is one of ours.
         if (!query.exec(QStringLiteral("SELECT * FROM pragma_table_info('%1');").arg(table))) {
             qCCritical(lcStorage) << "could not read the columns of" << table
                                   << query.lastError().text();
@@ -356,14 +435,18 @@ public:
      */
     Result<int> windowedRowCount(const QString &table, int offset, int limit)
     {
+        if (!isKnownTable(table)) {
+            return Error(ErrorCode::InvalidInput,
+                         QStringLiteral("Unknown table %1").arg(table));
+        }
+
         QSqlQuery query;
         if (const auto error = openQuery(query); error.isError()) {
             return error;
         }
 
         // The table name is interpolated because SQL knows no binding for an
-        // identifier. It comes from a literal of this file, never from outside.
-        // The window is bound.
+        // identifier. It passed the list above. The window is bound.
         const auto statement
             = QStringLiteral(
                   "SELECT COUNT(*) FROM (SELECT 1 FROM %1 LIMIT :limit OFFSET :offset);")
@@ -385,41 +468,6 @@ public:
         }
 
         return query.value(0).toInt();
-    }
-
-    QString escapeKey(const QString &key)
-    {
-        QString result = {};
-
-        const qsizetype stringLength = key.length();
-        for (int a = 0; a < stringLength; ++a) {
-            const QChar strPart = key.at(a);
-            const int ascii = (int) strPart.toLatin1();
-
-            const bool noEscapeSeq = (strPart != '\'' && strPart != '"' && strPart != '\\');
-            const bool isValidAscii = ((ascii >= 32 && ascii <= 126)
-                                       || (ascii >= 128 && ascii <= 255));
-
-            if (noEscapeSeq && isValidAscii) {
-                result.append(strPart);
-            } else {
-                switch (ascii) {
-                case 34: /* ascii = " */
-                    result.append(QString(strPart).replace(strPart, QStringLiteral("\"")));
-                    break;
-                case 39: /* ascii = ' */
-                    result.append(QString(strPart).replace(strPart, QStringLiteral("''")));
-                    break;
-                case 92: /* ascii = \ */
-                    result.append(QString(strPart).replace(strPart, QStringLiteral("\\")));
-                    break;
-                default:
-                    break;
-                }
-            }
-        }
-
-        return result;
     }
 
     QSettings *settings()
@@ -550,7 +598,7 @@ Error Storage::changeKey(const QString &oldKey, const QString &newKey)
 
     d_ptr->setKey(newKey);
 
-    if (!query.exec(QStringLiteral("PRAGMA rekey='%1';").arg(d_ptr->escapeKey(newKey)))) {
+    if (!query.exec(QStringLiteral("PRAGMA rekey=") + keyLiteral(newKey) + QLatin1Char(';'))) {
         // Restores the state the caller handed us, so that a failed change does
         // not leave the storage holding a key it was never rekeyed to.
         d_ptr->setKey(oldKey);
@@ -713,6 +761,14 @@ void Storage::receiveItems(Type type, int offset, int limit)
         Q_EMIT finished();
     };
 
+    // The window used to travel into the statement unchecked. A negative offset
+    // or a limit of INT_MAX is not a query anyone meant to run. QT-SEC-004.
+    if (limit < 1 || limit > MaxItemsPerQuery || offset < 0) {
+        reportError(ErrorCode::InvalidInput,
+                    QStringLiteral("Invalid window: limit=%1 offset=%2").arg(limit).arg(offset));
+        return;
+    }
+
     auto table = QString();
     switch (type) {
     case Storage::StorageAccount:
@@ -748,7 +804,8 @@ void Storage::receiveItems(Type type, int offset, int limit)
     }
 
     // The table name is interpolated because SQL knows no binding for an
-    // identifier. It comes from the switch above, never from outside. The window
+    // identifier. It comes from the switch above and has passed the list in
+    // tableColumns, which answers empty for a name it does not know. The window
     // is bound.
     const auto statement = QStringLiteral("SELECT * FROM %1 LIMIT :limit OFFSET :offset;")
                                .arg(table);

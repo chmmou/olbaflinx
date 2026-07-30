@@ -38,6 +38,9 @@ add_test(NAME BankingTests COMMAND BankingTests)
 qt_add_executable(StorageErrorTests core/tst_storage_errors.cpp)
 add_test(NAME StorageErrorTests COMMAND StorageErrorTests)
 
+qt_add_executable(StorageKeyTests core/tst_storage_key.cpp)
+add_test(NAME StorageKeyTests COMMAND StorageKeyTests)
+
 qt_add_executable(AppErrorHandlingTests ui/tst_apperrorhandling.cpp)
 add_test(NAME AppErrorHandlingTests COMMAND AppErrorHandlingTests)
 
@@ -56,6 +59,7 @@ set(OLBAFLINX_CORE_TESTS
         StorageLifetimeTests
         StorageGuidelinesTests
         StorageErrorTests
+        StorageKeyTests
         BankingTests
 )
 set(OLBAFLINX_UI_TESTS

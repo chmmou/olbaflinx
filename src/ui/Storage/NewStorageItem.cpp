@@ -129,7 +129,9 @@ void NewStorageItem::showPasswordChangeDialog()
 
     QPointer<QLabel> infoLabelField = new QLabel(&pwdChangeDlg);
     infoLabelField->setWordWrap(true);
-    infoLabelField->setText(tr("Choose an secure password possible with at least 6 letters, "
+    // The number has to match the guideline the storage enforces below, a user
+    // who is told six and then rejected learns nothing from the rejection.
+    infoLabelField->setText(tr("Choose an secure password possible with at least 12 letters, "
                                "numbers and special characters."));
     form.addRow(infoLabelField);
 
