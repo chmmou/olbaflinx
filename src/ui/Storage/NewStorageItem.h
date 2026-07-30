@@ -48,7 +48,7 @@ public:
     void setFileInfo(const QString &info) const;
     void setFilePath(const QString &filePath) const;
 
-    QString filePath() const;
+    [[nodiscard]] QString filePath() const;
 
 Q_SIGNALS:
     void storageOpened(const QString &filePath, const QString &password);
@@ -66,7 +66,7 @@ private Q_SLOTS:
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::ui::storage

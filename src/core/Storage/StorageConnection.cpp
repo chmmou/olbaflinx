@@ -24,13 +24,13 @@
 using namespace olbaflinx::core::storage;
 
 StorageConnection::StorageConnection(const QString &fileName, const QString &driver)
-    : m_connectionName("")
 {
     if (fileName.isEmpty()) {
         return;
     }
 
-    m_connectionName = QString("OLBAFLINX_STORAGE_%1").arg(QRandomGenerator::system()->generate());
+    m_connectionName = QStringLiteral("OLBAFLINX_STORAGE_%1")
+                           .arg(QRandomGenerator::system()->generate());
     QSqlDatabase db = QSqlDatabase::addDatabase(driver, m_connectionName);
     db.setDatabaseName(fileName);
     db.open();
@@ -38,7 +38,7 @@ StorageConnection::StorageConnection(const QString &fileName, const QString &dri
 
 StorageConnection::~StorageConnection() = default;
 
-QSqlDatabase StorageConnection::database()
+QSqlDatabase StorageConnection::database() const
 {
     return QSqlDatabase::database(m_connectionName);
 }
@@ -49,12 +49,12 @@ void StorageConnection::close()
     QSqlDatabase::removeDatabase(m_connectionName);
 }
 
-bool StorageConnection::isValid()
+bool StorageConnection::isValid() const
 {
     return database().isValid();
 }
 
-bool StorageConnection::isOpen()
+bool StorageConnection::isOpen() const
 {
     return isValid() && database().isOpen();
 }
@@ -86,7 +86,7 @@ bool StorageConnection::rollbackTransaction()
     return false;
 }
 
-QString StorageConnection::lastErrorMessage()
+QString StorageConnection::lastErrorMessage() const
 {
     return database().lastError().text();
 }

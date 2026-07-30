@@ -44,10 +44,10 @@ int main(int argc, char *argv[])
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 #endif
 
-    QApplication::setApplicationName("OlbaFlinx");
+    QApplication::setApplicationName(QStringLiteral("OlbaFlinx"));
     QApplication::setApplicationVersion(QStringLiteral(OLBAFLINX_VERSION));
-    QApplication::setOrganizationName("de.chm-projects.olbaflinx");
-    QApplication::setOrganizationDomain("https://olbaflinx.chm-projects.de");
+    QApplication::setOrganizationName(QStringLiteral("de.chm-projects.olbaflinx"));
+    QApplication::setOrganizationDomain(QStringLiteral("https://olbaflinx.chm-projects.de"));
 
     QApplication a(argc, argv);
 

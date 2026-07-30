@@ -213,7 +213,7 @@ Q_SIGNALS:
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 
     Q_DISABLE_COPY(Storage)
 };

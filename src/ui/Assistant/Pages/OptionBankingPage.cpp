@@ -48,7 +48,7 @@ public:
         banking = new Banking(applicationInfo, q_ptr);
         banking->initialize(applicationInfo.name,
                             applicationInfo.version,
-                            "3E1B97FF72A24783EC2215B12");
+                            QStringLiteral("3E1B97FF72A24783EC2215B12"));
     }
 
     void addItems(const BankingItems &items)
@@ -109,7 +109,7 @@ bool OptionBankingPage::isComplete() const
     return d_ptr->isComplete && d_ptr->ui->treeWidgetAccounts->topLevelItemCount() > 0;
 }
 
-QList<quint32> OptionBankingPage::selectedAccountIds()
+QList<quint32> OptionBankingPage::selectedAccountIds() const
 {
     auto accountIds = QList<quint32>();
 

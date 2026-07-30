@@ -26,6 +26,7 @@
 #include <QtCore/QFileInfo>
 
 #include <QtGui/QCloseEvent>
+#include <QtGui/QFontMetrics>
 #include <QtGui/QKeySequence>
 #include <QtGui/QMoveEvent>
 #include <QtGui/QResizeEvent>
@@ -42,6 +43,20 @@ using namespace olbaflinx::ui;
 using namespace olbaflinx::ui::storage;
 using namespace olbaflinx::core::storage;
 
+namespace {
+
+// The outer dimensions of the dialog, the header height and the logo size derive
+// from the font metrics, so that they hold at a different font size or scaling.
+// The spacings and margins of the layouts below are still fixed pixel values.
+// The factors approximate the previous fixed values at the default font; whether
+// they reproduce them exactly has not been measured.
+constexpr int DialogWidthInCharacters = 120;
+constexpr int DialogHeightInLines = 30;
+constexpr int HeaderHeightInLines = 5;
+constexpr int LogoSizeInLines = 4;
+
+} // namespace
+
 class StorageDialog::Private
 {
 public:
@@ -55,7 +70,9 @@ public:
         , btnNewStorageItem(nullptr)
         , storageInfoLabel(nullptr)
     {
-        q_ptr->setMinimumSize(QSize(930, 646));
+        const QFontMetrics metrics(q_ptr->font());
+        q_ptr->setMinimumSize(metrics.averageCharWidth() * DialogWidthInCharacters,
+                              metrics.height() * DialogHeightInLines);
     }
 
     // The storage belongs to whoever created the dialog. When it is closed is
@@ -66,30 +83,33 @@ public:
     {
         app = qobject_cast<App *>(window);
 
+        const QFontMetrics metrics(q_ptr->font());
+        const int logoSize = metrics.height() * LogoSizeInLines;
+
         auto verticalLayoutDataVaults = new QVBoxLayout(q_ptr);
         verticalLayoutDataVaults->setSpacing(0);
-        verticalLayoutDataVaults->setObjectName("verticalLayoutDataVaults");
+        verticalLayoutDataVaults->setObjectName(QStringLiteral("verticalLayoutDataVaults"));
         verticalLayoutDataVaults->setContentsMargins(0, 0, 0, 0);
 
         auto widgetStorageHeader = new QWidget(q_ptr);
-        widgetStorageHeader->setObjectName("widgetStorageHeader");
-        widgetStorageHeader->setMinimumSize(QSize(0, 82));
+        widgetStorageHeader->setObjectName(QStringLiteral("widgetStorageHeader"));
+        widgetStorageHeader->setMinimumSize(0, metrics.height() * HeaderHeightInLines);
 
         auto hlStorageWidgetInfo = new QHBoxLayout(widgetStorageHeader);
         hlStorageWidgetInfo->setSpacing(12);
-        hlStorageWidgetInfo->setObjectName("hlStorageWidgetInfo");
+        hlStorageWidgetInfo->setObjectName(QStringLiteral("hlStorageWidgetInfo"));
 
         auto lblStorageInfoIcon = new QLabel(widgetStorageHeader);
-        lblStorageInfoIcon->setObjectName("lblStorageInfoIcon");
-        lblStorageInfoIcon->setMinimumSize(QSize(64, 64));
-        lblStorageInfoIcon->setMaximumSize(QSize(64, 64));
-        lblStorageInfoIcon->setPixmap(QPixmap(QString::fromUtf8(":/app/olbaflinx-logo-128")));
+        lblStorageInfoIcon->setObjectName(QStringLiteral("lblStorageInfoIcon"));
+        lblStorageInfoIcon->setMinimumSize(logoSize, logoSize);
+        lblStorageInfoIcon->setMaximumSize(logoSize, logoSize);
+        lblStorageInfoIcon->setPixmap(QPixmap(QStringLiteral(":/app/olbaflinx-logo-128")));
         lblStorageInfoIcon->setScaledContents(true);
 
         hlStorageWidgetInfo->addWidget(lblStorageInfoIcon);
 
         auto lblStorageInfoTitle = new QLabel(widgetStorageHeader);
-        lblStorageInfoTitle->setObjectName("lblStorageInfoTitle");
+        lblStorageInfoTitle->setObjectName(QStringLiteral("lblStorageInfoTitle"));
         lblStorageInfoTitle->setAlignment(Qt::AlignCenter);
         lblStorageInfoTitle->setText(tr("OlbaFlinx - Online Banking For Linux"));
 
@@ -98,12 +118,13 @@ public:
         verticalLayoutDataVaults->addWidget(widgetStorageHeader);
 
         auto scrollAreaStorage = new QScrollArea(q_ptr);
-        scrollAreaStorage->setObjectName("scrollAreaStorage");
+        scrollAreaStorage->setObjectName(QStringLiteral("scrollAreaStorage"));
         scrollAreaStorage->setWidgetResizable(true);
 
+        // QT-CPP-080: no parent on purpose. QScrollArea::setWidget takes over
+        // ownership in the next line, a parent here would be undone right away.
         auto scrollAreaStorageContents = new QWidget();
-        scrollAreaStorageContents->setObjectName("scrollAreaStorageContents");
-        scrollAreaStorageContents->setGeometry(QRect(0, 0, 928, 489));
+        scrollAreaStorageContents->setObjectName(QStringLiteral("scrollAreaStorageContents"));
 
         scrollAreaStorage->setWidget(scrollAreaStorageContents);
         scrollAreaStorage->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -114,7 +135,7 @@ public:
         verticalLayoutDataVaults->addWidget(scrollAreaStorage);
 
         auto hlStoragePage = new QHBoxLayout();
-        hlStoragePage->setObjectName("hlStoragePage");
+        hlStoragePage->setObjectName(QStringLiteral("hlStoragePage"));
         hlStoragePage->setContentsMargins(-1, 5, 5, 5);
         auto hsStoragePage = new QSpacerItem(40,
                                              20,
@@ -124,14 +145,14 @@ public:
         hlStoragePage->addItem(hsStoragePage);
 
         btnNewStorageItem = new QPushButton(q_ptr);
-        btnNewStorageItem->setObjectName("btnNewStorageItem");
+        btnNewStorageItem->setObjectName(QStringLiteral("btnNewStorageItem"));
 
         QIcon icon;
-        icon.addFile(QString::fromUtf8(":/datavault/add"), QSize(), QIcon::Normal, QIcon::Off);
+        icon.addFile(QStringLiteral(":/datavault/add"), QSize(), QIcon::Normal, QIcon::Off);
 
         btnNewStorageItem->setIcon(icon);
         btnNewStorageItem->setFlat(true);
-        btnNewStorageItem->setShortcut(QKeySequence("Ctrl+N"));
+        btnNewStorageItem->setShortcut(QKeySequence(QStringLiteral("Ctrl+N")));
         connect(btnNewStorageItem, &QPushButton::clicked, q_ptr, [&] { addNewStorageItem(); });
 
         hlStoragePage->addWidget(btnNewStorageItem);
@@ -148,7 +169,9 @@ public:
 
     void loadStorageItems()
     {
-        auto items = storage->setting("Paths", "Items", QStringList()).toStringList();
+        auto items = storage
+                         ->setting(QStringLiteral("Paths"), QStringLiteral("Items"), QStringList())
+                         .toStringList();
         if (items.isEmpty()) {
             removeStorageInfo();
             addStorageInfo();
@@ -289,7 +312,7 @@ private:
         }
     }
 
-    static QString dateFormat() { return "dd.MM.yyyy hh:mm"; }
+    static QString dateFormat() { return QStringLiteral("dd.MM.yyyy hh:mm"); }
 
     StorageDialog *q_ptr;
     App *app;
@@ -313,12 +336,18 @@ StorageDialog::~StorageDialog()
 
 void StorageDialog::initialize(QMainWindow *window)
 {
-    const auto pos = d_ptr->storage->setting("Position", "StorageDialog", QPoint()).toPoint();
+    const auto pos = d_ptr->storage
+                         ->setting(QStringLiteral("Position"),
+                                   QStringLiteral("StorageDialog"),
+                                   QPoint())
+                         .toPoint();
     if (!pos.isNull()) {
         move(pos);
     }
 
-    const auto size = d_ptr->storage->setting("Size", "StorageDialog", QSize()).toSize();
+    const auto size = d_ptr->storage
+                          ->setting(QStringLiteral("Size"), QStringLiteral("StorageDialog"), QSize())
+                          .toSize();
     if (!size.isNull() && size.isValid()) {
         resize(size);
     }
@@ -334,12 +363,16 @@ void StorageDialog::reload()
 
 void StorageDialog::moveEvent(QMoveEvent *event)
 {
-    d_ptr->storage->storeSetting("Position", event->pos(), "StorageDialog");
+    d_ptr->storage->storeSetting(QStringLiteral("Position"),
+                                 event->pos(),
+                                 QStringLiteral("StorageDialog"));
     QWidget::moveEvent(event);
 }
 
 void StorageDialog::resizeEvent(QResizeEvent *event)
 {
-    d_ptr->storage->storeSetting("Size", event->size(), "StorageDialog");
+    d_ptr->storage->storeSetting(QStringLiteral("Size"),
+                                 event->size(),
+                                 QStringLiteral("StorageDialog"));
     QWidget::resizeEvent(event);
 }

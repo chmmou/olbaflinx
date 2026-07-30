@@ -29,7 +29,7 @@ class OptionBankingPage : public QWizardPage
     Q_OBJECT
 
 public:
-    explicit OptionBankingPage(QWidget *parent = Q_NULLPTR);
+    explicit OptionBankingPage(QWidget *parent = nullptr);
     ~OptionBankingPage() override;
 
     /**
@@ -40,16 +40,16 @@ public:
      * afterwards.
      */
     void initialize(const olbaflinx::core::ApplicationInfo &applicationInfo);
-    bool isComplete() const override;
+    [[nodiscard]] bool isComplete() const override;
 
-    QList<quint32> selectedAccountIds();
+    [[nodiscard]] QList<quint32> selectedAccountIds() const;
 
 public Q_SLOTS:
     void showSetupDialog();
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::ui::assistant::pages

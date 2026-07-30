@@ -67,7 +67,7 @@ protected:
 
 private:
     class Private;
-    Private *d_ptr; ///< private data (pimpl)
+    Private *d_ptr = nullptr; ///< private data (pimpl)
 };
 
 } // namespace olbaflinx::ui

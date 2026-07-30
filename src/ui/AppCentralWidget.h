@@ -32,11 +32,11 @@ public:
 
     void initialize(QMainWindow *window);
 
-    QTreeWidget *accountWidget() const;
+    [[nodiscard]] QTreeWidget *accountWidget() const;
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::ui

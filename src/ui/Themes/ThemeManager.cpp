@@ -38,8 +38,8 @@ public:
     {
         themes.clear();
 
-        application = Q_NULLPTR;
-        q_ptr = Q_NULLPTR;
+        application = nullptr;
+        q_ptr = nullptr;
     }
 
     void registerTheme(const QString &name)
@@ -65,7 +65,8 @@ public:
         application->setStyleSheet({});
 
         for (auto i = themes.cbegin(), end = themes.cend(); i != end; ++i) {
-            if (QFile file(themes[i.value()]); file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            if (QFile file(themes.value(i.value()));
+                file.open(QIODevice::ReadOnly | QIODevice::Text)) {
                 application->setStyleSheet(file.readAll());
                 file.close();
             }
@@ -81,7 +82,8 @@ public:
         }
 
         if (const auto themKey = themeName(name); themes.contains(themKey)) {
-            if (QFile file(themes[themKey]); file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            if (QFile file(themes.value(themKey));
+                file.open(QIODevice::ReadOnly | QIODevice::Text)) {
                 application->setStyleSheet(file.readAll());
                 file.close();
             }
@@ -96,10 +98,10 @@ private:
     }
 
     QHash<QString, QString> themes = {};
-    QApplication *application = Q_NULLPTR;
+    QApplication *application = nullptr;
 
     friend class ThemeManager;
-    ThemeManager *q_ptr = Q_NULLPTR;
+    ThemeManager *q_ptr = nullptr;
 };
 
 ThemeManager::ThemeManager(QObject *parent)
@@ -124,26 +126,26 @@ void ThemeManager::apply(QApplication *application, const QString &filename) con
 
 QPixmap ThemeManager::pixmap(const QString &name, const ThemeManager::Mode mode)
 {
-    const auto filenameFormat = ":/icons/%1/%2";
+    const auto filenameFormat = QStringLiteral(":/icons/%1/%2");
     auto filename = QString();
 
     switch (mode) {
     case Mode::Dark:
-        filename = QString(filenameFormat).arg("dark", name);
+        filename = filenameFormat.arg(QStringLiteral("dark"), name);
         break;
     case Mode::Light:
-        filename = QString(filenameFormat).arg("light", name);
+        filename = filenameFormat.arg(QStringLiteral("light"), name);
         break;
     default:
-        filename = QString(filenameFormat).arg("light", name);
+        filename = filenameFormat.arg(QStringLiteral("light"), name);
     }
 
     const auto svg = [](const QByteArray &contents) -> QByteArray {
-        return QString(
+        return QStringLiteral(
                    R"(<?xml version="1.0" encoding="utf-8"?>)"
                    R"(<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">)"
                    R"(%1)")
-            .arg(contents)
+            .arg(QString::fromUtf8(contents))
             .toLocal8Bit();
     };
 

@@ -33,13 +33,13 @@ public:
      * @param flags Window flags.
      */
     explicit SetupAssistant(const olbaflinx::core::ApplicationInfo &applicationInfo,
-                            QWidget *parent = Q_NULLPTR,
+                            QWidget *parent = nullptr,
                             Qt::WindowFlags flags = Qt::WindowFlags());
     ~SetupAssistant() override;
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::ui::assistant

@@ -26,7 +26,8 @@ namespace olbaflinx::core::storage {
 class OLBAFLINX_CORE_EXPORT StorageConnection
 {
 public:
-    explicit StorageConnection(const QString &fileName, const QString &driver = "QSQLCIPHER");
+    explicit StorageConnection(const QString &fileName,
+                               const QString &driver = QStringLiteral("QSQLCIPHER"));
     ~StorageConnection();
 
     /**
@@ -34,7 +35,7 @@ public:
      *
      * @return A QSqlDatabase object representing the database connection.
      */
-    QSqlDatabase database();
+    [[nodiscard]] QSqlDatabase database() const;
 
     /**
      * Closes the database connection associated with the current instance of StorageConnection.
@@ -49,14 +50,14 @@ public:
      *
      * @return true if the storage connection is valid; false otherwise.
      */
-    bool isValid();
+    [[nodiscard]] bool isValid() const;
 
     /**
      * Checks if the storage connection is currently open and usable.
      *
      * @return True if the storage connection is valid and open; otherwise, false.
      */
-    bool isOpen();
+    [[nodiscard]] bool isOpen() const;
 
     /**
      * Initiates a database transaction if the connection is open.
@@ -89,7 +90,7 @@ public:
      * @return A QString containing the last error message. If no errors have occurred,
      *         an empty string is returned.
      */
-    QString lastErrorMessage();
+    [[nodiscard]] QString lastErrorMessage() const;
 
 protected:
     QString m_connectionName;

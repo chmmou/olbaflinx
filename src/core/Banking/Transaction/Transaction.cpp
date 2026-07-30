@@ -59,14 +59,15 @@ public:
     static QDate toDate(const GWEN_DATE *gwenDate)
     {
         if (gwenDate) {
-            auto buffer = GWEN_Buffer_new(Q_NULLPTR, 16, 0, 1);
+            auto buffer = GWEN_Buffer_new(nullptr, 16, 0, 1);
             int rv = GWEN_Date_toStringWithTemplate(gwenDate, "DD.MM.YYYY HH:mm:ss", buffer);
             if (rv != GWEN_SUCCESS) {
                 return QDate::currentDate();
             }
 
             auto start = GWEN_Buffer_GetStart(buffer);
-            QDate qDate = QDate::fromString(QString(start), "dd.MM.yyyy HH:mm:ss");
+            QDate qDate = QDate::fromString(QString::fromUtf8(start),
+                                            QStringLiteral("dd.MM.yyyy HH:mm:ss"));
 
             GWEN_Buffer_Reset(buffer);
             GWEN_Buffer_free(buffer);
@@ -83,7 +84,7 @@ public:
             return GWEN_Date_CurrentDate();
         }
 
-        const auto fd = date.toString(QString("yyyyMMdd")).toLocal8Bit();
+        const auto fd = date.toString(QStringLiteral("yyyyMMdd")).toLocal8Bit();
         return GWEN_Date_fromString(fd.constData());
     }
 
@@ -497,151 +498,262 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
 {
     auto abTransaction = AB_Transaction_new();
 
-    AB_Transaction_SetType(abTransaction, (TransactionType) map.value("type").toInt());
-    AB_Transaction_SetSubType(abTransaction, (TransactionSubType) map.value("sub_type").toInt());
-    AB_Transaction_SetCommand(abTransaction, (TransactionCommand) map.value("command").toInt());
-    AB_Transaction_SetStatus(abTransaction, (TransactionStatus) map.value("status").toInt());
-    AB_Transaction_SetUniqueAccountId(abTransaction, map.value("unique_account_id").toUInt());
-    AB_Transaction_SetUniqueId(abTransaction, map.value("unique_id").toUInt());
-    AB_Transaction_SetRefUniqueId(abTransaction, map.value("ref_unique_id").toUInt());
-    AB_Transaction_SetIdForApplication(abTransaction, map.value("id_for_application").toUInt());
-    AB_Transaction_SetStringIdForApplication(
-        abTransaction, map.value("string_id_for_application").toString().toLocal8Bit().constData());
-    AB_Transaction_SetSessionId(abTransaction, map.value("session_id").toUInt());
-    AB_Transaction_SetGroupId(abTransaction, map.value("group_id").toUInt());
-    AB_Transaction_SetFiId(abTransaction, map.value("fi_id").toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalIban(abTransaction,
-                                map.value("local_iban").toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBic(abTransaction,
-                               map.value("local_bic").toString().toLocal8Bit().constData());
+    AB_Transaction_SetType(abTransaction,
+                           (TransactionType) map.value(QStringLiteral("type")).toInt());
+    AB_Transaction_SetSubType(abTransaction,
+                              (TransactionSubType) map.value(QStringLiteral("sub_type")).toInt());
+    AB_Transaction_SetCommand(abTransaction,
+                              (TransactionCommand) map.value(QStringLiteral("command")).toInt());
+    AB_Transaction_SetStatus(abTransaction,
+                             (TransactionStatus) map.value(QStringLiteral("status")).toInt());
+    AB_Transaction_SetUniqueAccountId(abTransaction,
+                                      map.value(QStringLiteral("unique_account_id")).toUInt());
+    AB_Transaction_SetUniqueId(abTransaction, map.value(QStringLiteral("unique_id")).toUInt());
+    AB_Transaction_SetRefUniqueId(abTransaction,
+                                  map.value(QStringLiteral("ref_unique_id")).toUInt());
+    AB_Transaction_SetIdForApplication(abTransaction,
+                                       map.value(QStringLiteral("id_for_application")).toUInt());
+    AB_Transaction_SetStringIdForApplication(abTransaction,
+                                             map.value(QStringLiteral("string_id_for_application"))
+                                                 .toString()
+                                                 .toLocal8Bit()
+                                                 .constData());
+    AB_Transaction_SetSessionId(abTransaction, map.value(QStringLiteral("session_id")).toUInt());
+    AB_Transaction_SetGroupId(abTransaction, map.value(QStringLiteral("group_id")).toUInt());
+    AB_Transaction_SetFiId(abTransaction,
+                           map.value(QStringLiteral("fi_id")).toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalIban(
+        abTransaction, map.value(QStringLiteral("local_iban")).toString().toLocal8Bit().constData());
+    AB_Transaction_SetLocalBic(
+        abTransaction, map.value(QStringLiteral("local_bic")).toString().toLocal8Bit().constData());
     AB_Transaction_SetLocalCountry(abTransaction,
-                                   map.value("local_country").toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBankCode(
-        abTransaction, map.value("local_bank_code").toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalBranchId(
-        abTransaction, map.value("local_branch_id").toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalAccountNumber(
-        abTransaction, map.value("local_account_number").toString().toLocal8Bit().constData());
+                                   map.value(QStringLiteral("local_country"))
+                                       .toString()
+                                       .toLocal8Bit()
+                                       .constData());
+    AB_Transaction_SetLocalBankCode(abTransaction,
+                                    map.value(QStringLiteral("local_bank_code"))
+                                        .toString()
+                                        .toLocal8Bit()
+                                        .constData());
+    AB_Transaction_SetLocalBranchId(abTransaction,
+                                    map.value(QStringLiteral("local_branch_id"))
+                                        .toString()
+                                        .toLocal8Bit()
+                                        .constData());
+    AB_Transaction_SetLocalAccountNumber(abTransaction,
+                                         map.value(QStringLiteral("local_account_number"))
+                                             .toString()
+                                             .toLocal8Bit()
+                                             .constData());
     AB_Transaction_SetLocalSuffix(abTransaction,
-                                  map.value("local_suffix").toString().toLocal8Bit().constData());
-    AB_Transaction_SetLocalName(abTransaction,
-                                map.value("local_name").toString().toLocal8Bit().constData());
+                                  map.value(QStringLiteral("local_suffix"))
+                                      .toString()
+                                      .toLocal8Bit()
+                                      .constData());
+    AB_Transaction_SetLocalName(
+        abTransaction, map.value(QStringLiteral("local_name")).toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteCountry(abTransaction,
-                                    map.value("remote_country").toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBankCode(
-        abTransaction, map.value("remote_bank_code").toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBranchId(
-        abTransaction, map.value("remote_branch_id").toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAccountNumber(
-        abTransaction, map.value("remote_account_number").toString().toLocal8Bit().constData());
+                                    map.value(QStringLiteral("remote_country"))
+                                        .toString()
+                                        .toLocal8Bit()
+                                        .constData());
+    AB_Transaction_SetRemoteBankCode(abTransaction,
+                                     map.value(QStringLiteral("remote_bank_code"))
+                                         .toString()
+                                         .toLocal8Bit()
+                                         .constData());
+    AB_Transaction_SetRemoteBranchId(abTransaction,
+                                     map.value(QStringLiteral("remote_branch_id"))
+                                         .toString()
+                                         .toLocal8Bit()
+                                         .constData());
+    AB_Transaction_SetRemoteAccountNumber(abTransaction,
+                                          map.value(QStringLiteral("remote_account_number"))
+                                              .toString()
+                                              .toLocal8Bit()
+                                              .constData());
     AB_Transaction_SetRemoteSuffix(abTransaction,
-                                   map.value("remote_suffix").toString().toLocal8Bit().constData());
+                                   map.value(QStringLiteral("remote_suffix"))
+                                       .toString()
+                                       .toLocal8Bit()
+                                       .constData());
     AB_Transaction_SetRemoteIban(abTransaction,
-                                 map.value("remote_iban").toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteBic(abTransaction,
-                                map.value("remote_bic").toString().toLocal8Bit().constData());
+                                 map.value(QStringLiteral("remote_iban"))
+                                     .toString()
+                                     .toLocal8Bit()
+                                     .constData());
+    AB_Transaction_SetRemoteBic(
+        abTransaction, map.value(QStringLiteral("remote_bic")).toString().toLocal8Bit().constData());
     AB_Transaction_SetRemoteName(abTransaction,
-                                 map.value("remote_name").toString().toLocal8Bit().constData());
-    AB_Transaction_SetDate(abTransaction, Private::fromDate(map.value("date").toDate()));
+                                 map.value(QStringLiteral("remote_name"))
+                                     .toString()
+                                     .toLocal8Bit()
+                                     .constData());
+    AB_Transaction_SetDate(abTransaction,
+                           Private::fromDate(map.value(QStringLiteral("date")).toDate()));
     AB_Transaction_SetValutaDate(abTransaction,
-                                 Private::fromDate(map.value("valuta_date").toDate()));
+                                 Private::fromDate(
+                                     map.value(QStringLiteral("valuta_date")).toDate()));
 
     auto value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map.value("value").toDouble());
-    AB_Value_SetCurrency(value, map.value("currency").toString().toLocal8Bit().constData());
+    AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("value")).toDouble());
+    AB_Value_SetCurrency(value,
+                         map.value(QStringLiteral("currency")).toString().toLocal8Bit().constData());
     AB_Transaction_SetValue(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map.value("fees").toDouble());
+    AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("fees")).toDouble());
     AB_Transaction_SetFees(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
-    AB_Transaction_SetTransactionCode(abTransaction, map.value("transaction_code").toInt());
-    AB_Transaction_SetTransactionText(
-        abTransaction, map.value("transaction_text").toString().toLocal8Bit().constData());
-    AB_Transaction_SetTransactionKey(
-        abTransaction, map.value("transaction_key").toString().toLocal8Bit().constData());
-    AB_Transaction_SetTextKey(abTransaction, map.value("text_key").toInt());
-    AB_Transaction_SetPrimanota(abTransaction,
-                                map.value("primanota").toString().toLocal8Bit().constData());
-    AB_Transaction_SetPurpose(abTransaction,
-                              map.value("purpose").toString().toLocal8Bit().constData());
-    AB_Transaction_SetCategory(abTransaction,
-                               map.value("category").toString().toLocal8Bit().constData());
-    AB_Transaction_SetCustomerReference(
-        abTransaction, map.value("customer_reference").toString().toLocal8Bit().constData());
+    AB_Transaction_SetTransactionCode(abTransaction,
+                                      map.value(QStringLiteral("transaction_code")).toInt());
+    AB_Transaction_SetTransactionText(abTransaction,
+                                      map.value(QStringLiteral("transaction_text"))
+                                          .toString()
+                                          .toLocal8Bit()
+                                          .constData());
+    AB_Transaction_SetTransactionKey(abTransaction,
+                                     map.value(QStringLiteral("transaction_key"))
+                                         .toString()
+                                         .toLocal8Bit()
+                                         .constData());
+    AB_Transaction_SetTextKey(abTransaction, map.value(QStringLiteral("text_key")).toInt());
+    AB_Transaction_SetPrimanota(
+        abTransaction, map.value(QStringLiteral("primanota")).toString().toLocal8Bit().constData());
+    AB_Transaction_SetPurpose(
+        abTransaction, map.value(QStringLiteral("purpose")).toString().toLocal8Bit().constData());
+    AB_Transaction_SetCategory(
+        abTransaction, map.value(QStringLiteral("category")).toString().toLocal8Bit().constData());
+    AB_Transaction_SetCustomerReference(abTransaction,
+                                        map.value(QStringLiteral("customer_reference"))
+                                            .toString()
+                                            .toLocal8Bit()
+                                            .constData());
     AB_Transaction_SetBankReference(abTransaction,
-                                    map.value("bank_reference").toString().toLocal8Bit().constData());
-    AB_Transaction_SetEndToEndReference(
-        abTransaction, map.value("end_to_end_reference").toString().toLocal8Bit().constData());
-    AB_Transaction_SetCreditorSchemeId(
-        abTransaction, map.value("creditor_scheme_id").toString().toLocal8Bit().constData());
+                                    map.value(QStringLiteral("bank_reference"))
+                                        .toString()
+                                        .toLocal8Bit()
+                                        .constData());
+    AB_Transaction_SetEndToEndReference(abTransaction,
+                                        map.value(QStringLiteral("end_to_end_reference"))
+                                            .toString()
+                                            .toLocal8Bit()
+                                            .constData());
+    AB_Transaction_SetCreditorSchemeId(abTransaction,
+                                       map.value(QStringLiteral("creditor_scheme_id"))
+                                           .toString()
+                                           .toLocal8Bit()
+                                           .constData());
     AB_Transaction_SetOriginatorId(abTransaction,
-                                   map.value("originator_id").toString().toLocal8Bit().constData());
-    AB_Transaction_SetMandateId(abTransaction,
-                                map.value("mandate_id").toString().toLocal8Bit().constData());
+                                   map.value(QStringLiteral("originator_id"))
+                                       .toString()
+                                       .toLocal8Bit()
+                                       .constData());
+    AB_Transaction_SetMandateId(
+        abTransaction, map.value(QStringLiteral("mandate_id")).toString().toLocal8Bit().constData());
     AB_Transaction_SetMandateDate(abTransaction,
-                                  Private::fromDate(map.value("mandate_date").toDate()));
-    AB_Transaction_SetMandateDebitorName(
-        abTransaction, map.value("mandate_debitor_name").toString().toLocal8Bit().constData());
+                                  Private::fromDate(
+                                      map.value(QStringLiteral("mandate_date")).toDate()));
+    AB_Transaction_SetMandateDebitorName(abTransaction,
+                                         map.value(QStringLiteral("mandate_debitor_name"))
+                                             .toString()
+                                             .toLocal8Bit()
+                                             .constData());
     AB_Transaction_SetOriginalCreditorSchemeId(abTransaction,
-                                               map.value("original_creditor_scheme_id")
+                                               map.value(
+                                                      QStringLiteral("original_creditor_scheme_id"))
                                                    .toString()
                                                    .toLocal8Bit()
                                                    .constData());
-    AB_Transaction_SetOriginalMandateId(
-        abTransaction, map.value("original_mandate_id").toString().toLocal8Bit().constData());
-    AB_Transaction_SetOriginalCreditorName(
-        abTransaction, map.value("original_creditor_name").toString().toLocal8Bit().constData());
-    AB_Transaction_SetSequence(abTransaction, (TransactionSequence) map.value("sequence").toInt());
-    AB_Transaction_SetCharge(abTransaction, (TransactionCharge) map.value("charge").toInt());
-    AB_Transaction_SetRemoteAddrStreet(
-        abTransaction, map.value("remote_addr_street").toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrZipcode(
-        abTransaction, map.value("remote_addr_zipcode").toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrCity(
-        abTransaction, map.value("remote_addr_city").toString().toLocal8Bit().constData());
-    AB_Transaction_SetRemoteAddrPhone(
-        abTransaction, map.value("remote_addr_phone").toString().toLocal8Bit().constData());
-    AB_Transaction_SetPeriod(abTransaction, (TransactionPeriod) map.value("period").toInt());
-    AB_Transaction_SetCycle(abTransaction, map.value("cycle").toUInt());
-    AB_Transaction_SetExecutionDay(abTransaction, map.value("execution_day").toUInt());
-    AB_Transaction_SetFirstDate(abTransaction, Private::fromDate(map.value("first_date").toDate()));
-    AB_Transaction_SetLastDate(abTransaction, Private::fromDate(map.value("last_date").toDate()));
-    AB_Transaction_SetNextDate(abTransaction, Private::fromDate(map.value("next_date").toDate()));
-    AB_Transaction_SetUnitId(abTransaction,
-                             map.value("unit_id").toString().toLocal8Bit().constData());
-    AB_Transaction_SetUnitIdNameSpace(
-        abTransaction, map.value("unit_id_name_space").toString().toLocal8Bit().constData());
+    AB_Transaction_SetOriginalMandateId(abTransaction,
+                                        map.value(QStringLiteral("original_mandate_id"))
+                                            .toString()
+                                            .toLocal8Bit()
+                                            .constData());
+    AB_Transaction_SetOriginalCreditorName(abTransaction,
+                                           map.value(QStringLiteral("original_creditor_name"))
+                                               .toString()
+                                               .toLocal8Bit()
+                                               .constData());
+    AB_Transaction_SetSequence(abTransaction,
+                               (TransactionSequence) map.value(QStringLiteral("sequence")).toInt());
+    AB_Transaction_SetCharge(abTransaction,
+                             (TransactionCharge) map.value(QStringLiteral("charge")).toInt());
+    AB_Transaction_SetRemoteAddrStreet(abTransaction,
+                                       map.value(QStringLiteral("remote_addr_street"))
+                                           .toString()
+                                           .toLocal8Bit()
+                                           .constData());
+    AB_Transaction_SetRemoteAddrZipcode(abTransaction,
+                                        map.value(QStringLiteral("remote_addr_zipcode"))
+                                            .toString()
+                                            .toLocal8Bit()
+                                            .constData());
+    AB_Transaction_SetRemoteAddrCity(abTransaction,
+                                     map.value(QStringLiteral("remote_addr_city"))
+                                         .toString()
+                                         .toLocal8Bit()
+                                         .constData());
+    AB_Transaction_SetRemoteAddrPhone(abTransaction,
+                                      map.value(QStringLiteral("remote_addr_phone"))
+                                          .toString()
+                                          .toLocal8Bit()
+                                          .constData());
+    AB_Transaction_SetPeriod(abTransaction,
+                             (TransactionPeriod) map.value(QStringLiteral("period")).toInt());
+    AB_Transaction_SetCycle(abTransaction, map.value(QStringLiteral("cycle")).toUInt());
+    AB_Transaction_SetExecutionDay(abTransaction,
+                                   map.value(QStringLiteral("execution_day")).toUInt());
+    AB_Transaction_SetFirstDate(abTransaction,
+                                Private::fromDate(map.value(QStringLiteral("first_date")).toDate()));
+    AB_Transaction_SetLastDate(abTransaction,
+                               Private::fromDate(map.value(QStringLiteral("last_date")).toDate()));
+    AB_Transaction_SetNextDate(abTransaction,
+                               Private::fromDate(map.value(QStringLiteral("next_date")).toDate()));
+    AB_Transaction_SetUnitId(
+        abTransaction, map.value(QStringLiteral("unit_id")).toString().toLocal8Bit().constData());
+    AB_Transaction_SetUnitIdNameSpace(abTransaction,
+                                      map.value(QStringLiteral("unit_id_name_space"))
+                                          .toString()
+                                          .toLocal8Bit()
+                                          .constData());
     AB_Transaction_SetTickerSymbol(abTransaction,
-                                   map.value("ticker_symbol").toString().toLocal8Bit().constData());
+                                   map.value(QStringLiteral("ticker_symbol"))
+                                       .toString()
+                                       .toLocal8Bit()
+                                       .constData());
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map.value("units").toDouble());
+    AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("units")).toDouble());
     AB_Transaction_SetUnits(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map.value("unit_price_value").toDouble());
+    AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("unit_price_value")).toDouble());
     AB_Transaction_SetUnitPriceValue(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
     AB_Transaction_SetUnitPriceDate(abTransaction,
-                                    Private::fromDate(map.value("unit_price_date").toDate()));
+                                    Private::fromDate(
+                                        map.value(QStringLiteral("unit_price_date")).toDate()));
 
     value = AB_Value_new();
-    AB_Value_SetValueFromDouble(value, map.value("commission_value").toDouble());
+    AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("commission_value")).toDouble());
     AB_Transaction_SetCommissionValue(abTransaction, AB_Value_dup(value));
     AB_Value_free(value);
     value = nullptr;
 
-    AB_Transaction_SetMemo(abTransaction, map.value("memo").toString().toLocal8Bit().constData());
-    AB_Transaction_SetHash(abTransaction, map.value("hash").toString().toLocal8Bit().constData());
+    AB_Transaction_SetMemo(abTransaction,
+                           map.value(QStringLiteral("memo")).toString().toLocal8Bit().constData());
+    AB_Transaction_SetHash(abTransaction,
+                           map.value(QStringLiteral("hash")).toString().toLocal8Bit().constData());
 
     auto transaction = std::make_shared<Transaction>(abTransaction);
 
@@ -667,83 +779,83 @@ QMap<QString, QVariant> Transaction::toMap() const
 {
     QMap<QString, QVariant> map = {};
 
-    map[":type"] = (qint32) type();
-    map[":sub_type"] = (qint32) subType();
-    map[":command"] = (qint32) command();
-    map[":status"] = (qint32) status();
-    map[":unique_account_id"] = uniqueAccountId();
-    map[":unique_id"] = uniqueId();
-    map[":ref_unique_id"] = refUniqueId();
-    map[":id_for_application"] = idForApplication();
-    map[":string_id_for_application"] = stringIdForApplication();
-    map[":session_id"] = sessionId();
-    map[":group_id"] = groupId();
-    map[":fi_id"] = fiId();
-    map[":local_iban"] = localIban();
-    map[":local_bic"] = localBic();
-    map[":local_country"] = localCountry();
-    map[":local_bank_code"] = localBankCode();
-    map[":local_branch_id"] = localBranchId();
-    map[":local_account_number"] = localAccountNumber();
-    map[":local_suffix"] = localSuffix();
-    map[":local_name"] = localName();
-    map[":remote_country"] = remoteCountry();
-    map[":remote_bank_code"] = remoteBankCode();
-    map[":remote_branch_id"] = remoteBranchId();
-    map[":remote_account_number"] = remoteAccountNumber();
-    map[":remote_suffix"] = remoteSuffix();
-    map[":remote_iban"] = remoteIban();
-    map[":remote_bic"] = remoteBic();
-    map[":remote_name"] = remoteName();
-    map[":date"] = date();
-    map[":valuta_date"] = valutaDate();
-    map[":value"] = value();
-    map[":currency"] = currency();
-    map[":fees"] = fees();
-    map[":transaction_code"] = transactionCode();
-    map[":transaction_text"] = transactionText();
-    map[":transaction_key"] = transactionKey();
-    map[":text_key"] = textKey();
-    map[":primanota"] = primanota();
-    map[":purpose"] = purpose();
-    map[":category"] = category();
-    map[":customer_reference"] = customerReference();
-    map[":bank_reference"] = bankReference();
-    map[":end_to_end_reference"] = endToEndReference();
-    map[":creditor_scheme_id"] = creditorSchemeId();
-    map[":originator_id"] = originatorId();
-    map[":mandate_id"] = mandateId();
-    map[":mandate_date"] = mandateDate();
-    map[":mandate_debitor_name"] = mandateDebitorName();
-    map[":original_creditor_scheme_id"] = originalCreditorSchemeId();
-    map[":original_mandate_id"] = originalMandateId();
-    map[":original_creditor_name"] = originalCreditorName();
-    map[":sequence"] = (qint32) sequence();
-    map[":charge"] = (qint32) charge();
-    map[":remote_addr_street"] = remoteAddrStreet();
-    map[":remote_addr_zipcode"] = remoteAddrZipcode();
-    map[":remote_addr_city"] = remoteAddrCity();
-    map[":remote_addr_phone"] = remoteAddrPhone();
-    map[":period"] = (qint32) period();
-    map[":cycle"] = cycle();
-    map[":execution_day"] = executionDay();
-    map[":first_date"] = firstDate();
-    map[":last_date"] = lastDate();
-    map[":next_date"] = nextDate();
-    map[":unit_id"] = unitId();
-    map[":unit_id_name_space"] = unitIdNameSpace();
-    map[":ticker_symbol"] = tickerSymbol();
-    map[":units"] = units();
-    map[":unit_price_value"] = unitPriceValue();
-    map[":unit_price_date"] = unitPriceDate();
-    map[":commission_value"] = commissionValue();
-    map[":memo"] = memo();
-    map[":hash"] = calculateTransactionHash();
+    map[QStringLiteral(":type")] = (qint32) type();
+    map[QStringLiteral(":sub_type")] = (qint32) subType();
+    map[QStringLiteral(":command")] = (qint32) command();
+    map[QStringLiteral(":status")] = (qint32) status();
+    map[QStringLiteral(":unique_account_id")] = uniqueAccountId();
+    map[QStringLiteral(":unique_id")] = uniqueId();
+    map[QStringLiteral(":ref_unique_id")] = refUniqueId();
+    map[QStringLiteral(":id_for_application")] = idForApplication();
+    map[QStringLiteral(":string_id_for_application")] = stringIdForApplication();
+    map[QStringLiteral(":session_id")] = sessionId();
+    map[QStringLiteral(":group_id")] = groupId();
+    map[QStringLiteral(":fi_id")] = fiId();
+    map[QStringLiteral(":local_iban")] = localIban();
+    map[QStringLiteral(":local_bic")] = localBic();
+    map[QStringLiteral(":local_country")] = localCountry();
+    map[QStringLiteral(":local_bank_code")] = localBankCode();
+    map[QStringLiteral(":local_branch_id")] = localBranchId();
+    map[QStringLiteral(":local_account_number")] = localAccountNumber();
+    map[QStringLiteral(":local_suffix")] = localSuffix();
+    map[QStringLiteral(":local_name")] = localName();
+    map[QStringLiteral(":remote_country")] = remoteCountry();
+    map[QStringLiteral(":remote_bank_code")] = remoteBankCode();
+    map[QStringLiteral(":remote_branch_id")] = remoteBranchId();
+    map[QStringLiteral(":remote_account_number")] = remoteAccountNumber();
+    map[QStringLiteral(":remote_suffix")] = remoteSuffix();
+    map[QStringLiteral(":remote_iban")] = remoteIban();
+    map[QStringLiteral(":remote_bic")] = remoteBic();
+    map[QStringLiteral(":remote_name")] = remoteName();
+    map[QStringLiteral(":date")] = date();
+    map[QStringLiteral(":valuta_date")] = valutaDate();
+    map[QStringLiteral(":value")] = value();
+    map[QStringLiteral(":currency")] = currency();
+    map[QStringLiteral(":fees")] = fees();
+    map[QStringLiteral(":transaction_code")] = transactionCode();
+    map[QStringLiteral(":transaction_text")] = transactionText();
+    map[QStringLiteral(":transaction_key")] = transactionKey();
+    map[QStringLiteral(":text_key")] = textKey();
+    map[QStringLiteral(":primanota")] = primanota();
+    map[QStringLiteral(":purpose")] = purpose();
+    map[QStringLiteral(":category")] = category();
+    map[QStringLiteral(":customer_reference")] = customerReference();
+    map[QStringLiteral(":bank_reference")] = bankReference();
+    map[QStringLiteral(":end_to_end_reference")] = endToEndReference();
+    map[QStringLiteral(":creditor_scheme_id")] = creditorSchemeId();
+    map[QStringLiteral(":originator_id")] = originatorId();
+    map[QStringLiteral(":mandate_id")] = mandateId();
+    map[QStringLiteral(":mandate_date")] = mandateDate();
+    map[QStringLiteral(":mandate_debitor_name")] = mandateDebitorName();
+    map[QStringLiteral(":original_creditor_scheme_id")] = originalCreditorSchemeId();
+    map[QStringLiteral(":original_mandate_id")] = originalMandateId();
+    map[QStringLiteral(":original_creditor_name")] = originalCreditorName();
+    map[QStringLiteral(":sequence")] = (qint32) sequence();
+    map[QStringLiteral(":charge")] = (qint32) charge();
+    map[QStringLiteral(":remote_addr_street")] = remoteAddrStreet();
+    map[QStringLiteral(":remote_addr_zipcode")] = remoteAddrZipcode();
+    map[QStringLiteral(":remote_addr_city")] = remoteAddrCity();
+    map[QStringLiteral(":remote_addr_phone")] = remoteAddrPhone();
+    map[QStringLiteral(":period")] = (qint32) period();
+    map[QStringLiteral(":cycle")] = cycle();
+    map[QStringLiteral(":execution_day")] = executionDay();
+    map[QStringLiteral(":first_date")] = firstDate();
+    map[QStringLiteral(":last_date")] = lastDate();
+    map[QStringLiteral(":next_date")] = nextDate();
+    map[QStringLiteral(":unit_id")] = unitId();
+    map[QStringLiteral(":unit_id_name_space")] = unitIdNameSpace();
+    map[QStringLiteral(":ticker_symbol")] = tickerSymbol();
+    map[QStringLiteral(":units")] = units();
+    map[QStringLiteral(":unit_price_value")] = unitPriceValue();
+    map[QStringLiteral(":unit_price_date")] = unitPriceDate();
+    map[QStringLiteral(":commission_value")] = commissionValue();
+    map[QStringLiteral(":memo")] = memo();
+    map[QStringLiteral(":hash")] = calculateTransactionHash();
 
     return map;
 }
 
 QString Transaction::itemType() const
 {
-    return {"Transaction"};
+    return QStringLiteral("Transaction");
 }

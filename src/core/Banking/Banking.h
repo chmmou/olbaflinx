@@ -52,7 +52,7 @@ public:
      *  and for the title of the setup dialog.
      * @param parent Optional owner.
      */
-    explicit Banking(ApplicationInfo applicationInfo, QObject *parent = Q_NULLPTR);
+    explicit Banking(ApplicationInfo applicationInfo, QObject *parent = nullptr);
     ~Banking() override;
 
     /**
@@ -94,7 +94,7 @@ Q_SIGNALS:
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::core::banking

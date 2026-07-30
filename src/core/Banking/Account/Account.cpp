@@ -97,7 +97,7 @@ QString Account::typeString() const
         typeString = QObject::tr("Unspecified");
         break;
     default:
-        typeString = "";
+        typeString.clear();
     }
 
     return typeString;
@@ -218,29 +218,29 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
 
     auto accountSpec = AB_AccountSpec_new();
 
-    const auto backendName = map.value(":backend_name").toString();
-    const auto ownerName = map.value(":owner_name").toString();
-    const auto accountName = map.value(":account_name").toString();
-    const auto currency = map.value(":currency").toString();
-    const auto memo = map.value(":memo").toString();
-    const auto iban = map.value(":iban").toString();
-    const auto bic = map.value(":bic").toString();
-    const auto country = map.value(":country").toString();
-    const auto bankCode = map.value(":bank_code").toString();
-    const auto bankName = map.value(":bank_name").toString();
-    const auto branchId = map.value(":branch_id").toString();
-    const auto accountNumber = map.value(":account_number").toString();
-    const auto subAccountNumber = map.value(":sub_account_number").toString();
-    const auto balance = map.value(":balance").toDouble();
+    const auto backendName = map.value(QStringLiteral(":backend_name")).toString();
+    const auto ownerName = map.value(QStringLiteral(":owner_name")).toString();
+    const auto accountName = map.value(QStringLiteral(":account_name")).toString();
+    const auto currency = map.value(QStringLiteral(":currency")).toString();
+    const auto memo = map.value(QStringLiteral(":memo")).toString();
+    const auto iban = map.value(QStringLiteral(":iban")).toString();
+    const auto bic = map.value(QStringLiteral(":bic")).toString();
+    const auto country = map.value(QStringLiteral(":country")).toString();
+    const auto bankCode = map.value(QStringLiteral(":bank_code")).toString();
+    const auto bankName = map.value(QStringLiteral(":bank_name")).toString();
+    const auto branchId = map.value(QStringLiteral(":branch_id")).toString();
+    const auto accountNumber = map.value(QStringLiteral(":account_number")).toString();
+    const auto subAccountNumber = map.value(QStringLiteral(":sub_account_number")).toString();
+    const auto balance = map.value(QStringLiteral(":balance")).toDouble();
 
     auto refAccounts = ReferenceAccounts();
 
-    if (map.value(":refAccounts").canConvert<ReferenceAccounts>()) {
-        refAccounts = qvariant_cast<ReferenceAccounts>(map.value(":refAccounts"));
+    if (map.value(QStringLiteral(":refAccounts")).canConvert<ReferenceAccounts>()) {
+        refAccounts = qvariant_cast<ReferenceAccounts>(map.value(QStringLiteral(":refAccounts")));
     }
 
-    AB_AccountSpec_SetType(accountSpec, map.value(":type").toInt());
-    AB_AccountSpec_SetUniqueId(accountSpec, map.value(":uniqueId").toInt());
+    AB_AccountSpec_SetType(accountSpec, map.value(QStringLiteral(":type")).toInt());
+    AB_AccountSpec_SetUniqueId(accountSpec, map.value(QStringLiteral(":uniqueId")).toInt());
     AB_AccountSpec_SetBackendName(accountSpec, backendName.toLocal8Bit().constData());
     AB_AccountSpec_SetOwnerName(accountSpec, ownerName.toLocal8Bit().constData());
     AB_AccountSpec_SetAccountName(accountSpec, accountName.toLocal8Bit().constData());
@@ -258,16 +258,17 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
     for (const auto refAccount : std::as_const(refAccounts)) {
         auto refAccMap = refAccount->toMap();
 
-        const auto refAccIban = refAccMap[":iban"].toString();
-        const auto refAccBic = refAccMap[":bic"].toString();
-        const auto refAccAccountNumber = refAccMap[":account_number"].toString();
-        const auto refAccSubAccountNumber = refAccMap[":sub_account_number"].toString();
-        const auto refAccCountry = refAccMap[":country"].toString();
-        const auto refAccBankCode = refAccMap[":bank_code"].toString();
-        const auto refAccOwnerName = refAccMap[":owner_name"].toString();
-        const auto refAccOwnerName2 = refAccMap[":owner_name2"].toString();
-        const auto refAccAccountName = refAccMap[":account_name"].toString();
-        const auto refAccAccountType = refAccMap[":account_type"].toInt();
+        const auto refAccIban = refAccMap[QStringLiteral(":iban")].toString();
+        const auto refAccBic = refAccMap[QStringLiteral(":bic")].toString();
+        const auto refAccAccountNumber = refAccMap[QStringLiteral(":account_number")].toString();
+        const auto refAccSubAccountNumber = refAccMap[QStringLiteral(":sub_account_number")]
+                                                .toString();
+        const auto refAccCountry = refAccMap[QStringLiteral(":country")].toString();
+        const auto refAccBankCode = refAccMap[QStringLiteral(":bank_code")].toString();
+        const auto refAccOwnerName = refAccMap[QStringLiteral(":owner_name")].toString();
+        const auto refAccOwnerName2 = refAccMap[QStringLiteral(":owner_name2")].toString();
+        const auto refAccAccountName = refAccMap[QStringLiteral(":account_name")].toString();
+        const auto refAccAccountType = refAccMap[QStringLiteral(":account_type")].toInt();
 
         AB_REFERENCE_ACCOUNT *abRefAccount = AB_ReferenceAccount_new();
 
@@ -288,7 +289,7 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
         AB_AccountSpec_AddReferenceAccount(accountSpec, AB_ReferenceAccount_dup(abRefAccount));
 
         AB_ReferenceAccount_free(abRefAccount);
-        abRefAccount = Q_NULLPTR;
+        abRefAccount = nullptr;
         refAccMap.clear();
     }
 
@@ -317,28 +318,28 @@ QMap<QString, QVariant> Account::toMap() const
 {
     QMap<QString, QVariant> map = {};
 
-    map[":type"] = type();
-    map[":unique_id"] = uniqueId();
-    map[":backend_name"] = backendName();
-    map[":owner_name"] = ownerName();
-    map[":account_name"] = accountName();
-    map[":currency"] = currency();
-    map[":memo"] = memo();
-    map[":iban"] = iban();
-    map[":bic"] = bic();
-    map[":country"] = country();
-    map[":bank_code"] = bankCode();
-    map[":bank_name"] = bankName();
-    map[":branch_id"] = branchId();
-    map[":account_number"] = accountNumber();
-    map[":sub_account_number"] = subAccountNumber();
-    map[":refAccounts"] = QVariant::fromValue(referenceAccounts());
-    map[":balance"] = balance();
+    map[QStringLiteral(":type")] = type();
+    map[QStringLiteral(":unique_id")] = uniqueId();
+    map[QStringLiteral(":backend_name")] = backendName();
+    map[QStringLiteral(":owner_name")] = ownerName();
+    map[QStringLiteral(":account_name")] = accountName();
+    map[QStringLiteral(":currency")] = currency();
+    map[QStringLiteral(":memo")] = memo();
+    map[QStringLiteral(":iban")] = iban();
+    map[QStringLiteral(":bic")] = bic();
+    map[QStringLiteral(":country")] = country();
+    map[QStringLiteral(":bank_code")] = bankCode();
+    map[QStringLiteral(":bank_name")] = bankName();
+    map[QStringLiteral(":branch_id")] = branchId();
+    map[QStringLiteral(":account_number")] = accountNumber();
+    map[QStringLiteral(":sub_account_number")] = subAccountNumber();
+    map[QStringLiteral(":refAccounts")] = QVariant::fromValue(referenceAccounts());
+    map[QStringLiteral(":balance")] = balance();
 
     return map;
 }
 
 QString Account::itemType() const
 {
-    return {"Account"};
+    return QStringLiteral("Account");
 }

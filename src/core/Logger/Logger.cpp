@@ -61,7 +61,7 @@ void Logger::log(const QString &message)
     if (isEnabled()) {
         GWEN_Logger_Log(OLBAFLINX_CORE_LOGDOMAIN,
                         (GWEN_LOGGER_LEVEL) GWEN_Logger_GetLevel(OLBAFLINX_CORE_LOGDOMAIN),
-                        QString(" %1").arg(message).toLocal8Bit().constData());
+                        QStringLiteral(" %1").arg(message).toLocal8Bit().constData());
     }
 }
 

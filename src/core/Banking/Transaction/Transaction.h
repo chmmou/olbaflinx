@@ -48,7 +48,7 @@ typedef AB_TRANSACTION_PERIOD TransactionPeriod;
 class OLBAFLINX_CORE_EXPORT Transaction : public BankingItem
 {
 public:
-    explicit Transaction(const AB_TRANSACTION *transaction = Q_NULLPTR);
+    explicit Transaction(const AB_TRANSACTION *transaction = nullptr);
     ~Transaction() override;
 
     /**
@@ -142,7 +142,7 @@ public:
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::core::banking::transaction

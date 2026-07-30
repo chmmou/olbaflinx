@@ -61,7 +61,7 @@ public:
 
         ui->setupUi(q_ptr);
 
-        QApplication::setWindowIcon(QIcon(":/app/olbaflinx-logo-128"));
+        QApplication::setWindowIcon(QIcon(QStringLiteral(":/app/olbaflinx-logo-128")));
         q_ptr->setWindowIconText(QApplication::applicationName());
 
         QObject::connect(ui->appAboutAction, &QAction::triggered, q_ptr, [this] { showAbout(); });
@@ -170,12 +170,15 @@ App::~App()
 
 void App::initialize()
 {
-    const QPoint pos = d_ptr->storage->setting("Position", "App", QPoint()).toPoint();
+    const QPoint pos = d_ptr->storage
+                           ->setting(QStringLiteral("Position"), QStringLiteral("App"), QPoint())
+                           .toPoint();
     if (!pos.isNull()) {
         move(pos);
     }
 
-    const QSize size = d_ptr->storage->setting("Size", "App", QSize()).toSize();
+    const QSize size
+        = d_ptr->storage->setting(QStringLiteral("Size"), QStringLiteral("App"), QSize()).toSize();
     if (!size.isNull() && size.isValid()) {
         resize(size);
     }
@@ -195,12 +198,12 @@ bool App::event(QEvent *event)
 
 void App::moveEvent(QMoveEvent *event)
 {
-    d_ptr->storage->storeSetting("Position", event->pos(), "App");
+    d_ptr->storage->storeSetting(QStringLiteral("Position"), event->pos(), QStringLiteral("App"));
     QMainWindow::moveEvent(event);
 }
 
 void App::resizeEvent(QResizeEvent *event)
 {
-    d_ptr->storage->storeSetting("Size", event->size(), "App");
+    d_ptr->storage->storeSetting(QStringLiteral("Size"), event->size(), QStringLiteral("App"));
     QMainWindow::resizeEvent(event);
 }

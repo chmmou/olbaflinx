@@ -38,6 +38,13 @@
 
 #include <utility>
 
+using namespace olbaflinx::core::storage;
+using namespace olbaflinx::core::banking;
+using namespace olbaflinx::core::banking::account;
+using namespace olbaflinx::core::banking::transaction;
+
+namespace {
+
 /**
  * Password regular expression
  *
@@ -50,55 +57,59 @@
  * At least one digit, 0-9
  * At least one of special character, !"§$%&/()=?´`{}[]\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>
  * Minimum six in length 6 (with the anchors)
+ *
+ * The pattern is compiled once. It used to be a macro and was therefore built
+ * anew on every password check.
  */
-#define MinPasswordReqEx \
-    QRegularExpression("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!\"§$%&/" \
-                       "()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>])[A-Za-z\\d!\"§$%&/" \
-                       "()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>]{6,}$")
+const QRegularExpression &minPasswordPattern()
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!\"§$%&/"
+                       "()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>])[A-Za-z\\d!\"§$%&/"
+                       "()=?´`{}\\[\\]\\ß@€~’*'+#-_.:,;µöäüÖÄÜ<|>]{6,}$"));
+    return pattern;
+}
 
-#define AccountInsertQuery \
-    "INSERT INTO accounts (`type`, unique_id, backend_name, owner_name, " \
-    "account_name, currency, memo, iban, bic, country, bank_code, bank_name, " \
-    "branch_id, account_number, sub_account_number) " \
-    "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, " \
-    ":currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, " \
-    ":branch_id, :account_number, :sub_account_number);"
+constexpr auto AccountInsertQuery = QLatin1StringView(
+    "INSERT INTO accounts (`type`, unique_id, backend_name, owner_name, "
+    "account_name, currency, memo, iban, bic, country, bank_code, bank_name, "
+    "branch_id, account_number, sub_account_number) "
+    "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, "
+    ":currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, "
+    ":branch_id, :account_number, :sub_account_number);");
 
-#define TransactionInsertQuery \
-    "INSERT INTO transactions (account_id, `type`, sub_type, command, status, " \
-    "unique_account_id, unique_id, ref_unique_id, id_for_application, " \
-    "string_id_for_application, session_id, group_id, fi_id, local_iban, local_bic, " \
-    "local_country, local_bank_code, local_branch_id, local_account_number, local_suffix, " \
-    "local_name, remote_country, remote_bank_code, remote_branch_id, " \
-    "remote_account_number, remote_suffix, remote_iban, remote_bic, remote_name, `date`, " \
-    "valuta_date, value, currency, fees, transaction_code, transaction_text, " \
-    "transaction_key, text_key, primanota, purpose, `category`, customer_reference, " \
-    "bank_reference, end_to_end_reference, creditor_scheme_id, originator_id, mandate_id, " \
-    "mandate_date, mandate_debitor_name, original_creditor_scheme_id, original_mandate_id, " \
-    "original_creditor_name, `sequence`, charge, remote_addr_street, remote_addr_zipcode, " \
-    "remote_addr_city, remote_addr_phone, period, `cycle`, execution_day, first_date, " \
-    "last_date, next_date, unit_id, unit_id_name_space, ticker_symbol, units, " \
-    "unit_price_value, unit_price_date, commission_value, memo, `hash`) " \
-    "VALUES (:account_id, :type, :sub_type, :command, :status, :unique_account_id, " \
-    ":unique_id, :ref_unique_id, :id_for_application, :string_id_for_application, " \
-    ":session_id, :group_id, :fi_id, :local_iban, :local_bic, :local_country, " \
-    ":local_bank_code, :local_branch_id, :local_account_number, :local_suffix, " \
-    ":local_name, :remote_country, :remote_bank_code, :remote_branch_id, " \
-    ":remote_account_number, :remote_suffix, :remote_iban, :remote_bic, :remote_name, " \
-    ":date, :valuta_date, :value, :currency, :fees, :transaction_code, :transaction_text, " \
-    ":transaction_key, :text_key, :primanota, :purpose, :category, :customer_reference, " \
-    ":bank_reference, :end_to_end_reference, :creditor_scheme_id, :originator_id, " \
-    ":mandate_id, :mandate_date, :mandate_debitor_name, :original_creditor_scheme_id, " \
-    ":original_mandate_id, :original_creditor_name, :sequence, :charge, " \
-    ":remote_addr_street, :remote_addr_zipcode, :remote_addr_city, :remote_addr_phone, " \
-    ":period, :cycle, :execution_day, :first_date, :last_date, :next_date, :unit_id, " \
-    ":unit_id_name_space, :ticker_symbol, :units, :unit_price_value, :unit_price_date, " \
-    ":commission_value, :memo, :hash);"
+constexpr auto TransactionInsertQuery = QLatin1StringView(
+    "INSERT INTO transactions (account_id, `type`, sub_type, command, status, "
+    "unique_account_id, unique_id, ref_unique_id, id_for_application, "
+    "string_id_for_application, session_id, group_id, fi_id, local_iban, local_bic, "
+    "local_country, local_bank_code, local_branch_id, local_account_number, local_suffix, "
+    "local_name, remote_country, remote_bank_code, remote_branch_id, "
+    "remote_account_number, remote_suffix, remote_iban, remote_bic, remote_name, `date`, "
+    "valuta_date, value, currency, fees, transaction_code, transaction_text, "
+    "transaction_key, text_key, primanota, purpose, `category`, customer_reference, "
+    "bank_reference, end_to_end_reference, creditor_scheme_id, originator_id, mandate_id, "
+    "mandate_date, mandate_debitor_name, original_creditor_scheme_id, original_mandate_id, "
+    "original_creditor_name, `sequence`, charge, remote_addr_street, remote_addr_zipcode, "
+    "remote_addr_city, remote_addr_phone, period, `cycle`, execution_day, first_date, "
+    "last_date, next_date, unit_id, unit_id_name_space, ticker_symbol, units, "
+    "unit_price_value, unit_price_date, commission_value, memo, `hash`) "
+    "VALUES (:account_id, :type, :sub_type, :command, :status, :unique_account_id, "
+    ":unique_id, :ref_unique_id, :id_for_application, :string_id_for_application, "
+    ":session_id, :group_id, :fi_id, :local_iban, :local_bic, :local_country, "
+    ":local_bank_code, :local_branch_id, :local_account_number, :local_suffix, "
+    ":local_name, :remote_country, :remote_bank_code, :remote_branch_id, "
+    ":remote_account_number, :remote_suffix, :remote_iban, :remote_bic, :remote_name, "
+    ":date, :valuta_date, :value, :currency, :fees, :transaction_code, :transaction_text, "
+    ":transaction_key, :text_key, :primanota, :purpose, :category, :customer_reference, "
+    ":bank_reference, :end_to_end_reference, :creditor_scheme_id, :originator_id, "
+    ":mandate_id, :mandate_date, :mandate_debitor_name, :original_creditor_scheme_id, "
+    ":original_mandate_id, :original_creditor_name, :sequence, :charge, "
+    ":remote_addr_street, :remote_addr_zipcode, :remote_addr_city, :remote_addr_phone, "
+    ":period, :cycle, :execution_day, :first_date, :last_date, :next_date, :unit_id, "
+    ":unit_id_name_space, :ticker_symbol, :units, :unit_price_value, :unit_price_date, "
+    ":commission_value, :memo, :hash);");
 
-using namespace olbaflinx::core::storage;
-using namespace olbaflinx::core::banking;
-using namespace olbaflinx::core::banking::account;
-using namespace olbaflinx::core::banking::transaction;
+} // namespace
 
 inline void initResource()
 {
@@ -113,11 +124,11 @@ class Storage::Private
 {
 public:
     explicit Private(Storage *storage, ApplicationInfo applicationInfo)
-        : m_key("")
-        , m_storageFileName("")
+        : m_key()
+        , m_storageFileName()
         , m_applicationInfo(std::move(applicationInfo))
-        , m_settings(Q_NULLPTR)
-        , m_connection(Q_NULLPTR)
+        , m_settings(nullptr)
+        , m_connection(nullptr)
         , q_ptr(storage)
     {
         initResource();
@@ -182,8 +193,8 @@ public:
         if (m_connection) {
             if (m_connection->isOpen()) {
                 QSqlQuery query = databaseQuery();
-                query.exec("REINDEX;");
-                query.exec("VACUUM;");
+                query.exec(QStringLiteral("REINDEX;"));
+                query.exec(QStringLiteral("VACUUM;"));
                 m_connection->close();
             }
 
@@ -209,13 +220,13 @@ public:
         }
 
         QSqlQuery dbQuery = databaseQuery();
-        bool executed = dbQuery.exec("SELECT COUNT(*) AS ID_COUNT FROM accounts;");
+        bool executed = dbQuery.exec(QStringLiteral("SELECT COUNT(*) AS ID_COUNT FROM accounts;"));
         if (!executed) {
             return false;
         }
 
         while (dbQuery.next()) {
-            const int count = dbQuery.value("ID_COUNT").toInt();
+            const int count = dbQuery.value(QStringLiteral("ID_COUNT")).toInt();
             executed &= (count >= 0);
         }
 
@@ -225,7 +236,7 @@ public:
     QSqlQuery databaseQuery()
     {
         QSqlQuery dbQuery(m_connection->database());
-        dbQuery.exec(QString("PRAGMA key='%1';").arg(escapeKey(m_key)));
+        dbQuery.exec(QStringLiteral("PRAGMA key='%1';").arg(escapeKey(m_key)));
         return dbQuery;
     }
 
@@ -234,7 +245,8 @@ public:
         auto columnList = QMap<int, QString>();
 
         QSqlQuery query = databaseQuery();
-        bool executed = query.exec(QString("SELECT * FROM pragma_table_info('%1');").arg(table));
+        bool executed = query.exec(
+            QStringLiteral("SELECT * FROM pragma_table_info('%1');").arg(table));
 
         if (!executed) {
             return {};
@@ -265,13 +277,13 @@ public:
             } else {
                 switch (ascii) {
                 case 34: /* ascii = " */
-                    result.append(QString(strPart).replace(strPart, "\""));
+                    result.append(QString(strPart).replace(strPart, QStringLiteral("\"")));
                     break;
                 case 39: /* ascii = ' */
-                    result.append(QString(strPart).replace(strPart, "''"));
+                    result.append(QString(strPart).replace(strPart, QStringLiteral("''")));
                     break;
                 case 92: /* ascii = \ */
-                    result.append(QString(strPart).replace(strPart, "\\"));
+                    result.append(QString(strPart).replace(strPart, QStringLiteral("\\")));
                     break;
                 default:
                     break;
@@ -297,12 +309,12 @@ public:
     QString storagePath()
     {
         QString path = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
-        return QString("%1/%2").arg(path, m_applicationInfo.organization);
+        return QStringLiteral("%1/%2").arg(path, m_applicationInfo.organization);
     }
 
     bool setupTables()
     {
-        QFile storageFile(":/lib/olbaflinx-storage");
+        QFile storageFile(QStringLiteral(":/lib/olbaflinx-storage"));
         if (!storageFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
             Q_EMIT q_ptr->errorOccurred(Storage::SchemaSetup, storageFile.errorString());
             Q_EMIT q_ptr->finished();
@@ -313,7 +325,7 @@ public:
         QStringList queries = {};
 
         for (auto &query : sqlStatements) {
-            queries << query.replace("#", ";").trimmed();
+            queries << query.replace(QStringLiteral("#"), QStringLiteral(";")).trimmed();
         }
 
         QSqlQuery query = databaseQuery();
@@ -381,7 +393,7 @@ bool Storage::changeKey(const QString &oldKey, const QString &newKey)
 
     d_ptr->setKey(newKey);
 
-    valid = query.exec(QString("PRAGMA rekey='%1';").arg(d_ptr->escapeKey(newKey)));
+    valid = query.exec(QStringLiteral("PRAGMA rekey='%1';").arg(d_ptr->escapeKey(newKey)));
 
     return valid && d_ptr->isConnectionValid();
 }
@@ -440,7 +452,7 @@ QVariant Storage::setting(const QString &key,
 
 QRegularExpression Storage::minPasswordGuidelines() const
 {
-    return MinPasswordReqEx;
+    return minPasswordPattern();
 }
 
 bool Storage::storeItem(const BankingItem *bankingItem)
@@ -451,14 +463,14 @@ bool Storage::storeItem(const BankingItem *bankingItem)
         auto map = bankingItem->toMap();
 
         const auto type = bankingItem->itemType();
-        if (type.startsWith("Account")) {
+        if (type.startsWith(QLatin1StringView("Account"))) {
             query.prepare(AccountInsertQuery);
-        } else if (type.startsWith("ReferenceAccount")) {
-        } else if (type.startsWith("Transaction")) {
+        } else if (type.startsWith(QLatin1StringView("ReferenceAccount"))) {
+        } else if (type.startsWith(QLatin1StringView("Transaction"))) {
             query.prepare(TransactionInsertQuery);
         }
 
-        for (auto [key, value] : map.asKeyValueRange()) {
+        for (const auto &[key, value] : std::as_const(map).asKeyValueRange()) {
             query.bindValue(key, value);
         }
 
@@ -489,19 +501,19 @@ void Storage::receiveItems(Type type, int offset, int limit)
 
     switch (type) {
     case Storage::StorageAccount:
-        columnList = d_ptr->tableColumns({"accounts"});
+        columnList = d_ptr->tableColumns(QStringLiteral("accounts"));
         executed = query.exec(
-            QString("SELECT * FROM accounts LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
+            QStringLiteral("SELECT * FROM accounts LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
         break;
     case Storage::StorageReferenceAccount:
-        columnList = d_ptr->tableColumns({"refaccounts"});
+        columnList = d_ptr->tableColumns(QStringLiteral("refaccounts"));
         executed = query.exec(
-            QString("SELECT * FROM refaccounts LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
+            QStringLiteral("SELECT * FROM refaccounts LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
         break;
     case Storage::StorageTransaction:
-        columnList = d_ptr->tableColumns({"transactions"});
+        columnList = d_ptr->tableColumns(QStringLiteral("transactions"));
         executed = query.exec(
-            QString("SELECT * FROM transactions LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
+            QStringLiteral("SELECT * FROM transactions LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
         break;
     case Storage::StorageCategories: {
     } break;
@@ -527,8 +539,8 @@ void Storage::receiveItems(Type type, int offset, int limit)
     int totalRows = query.numRowsAffected();
 
     while (query.next()) {
-        for (auto [key, value] : columnList.asKeyValueRange()) {
-            map[":" + value] = query.value(key);
+        for (const auto &[key, value] : std::as_const(columnList).asKeyValueRange()) {
+            map[QStringLiteral(":") + value] = query.value(key);
         }
 
         switch (type) {

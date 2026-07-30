@@ -71,5 +71,5 @@ void AppCentralWidget::initialize(QMainWindow *window)
 
 QTreeWidget *AppCentralWidget::accountWidget() const
 {
-    return Q_NULLPTR;
+    return nullptr;
 }

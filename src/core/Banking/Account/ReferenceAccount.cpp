@@ -28,10 +28,10 @@ public:
 
     ~Private()
     {
-        if (abRefAccount != Q_NULLPTR) {
+        if (abRefAccount != nullptr) {
             AB_ReferenceAccount_free(abRefAccount);
         }
-        abRefAccount = Q_NULLPTR;
+        abRefAccount = nullptr;
     }
 
     AB_REFERENCE_ACCOUNT *abRefAccount;
@@ -119,21 +119,21 @@ QMap<QString, QVariant> ReferenceAccount::toMap() const
 {
     QMap<QString, QVariant> map = {};
 
-    map[":iban"] = iban();
-    map[":bic"] = bic();
-    map[":account_number"] = accountNumber();
-    map[":sub_account_number"] = subAccountNumber();
-    map[":country"] = country();
-    map[":bank_code"] = bankCode();
-    map[":owner_name"] = ownerName();
-    map[":owner_name2"] = ownerName2();
-    map[":account_name"] = accountName();
-    map[":account_type"] = accountType();
+    map[QStringLiteral(":iban")] = iban();
+    map[QStringLiteral(":bic")] = bic();
+    map[QStringLiteral(":account_number")] = accountNumber();
+    map[QStringLiteral(":sub_account_number")] = subAccountNumber();
+    map[QStringLiteral(":country")] = country();
+    map[QStringLiteral(":bank_code")] = bankCode();
+    map[QStringLiteral(":owner_name")] = ownerName();
+    map[QStringLiteral(":owner_name2")] = ownerName2();
+    map[QStringLiteral(":account_name")] = accountName();
+    map[QStringLiteral(":account_type")] = accountType();
 
     return map;
 }
 
 QString ReferenceAccount::itemType() const
 {
-    return {"ReferenceAccount"};
+    return QStringLiteral("ReferenceAccount");
 }

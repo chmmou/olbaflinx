@@ -236,7 +236,7 @@ void NewStorageItem::deleteStorage()
 
 void NewStorageItem::backupStorage()
 {
-    QString storageBackupPath = d_ptr->storage->storagePath().append("/backup");
+    QString storageBackupPath = d_ptr->storage->storagePath().append(QStringLiteral("/backup"));
     QDir backupDir(storageBackupPath);
     if (!backupDir.exists()) {
         backupDir.mkpath(storageBackupPath);
@@ -244,10 +244,11 @@ void NewStorageItem::backupStorage()
 
     QFile storageFile(filePath());
     if (storageFile.exists()) {
-        const QString timeStamp = QDateTime::currentDateTime().toString("yyyyMMddhhmmsszzz");
+        const QString timeStamp = QDateTime::currentDateTime().toString(
+            QStringLiteral("yyyyMMddhhmmsszzz"));
 
         QFileInfo info(filePath());
-        const QString storageBackupFile = storageBackupPath.append("/%1.%2")
+        const QString storageBackupFile = storageBackupPath.append(QStringLiteral("/%1.%2"))
                                               .arg(timeStamp, info.completeSuffix());
 
         storageFile.copy(storageBackupFile);

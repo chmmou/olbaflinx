@@ -29,6 +29,9 @@ add_test(NAME TransactionTests COMMAND TransactionTests)
 qt_add_executable(StorageLifetimeTests core/tst_storage_lifetime.cpp)
 add_test(NAME StorageLifetimeTests COMMAND StorageLifetimeTests)
 
+qt_add_executable(StorageGuidelinesTests core/tst_storage.cpp)
+add_test(NAME StorageGuidelinesTests COMMAND StorageGuidelinesTests)
+
 qt_add_executable(BankingTests core/tst_banking.cpp)
 add_test(NAME BankingTests COMMAND BankingTests)
 
@@ -41,7 +44,13 @@ add_test(NAME TransactionListModelTests COMMAND TransactionListModelTests)
 qt_add_executable(StorageDialogTests ui/tst_storagedialog.cpp)
 add_test(NAME StorageDialogTests COMMAND StorageDialogTests)
 
-set(OLBAFLINX_CORE_TESTS OlbaFlinxTests TransactionTests StorageLifetimeTests BankingTests)
+set(OLBAFLINX_CORE_TESTS
+        OlbaFlinxTests
+        TransactionTests
+        StorageLifetimeTests
+        StorageGuidelinesTests
+        BankingTests
+)
 set(OLBAFLINX_UI_TESTS AccountListModelTests TransactionListModelTests StorageDialogTests)
 
 foreach (test_target ${OLBAFLINX_CORE_TESTS} ${OLBAFLINX_UI_TESTS})

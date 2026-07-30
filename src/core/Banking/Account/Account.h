@@ -87,7 +87,7 @@ public:
 
 private:
     class Private;
-    Private *d_ptr;
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::core::banking::account

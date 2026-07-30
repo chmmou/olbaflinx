@@ -59,12 +59,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="312"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="313"/>
         <source>Account %1 [%2] - %3 - %4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="662"/>
+        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="774"/>
         <source>Transaction %1 - %2 %3</source>
         <translation type="unfinished"></translation>
     </message>
@@ -390,12 +390,12 @@
 <context>
     <name>olbaflinx::core::storage::Storage</name>
     <message>
-        <location filename="../../src/core/Storage/Storage.cpp" line="522"/>
+        <location filename="../../src/core/Storage/Storage.cpp" line="534"/>
         <source>Not columns for store item found.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Storage/Storage.cpp" line="559"/>
+        <location filename="../../src/core/Storage/Storage.cpp" line="571"/>
         <source>No items found</source>
         <translation type="unfinished"></translation>
     </message>
@@ -483,7 +483,7 @@
     </message>
     <message>
         <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="223"/>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="259"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="260"/>
         <source>Storage</source>
         <translation type="unfinished"></translation>
     </message>
@@ -494,7 +494,7 @@ This can not be undone!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="259"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="260"/>
         <source>Not implemented yet!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -502,27 +502,27 @@ This can not be undone!</source>
 <context>
     <name>olbaflinx::ui::storage::StorageDialog</name>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="94"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="114"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="185"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="208"/>
         <source>Created on %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="203"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="226"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="204"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="227"/>
         <source>Your data vault is corrupted and or not readable / writeable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="285"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="308"/>
         <source>&lt;h1&gt;Welcome to OlbaFlinx&lt;/h1&gt;&lt;p&gt;Click the plus sign or type Ctrl+N to create a new data storage.&lt;/p&gt;&lt;p&gt;You can create as many vaults as you like, each with its own password, e.g. for different user and or accounts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>
