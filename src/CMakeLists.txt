@@ -40,6 +40,10 @@ qt_add_resources(CORE_RESOURCES ${OLBAFLINX_RES_DIR}/OlbaFlinxCore.qrc)
 qt_add_library(OlbaFlinxCore STATIC
         core/OlbaFlinxCore.h
         core/ApplicationInfo.h
+        core/Error.h
+        core/Logging.cpp
+        core/Logging.h
+        core/Result.h
         core/Banking/Banking.cpp
         core/Banking/Banking.h
         core/Banking/BankingItem.h
@@ -111,6 +115,10 @@ qt_add_library(OlbaFlinxUi STATIC
         ui/AppCentralWidget.cpp
         ui/AppCentralWidget.h
         ui/AppCentralWidget.ui
+        ui/ErrorMessage.cpp
+        ui/ErrorMessage.h
+        ui/Logging.cpp
+        ui/Logging.h
         ui/Assistant/SetupAssistant.cpp
         ui/Assistant/SetupAssistant.h
         ui/Assistant/SetupAssistant.ui

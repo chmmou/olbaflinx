@@ -21,6 +21,7 @@
 
 #include "core/ApplicationInfo.h"
 #include "core/Banking/BankingItem.h"
+#include "core/Error.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QRegularExpression>
@@ -49,23 +50,6 @@ public:
      */
     explicit Storage(ApplicationInfo applicationInfo, QObject *parent = nullptr);
     ~Storage() override;
-
-    /**
-     * @brief Error enumeration
-     */
-    enum Error {
-        /** Error on storing item */
-        NoError = 0,
-        /** Error on storing item */
-        StoreItem = 100,
-        /** Error on schema setup */
-        SchemaSetup,
-        /** Error on password changing */
-        PasswordChanged,
-        /** Unknown error */
-        Unknown = 1000,
-    };
-    Q_ENUM(Error);
 
     /**
      * @brief Storage type enumeration
@@ -99,10 +83,10 @@ public:
      * @param oldKey Old storage key
      * @param newKey New storage key
      *
-     * @return If a error occurred false returned and the errorOccurred signal is emitted;
-     *  otherwise true
+     * @return A default constructed Error on success, otherwise the reason. The
+     *  caller has to check it, the return type is [[nodiscard]].
      */
-    [[nodiscard]] bool changeKey(const QString &oldKey, const QString &newKey);
+    Error changeKey(const QString &oldKey, const QString &newKey);
 
     /**
      * @Brief Initializing the storage backend
@@ -111,10 +95,10 @@ public:
      *  schema, then set it to false; otherwise, it is safe to set it to true since we only initialize
      *  the database default schema once.
      *
-     * @return If a error occurred false returned and the errorOccurred signal is emitted;
-     *  otherwise true
+     * @return A default constructed Error on success, otherwise the reason. The
+     *  caller has to check it, the return type is [[nodiscard]].
      */
-    [[nodiscard]] bool initialize(bool withSchema = false);
+    Error initialize(bool withSchema = false);
 
     /**
      * @brief Checks whether the storage has been initialized correctly and is ready for use.
@@ -170,9 +154,10 @@ public:
      *
      * @param bankingItem A pointer to the BankingItem object to be stored.
      *                     The item must be valid to proceed.
-     * @return True if the item is successfully stored; false if an error occurs during the operation.
+     * @return A default constructed Error on success, otherwise the reason. An
+     *  invalid or unsupported item is a failure, not a silent no-op.
      */
-    bool storeItem(const BankingItem *bankingItem);
+    Error storeItem(const BankingItem *bankingItem);
 
     /**
      * @brief Retrieves a list of items from a database based on the specified type, offset, and limit.
@@ -185,12 +170,15 @@ public:
 
 Q_SIGNALS:
     /**
-     * @brief This signal is emitted if any error occurred
+     * @brief This signal is emitted if an error occurred on an asynchronous path.
      *
-     * @param errorCode @ref Error
-     * @param reason Error message
+     * Synchronous calls report through their return value instead.
+     *
+     * @param errorCode @ref olbaflinx::core::ErrorCode
+     * @param reason Technical message, meant for the log. The presentation
+     *  layer decides what the user gets to see.
      */
-    void errorOccurred(Error errorCode, const QString &reason);
+    void errorOccurred(olbaflinx::core::ErrorCode errorCode, const QString &reason);
 
     /**
      * @brief This signal is emitted when we have received one or more entries.

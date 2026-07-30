@@ -17,6 +17,8 @@
 
 #include "core/Banking/Banking.h"
 
+#include "core/Logging.h"
+
 #include <chipcard/client.h>
 
 #include <gwenhywfar/dialog.h>
@@ -43,6 +45,7 @@
 #define AB_ERROR GWEN_ERROR_GENERIC
 #endif
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 
 class Banking::Private
@@ -60,21 +63,26 @@ public:
 
     ~Private() { finalize(); }
 
-    bool initialize(const QString &name, const QString &version, const QString &key)
+    Error initialize(const QString &name, const QString &version, const QString &key)
     {
         if (name.isEmpty() || version.isEmpty()) {
-            return false;
+            return Error(ErrorCode::InvalidInput,
+                         QStringLiteral("Banking needs an application name and a version, got "
+                                        "\"%1\" and \"%2\"")
+                             .arg(name, version));
         }
 
         // We don't initialize AQ Banking & Gwen GUI twice
         m_isInitialized = (aqBanking != nullptr) && (gwenGui != nullptr);
         if (m_isInitialized) {
-            return false;
+            return Error(ErrorCode::InvalidInput,
+                         QStringLiteral("The banking backend is already initialized"));
         }
 
         int rv = GWEN_Init();
         if (rv != AB_SUCCESS) {
-            return false;
+            return Error(ErrorCode::BankingFailure,
+                         QStringLiteral("GWEN_Init failed with %1").arg(rv));
         }
 
         qtGui = new QT5_Gui();
@@ -96,7 +104,8 @@ public:
 
         rv = AB_Banking_Init(aqBanking);
         if (rv != AB_SUCCESS) {
-            return false;
+            return Error(ErrorCode::BankingFailure,
+                         QStringLiteral("AB_Banking_Init failed with %1").arg(rv));
         }
 
         AB_Gui_Extend(gwenGui, aqBanking);
@@ -109,8 +118,14 @@ public:
         LC_Client_Init(m_chipCardClient);
 
         m_isInitialized = ((aqBanking != nullptr) && (gwenGui != nullptr));
+        if (!m_isInitialized) {
+            return Error(ErrorCode::BankingFailure,
+                         QStringLiteral("The banking backend did not come up"));
+        }
 
-        return m_isInitialized;
+        qCInfo(lcBanking) << "banking backend initialized for" << name << version;
+
+        return {};
     }
 
     void finalize()
@@ -231,7 +246,7 @@ Banking::~Banking()
     delete d_ptr;
 }
 
-bool Banking::initialize(const QString &name, const QString &version, const QString &key)
+Error Banking::initialize(const QString &name, const QString &version, const QString &key)
 {
     return d_ptr->initialize(name, version, key);
 }
@@ -248,18 +263,25 @@ int Banking::setupAccounts()
 
 void Banking::accounts()
 {
-    if (!d_ptr->isInitialized()) {
-        Q_EMIT errorOccurred(AB_ERROR_NOT_INIT, tr("The backend for banking was not initialized!"));
+    const auto reportError = [this](ErrorCode code, const QString &message) {
+        qCCritical(lcBanking) << message;
+
+        Q_EMIT errorOccurred(code, message);
         Q_EMIT finished();
+    };
+
+    if (!d_ptr->isInitialized()) {
+        reportError(ErrorCode::BankingFailure,
+                    QStringLiteral("The banking backend is not initialized"));
         return;
     }
 
     AB_ACCOUNT_SPEC_LIST *specList = nullptr;
 
-    int rv = AB_Banking_GetAccountSpecList(d_ptr->aqBanking, &specList);
+    const int rv = AB_Banking_GetAccountSpecList(d_ptr->aqBanking, &specList);
     if (rv != AB_SUCCESS) {
-        Q_EMIT errorOccurred(rv, tr("No account list could be populated!"));
-        Q_EMIT finished();
+        reportError(ErrorCode::BankingFailure,
+                    QStringLiteral("AB_Banking_GetAccountSpecList failed with %1").arg(rv));
         return;
     }
 
@@ -269,10 +291,11 @@ void Banking::accounts()
     specList = nullptr;
 
     if (accounts.isEmpty()) {
-        Q_EMIT errorOccurred(AB_ERROR_EMPTY, tr("No accounts were found!"));
-        Q_EMIT finished();
+        reportError(ErrorCode::NotFound, QStringLiteral("No accounts were found"));
         return;
     }
+
+    qCDebug(lcBanking) << "read" << accounts.size() << "accounts";
 
     Q_EMIT itemsReceived(accounts);
 

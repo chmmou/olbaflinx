@@ -119,16 +119,16 @@ QMap<QString, QVariant> ReferenceAccount::toMap() const
 {
     QMap<QString, QVariant> map = {};
 
-    map[QStringLiteral(":iban")] = iban();
-    map[QStringLiteral(":bic")] = bic();
-    map[QStringLiteral(":account_number")] = accountNumber();
-    map[QStringLiteral(":sub_account_number")] = subAccountNumber();
-    map[QStringLiteral(":country")] = country();
-    map[QStringLiteral(":bank_code")] = bankCode();
-    map[QStringLiteral(":owner_name")] = ownerName();
-    map[QStringLiteral(":owner_name2")] = ownerName2();
-    map[QStringLiteral(":account_name")] = accountName();
-    map[QStringLiteral(":account_type")] = accountType();
+    map[QStringLiteral("iban")] = iban();
+    map[QStringLiteral("bic")] = bic();
+    map[QStringLiteral("account_number")] = accountNumber();
+    map[QStringLiteral("sub_account_number")] = subAccountNumber();
+    map[QStringLiteral("country")] = country();
+    map[QStringLiteral("bank_code")] = bankCode();
+    map[QStringLiteral("owner_name")] = ownerName();
+    map[QStringLiteral("owner_name2")] = ownerName2();
+    map[QStringLiteral("account_name")] = accountName();
+    map[QStringLiteral("account_type")] = accountType();
 
     return map;
 }

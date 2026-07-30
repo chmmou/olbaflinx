@@ -35,6 +35,12 @@ add_test(NAME StorageGuidelinesTests COMMAND StorageGuidelinesTests)
 qt_add_executable(BankingTests core/tst_banking.cpp)
 add_test(NAME BankingTests COMMAND BankingTests)
 
+qt_add_executable(StorageErrorTests core/tst_storage_errors.cpp)
+add_test(NAME StorageErrorTests COMMAND StorageErrorTests)
+
+qt_add_executable(AppErrorHandlingTests ui/tst_apperrorhandling.cpp)
+add_test(NAME AppErrorHandlingTests COMMAND AppErrorHandlingTests)
+
 qt_add_executable(AccountListModelTests ui/tst_accountlistmodel.cpp)
 add_test(NAME AccountListModelTests COMMAND AccountListModelTests)
 
@@ -49,9 +55,15 @@ set(OLBAFLINX_CORE_TESTS
         TransactionTests
         StorageLifetimeTests
         StorageGuidelinesTests
+        StorageErrorTests
         BankingTests
 )
-set(OLBAFLINX_UI_TESTS AccountListModelTests TransactionListModelTests StorageDialogTests)
+set(OLBAFLINX_UI_TESTS
+        AccountListModelTests
+        TransactionListModelTests
+        StorageDialogTests
+        AppErrorHandlingTests
+)
 
 foreach (test_target ${OLBAFLINX_CORE_TESTS} ${OLBAFLINX_UI_TESTS})
     # For "BaseTest.h", which sits next to the test sources.

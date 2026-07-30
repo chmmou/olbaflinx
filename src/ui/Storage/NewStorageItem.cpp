@@ -19,6 +19,7 @@
 #include "ui_NewStorageItem.h"
 
 #include "core/Storage/Storage.h"
+#include "ui/Logging.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QFile>
@@ -183,7 +184,17 @@ void NewStorageItem::showPasswordChangeDialog()
                 qApp->setOverrideCursor(Qt::WaitCursor);
                 d_ptr->storage->setKey(currPassword);
                 d_ptr->storage->setStorageFile(filePath());
-                (void) d_ptr->storage->initialize(false);
+
+                if (const auto error = d_ptr->storage->initialize(false); error.isError()) {
+                    qCWarning(lcUiStorage) << "could not open the storage:" << error.message();
+
+                    QMessageBox::critical(&pwdChangeDlg,
+                                          dlgTitle,
+                                          tr("The storage could not be opened. Check the "
+                                             "current password."));
+                    qApp->restoreOverrideCursor();
+                    return;
+                }
 
                 const bool isStorageValid = d_ptr->storage->isValid();
                 if (!isStorageValid) {
@@ -194,8 +205,10 @@ void NewStorageItem::showPasswordChangeDialog()
                     return;
                 }
 
-                const bool success = d_ptr->storage->changeKey(currPassword, newPassword);
-                if (!success) {
+                if (const auto error = d_ptr->storage->changeKey(currPassword, newPassword);
+                    error.isError()) {
+                    qCWarning(lcUiStorage) << "could not change the key:" << error.message();
+
                     QMessageBox::critical(&pwdChangeDlg,
                                           dlgTitle,
                                           tr("The password could not be changed!"));

@@ -16,8 +16,6 @@
  */
 #pragma once
 
-#include <cstdlib>
-
 #include "core/Banking/Account/Account.h"
 
 #include <QtCore/QMap>
@@ -40,22 +38,24 @@ public:
         QMap<QString, QVariant> map = {};
 
         // Test fake data: https://ibanvalidieren.de/beispiele.html
-        map[":type"] = accountType;
-        map[":uniqueId"] = QRandomGenerator::system()->generate();
-        map[":backend_name"] = "aqhbci";
-        map[":owner_name"] = randomString();
-        map[":account_name"] = randomString();
-        map[":currency"] = "EURO";
-        map[":memo"] = "";
-        map[":iban"] = "DE02500105170137075030";
-        map[":bic"] = "INGDDEFF";
-        map[":country"] = "";
-        map[":bank_code"] = "50010517";
-        map[":bank_name"] = "ING-DIBA";
-        map[":branch_id"] = "";
-        map[":account_number"] = "0137075030";
-        map[":sub_account_number"] = "";
-        map[":balance"] = (rand() * 1.01);
+        // The keys carry no colon. It belongs to the binding of a query, not to
+        // a property map, and the two sides used to disagree about it.
+        map["type"] = accountType;
+        map["unique_id"] = QRandomGenerator::system()->generate();
+        map["backend_name"] = "aqhbci";
+        map["owner_name"] = randomString();
+        map["account_name"] = randomString();
+        map["currency"] = "EURO";
+        map["memo"] = "";
+        map["iban"] = "DE02500105170137075030";
+        map["bic"] = "INGDDEFF";
+        map["country"] = "";
+        map["bank_code"] = "50010517";
+        map["bank_name"] = "ING-DIBA";
+        map["branch_id"] = "";
+        map["account_number"] = "0137075030";
+        map["sub_account_number"] = "";
+        map["balance"] = QRandomGenerator::system()->bounded(1000.0);
 
         return map;
     }
@@ -64,7 +64,7 @@ public:
     {
         QString randomString;
         for (int i = 0; i < 12; ++i) {
-            const auto letter = 'A' + (rand() % (2 * 26));
+            const auto letter = 'A' + QRandomGenerator::system()->bounded(2 * 26);
             randomString.append(QChar(letter));
         }
 

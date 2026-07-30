@@ -112,7 +112,12 @@ void StorageTest::testInitializingWithNoStorageFile()
     Storage storage(applicationInfo());
     storage.setKey(storagePassword);
     storage.setStorageFile("");
-    (void) storage.initialize(true);
+
+    // Without a file there is no connection to open. The call used to report
+    // that through a signal nobody listened to.
+    const auto error = storage.initialize(true);
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::DatabaseFailure);
 
     QVERIFY(!storage.isValid());
     storage.close();
@@ -125,6 +130,9 @@ void StorageTest::testInitializingWithNoPassword()
 
     storage.setKey("");
     storage.setStorageFile(tmpStorage);
+
+    // An empty key opens the file, it just leaves it unencrypted. The storage is
+    // not usable that way, which isValid reports.
     (void) storage.initialize(true);
 
     QVERIFY(!storage.isValid());
@@ -142,7 +150,7 @@ void StorageTest::testInitializing()
     storage.setKey(storagePassword);
     storage.setStorageFile(tmpStorage);
 
-    (void) storage.initialize(true);
+    QVERIFY(!storage.initialize(true).isError());
 
     QVERIFY(storage.isValid());
     storage.close();
@@ -158,24 +166,26 @@ void StorageTest::testChangePassword()
     storage.setKey(storagePassword);
     storage.setStorageFile(tmpStorage);
 
-    (void) storage.initialize(true);
+    QVERIFY(!storage.initialize(true).isError());
 
-    bool changed = storage.changeKey(storagePassword,
-                                     "eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
-    QVERIFY(changed);
+    QVERIFY(!storage.changeKey(storagePassword,
+                               "eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2")
+                 .isError());
     storage.close();
 
     storage.setKey(storagePassword);
     storage.setStorageFile(tmpStorage);
 
-    (void) storage.initialize(true);
+    // The old key no longer opens the file. Applying the schema fails, and that
+    // now reaches the caller instead of ending in an unheard signal.
+    QVERIFY(storage.initialize(true).isError());
 
     QVERIFY(!storage.isValid());
 
     storage.setKey("eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
     storage.setStorageFile(tmpStorage);
 
-    (void) storage.initialize(true);
+    QVERIFY(!storage.initialize(true).isError());
     QVERIFY(storage.isValid());
     storage.close();
 
@@ -224,7 +234,7 @@ void StorageTest::testStoreItems()
     storage.setKey(storagePassword);
     storage.setStorageFile(tmpStorage);
 
-    (void) storage.initialize(true);
+    QVERIFY(!storage.initialize(true).isError());
     QVERIFY(storage.isValid());
 
     const auto account1 = BaseTest::createFakeAccount();
@@ -233,8 +243,8 @@ void StorageTest::testStoreItems()
     const auto account2 = BaseTest::createFakeAccount();
     QVERIFY(account2->isValid());
 
-    (void) storage.storeItem(account1.get());
-    (void) storage.storeItem(account2.get());
+    QVERIFY(!storage.storeItem(account1.get()).isError());
+    QVERIFY(!storage.storeItem(account2.get()).isError());
 
     storage.receiveItems(Storage::StorageAccount);
     // Make sure the signal was emitted exactly one time

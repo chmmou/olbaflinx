@@ -21,6 +21,7 @@
 
 #include "core/ApplicationInfo.h"
 #include "core/Banking/Account/Account.h"
+#include "core/Error.h"
 
 #include <QtCore/QObject>
 
@@ -62,9 +63,10 @@ public:
      * @param version Application version registered by German HBCI ZKA
      * @param key The FinTS registration key from German ZKA
      *
-     * @return true on success; otherwise false.
+     * @return A default constructed Error on success, otherwise the reason. The
+     *  caller has to check it, the return type is [[nodiscard]].
      */
-    bool initialize(const QString &name, const QString &version, const QString &key);
+    Error initialize(const QString &name, const QString &version, const QString &key);
 
     /**
      * @brief Finalize the banking backend and free all resources.
@@ -86,7 +88,14 @@ public:
     void accounts();
 
 Q_SIGNALS:
-    void errorOccurred(qint32 code, const QString &reason);
+    /**
+     * @brief This signal is emitted if an error occurred on an asynchronous path.
+     *
+     * @param errorCode @ref olbaflinx::core::ErrorCode
+     * @param reason Technical message, meant for the log. It carries the return
+     *  value of the banking backend where there is one.
+     */
+    void errorOccurred(olbaflinx::core::ErrorCode errorCode, const QString &reason);
 
     void progressValueChanged(qreal progress);
     void itemsReceived(const BankingItems &items);

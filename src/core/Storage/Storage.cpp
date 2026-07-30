@@ -21,9 +21,12 @@
 #include "core/Banking/Account/Account.h"
 #include "core/Banking/Account/ReferenceAccount.h"
 #include "core/Banking/Transaction/Transaction.h"
+#include "core/Logging.h"
+#include "core/Result.h"
 
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QFile>
+#include <QtCore/QMetaEnum>
 #include <QtCore/QScopedPointer>
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>
@@ -36,8 +39,10 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 
+#include <memory>
 #include <utility>
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::account;
@@ -109,6 +114,26 @@ constexpr auto TransactionInsertQuery = QLatin1StringView(
     ":unit_id_name_space, :ticker_symbol, :units, :unit_price_value, :unit_price_date, "
     ":commission_value, :memo, :hash);");
 
+/**
+ * Collects the placeholder names an insert statement carries, without the
+ * leading colon. A property whose key is missing from that set would be dropped
+ * by QSqlQuery::bindValue without a word, which is how the balance of an
+ * account went missing.
+ */
+QSet<QString> placeholdersOf(QLatin1StringView statement)
+{
+    static const QRegularExpression placeholder(QStringLiteral(":([A-Za-z_][A-Za-z0-9_]*)"));
+
+    auto names = QSet<QString>();
+
+    auto matches = placeholder.globalMatch(QString::fromLatin1(statement));
+    while (matches.hasNext()) {
+        names.insert(matches.next().captured(1));
+    }
+
+    return names;
+}
+
 } // namespace
 
 inline void initResource()
@@ -127,7 +152,6 @@ public:
         : m_key()
         , m_storageFileName()
         , m_applicationInfo(std::move(applicationInfo))
-        , m_settings(nullptr)
         , m_connection(nullptr)
         , q_ptr(storage)
     {
@@ -138,15 +162,16 @@ public:
 
     ~Private()
     {
-        if (m_settings != nullptr) {
+        if (m_settings) {
             m_settings->sync();
         }
-        delete m_settings;
 
         close();
     }
 
     void setStorageFile(const QString &file) { m_storageFileName = file; }
+
+    QString storageFileName() const { return m_storageFileName; }
 
     void setKey(const QString &key) { m_key = key; }
 
@@ -154,7 +179,7 @@ public:
 
     QString lastErrorMessage() { return m_connection->lastErrorMessage(); }
 
-    bool initialize(const bool withSchema = false)
+    Error initialize(const bool withSchema = false)
     {
         if (m_connection != nullptr) {
             const auto currentDatabaseName = m_connection->database().databaseName();
@@ -168,7 +193,7 @@ public:
                 if (withSchema) {
                     return setupTables();
                 }
-                return true;
+                return {};
             }
         }
 
@@ -176,26 +201,45 @@ public:
 
         m_connection = new StorageConnection(m_storageFileName);
         if (!m_connection->isOpen()) {
-            Q_EMIT q_ptr->errorOccurred(Storage::PasswordChanged, lastErrorMessage());
+            // The message of the driver names the file and the reason, it is for
+            // the log. The code tells the caller that the store could not be
+            // opened, which is not the same as a wrong password.
+            auto error = Error(ErrorCode::DatabaseFailure,
+                               QStringLiteral("Could not open the storage file %1: %2")
+                                   .arg(m_storageFileName, lastErrorMessage()));
+
+            qCCritical(lcStorage) << error.message();
+
+            Q_EMIT q_ptr->errorOccurred(error.code(), error.message());
             Q_EMIT q_ptr->finished();
-            return false;
+
+            return error;
         }
+
+        qCInfo(lcStorage) << "storage opened" << m_storageFileName;
 
         if (withSchema) {
             return setupTables();
         }
 
-        return m_connection->isOpen();
+        return {};
     }
 
     void close()
     {
         if (m_connection) {
             if (m_connection->isOpen()) {
-                QSqlQuery query = databaseQuery();
-                query.exec(QStringLiteral("REINDEX;"));
-                query.exec(QStringLiteral("VACUUM;"));
+                QSqlQuery query;
+                if (const auto error = openQuery(query); error.isError()) {
+                    qCWarning(lcStorage) << "skipping maintenance on close:" << error.message();
+                } else {
+                    runMaintenance(query, QStringLiteral("REINDEX;"));
+                    runMaintenance(query, QStringLiteral("VACUUM;"));
+                }
+
                 m_connection->close();
+
+                qCInfo(lcStorage) << "storage closed" << m_storageFileName;
             }
 
             delete m_connection;
@@ -207,48 +251,94 @@ public:
 
     bool isConnectionValid()
     {
-        if (!m_connection->isOpen()) {
+        if (m_connection == nullptr || !m_connection->isOpen()) {
             return false;
         }
 
         if (m_key.isEmpty()) {
+            // A predicate, not an operation. A log entry is the whole of the
+            // reporting here, the caller learns the outcome from the return value.
+            qCDebug(lcStorage) << "storage has no key set";
             return false;
         }
 
         if (m_storageFileName.isEmpty()) {
+            qCDebug(lcStorage) << "storage has no file set";
             return false;
         }
 
-        QSqlQuery dbQuery = databaseQuery();
-        bool executed = dbQuery.exec(QStringLiteral("SELECT COUNT(*) AS ID_COUNT FROM accounts;"));
-        if (!executed) {
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            qCDebug(lcStorage) << "storage is not readable:" << error.message();
             return false;
         }
 
-        while (dbQuery.next()) {
-            const int count = dbQuery.value(QStringLiteral("ID_COUNT")).toInt();
+        if (!query.exec(QStringLiteral("SELECT COUNT(*) AS ID_COUNT FROM accounts;"))) {
+            qCDebug(lcStorage) << "storage is not readable:" << query.lastError().text();
+            return false;
+        }
+
+        bool executed = true;
+        while (query.next()) {
+            const int count = query.value(QStringLiteral("ID_COUNT")).toInt();
             executed &= (count >= 0);
         }
 
         return executed;
     }
 
-    QSqlQuery databaseQuery()
+    /**
+     * Puts a query on the connection and applies the decryption key to it.
+     * Whoever gets no error back holds a query on a readable database; whoever
+     * gets one must not carry on, every statement would then fail with a message
+     * that does not name the cause.
+     *
+     * QSqlQuery cannot be copied, so the query is handed in rather than returned.
+     */
+    [[nodiscard]] Error openQuery(QSqlQuery &query)
     {
-        QSqlQuery dbQuery(m_connection->database());
-        dbQuery.exec(QStringLiteral("PRAGMA key='%1';").arg(escapeKey(m_key)));
-        return dbQuery;
+        if (m_connection == nullptr) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("No storage connection for %1").arg(m_storageFileName));
+        }
+
+        query = QSqlQuery(m_connection->database());
+        if (!query.exec(QStringLiteral("PRAGMA key='%1';").arg(escapeKey(m_key)))) {
+            // The message of the driver can carry the key on this statement.
+            // Only the file is named, never the reason verbatim.
+            return Error(ErrorCode::PermissionDenied,
+                         QStringLiteral("Could not apply the key to %1").arg(m_storageFileName));
+        }
+
+        return {};
+    }
+
+    /**
+     * Maintenance. A failure leaves the data untouched, it only costs the
+     * compactness of the file. A log entry is therefore the whole of the
+     * handling.
+     */
+    static void runMaintenance(QSqlQuery &query, const QString &statement)
+    {
+        if (!query.exec(statement)) {
+            qCWarning(lcStorage) << "maintenance statement failed:" << statement
+                                 << query.lastError().text();
+        }
     }
 
     QMap<int, QString> tableColumns(const QString &table)
     {
         auto columnList = QMap<int, QString>();
 
-        QSqlQuery query = databaseQuery();
-        bool executed = query.exec(
-            QStringLiteral("SELECT * FROM pragma_table_info('%1');").arg(table));
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            qCCritical(lcStorage) << "could not read the columns of" << table << error.message();
+            return {};
+        }
 
-        if (!executed) {
+        if (!query.exec(QStringLiteral("SELECT * FROM pragma_table_info('%1');").arg(table))) {
+            qCCritical(lcStorage) << "could not read the columns of" << table
+                                  << query.lastError().text();
             return {};
         }
 
@@ -257,6 +347,44 @@ public:
         }
 
         return columnList;
+    }
+
+    /**
+     * The number of rows the given window actually yields. QSqlQuery::size() is
+     * unavailable for SQLite and numRowsAffected() is undefined for a SELECT, so
+     * the count comes from a query of its own.
+     */
+    Result<int> windowedRowCount(const QString &table, int offset, int limit)
+    {
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            return error;
+        }
+
+        // The table name is interpolated because SQL knows no binding for an
+        // identifier. It comes from a literal of this file, never from outside.
+        // The window is bound.
+        const auto statement
+            = QStringLiteral(
+                  "SELECT COUNT(*) FROM (SELECT 1 FROM %1 LIMIT :limit OFFSET :offset);")
+                  .arg(table);
+
+        if (!query.prepare(statement)) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the row count of %1: %2")
+                             .arg(table, query.lastError().text()));
+        }
+
+        query.bindValue(QStringLiteral(":limit"), limit);
+        query.bindValue(QStringLiteral(":offset"), offset);
+
+        if (!query.exec() || !query.next()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not count the rows of %1: %2")
+                             .arg(table, query.lastError().text()));
+        }
+
+        return query.value(0).toInt();
     }
 
     QString escapeKey(const QString &key)
@@ -296,14 +424,14 @@ public:
 
     QSettings *settings()
     {
-        if (m_settings == nullptr) {
-            m_settings = new QSettings(QSettings::IniFormat,
-                                       QSettings::UserScope,
-                                       m_applicationInfo.organization,
-                                       m_applicationInfo.name);
+        if (!m_settings) {
+            m_settings = std::make_unique<QSettings>(QSettings::IniFormat,
+                                                     QSettings::UserScope,
+                                                     m_applicationInfo.organization,
+                                                     m_applicationInfo.name);
         }
 
-        return m_settings;
+        return m_settings.get();
     }
 
     QString storagePath()
@@ -312,13 +440,13 @@ public:
         return QStringLiteral("%1/%2").arg(path, m_applicationInfo.organization);
     }
 
-    bool setupTables()
+    Error setupTables()
     {
         QFile storageFile(QStringLiteral(":/lib/olbaflinx-storage"));
         if (!storageFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            Q_EMIT q_ptr->errorOccurred(Storage::SchemaSetup, storageFile.errorString());
-            Q_EMIT q_ptr->finished();
-            return false;
+            return reportSchemaFailure(ErrorCode::IoFailure,
+                                       QStringLiteral("Could not read the schema: %1")
+                                           .arg(storageFile.errorString()));
         }
 
         QStringList sqlStatements = QTextStream(&storageFile).readAll().split(';');
@@ -328,32 +456,53 @@ public:
             queries << query.replace(QStringLiteral("#"), QStringLiteral(";")).trimmed();
         }
 
-        QSqlQuery query = databaseQuery();
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            return reportSchemaFailure(error.code(), error.message());
+        }
+
         for (const auto &sqlStatement : std::as_const(queries)) {
             if (sqlStatement.isEmpty()) {
                 continue;
             }
 
             connection()->beginTransaction();
-            bool success = query.exec(sqlStatement);
-            if (!success) {
+            if (!query.exec(sqlStatement)) {
                 connection()->rollbackTransaction();
-                Q_EMIT q_ptr->errorOccurred(Storage::SchemaSetup, lastErrorMessage());
-                Q_EMIT q_ptr->finished();
-                return false;
+
+                // The statement itself stays out of the message, it goes to the
+                // log only. It carries no secret, but it is of no use to a user.
+                qCCritical(lcStorage) << "schema statement failed:" << sqlStatement
+                                      << query.lastError().text();
+
+                return reportSchemaFailure(ErrorCode::DatabaseFailure,
+                                           QStringLiteral("Could not create the schema of %1: %2")
+                                               .arg(m_storageFileName, lastErrorMessage()));
             }
             connection()->commitTransaction();
         }
 
-        return true;
+        return {};
     }
 
 private:
+    Error reportSchemaFailure(ErrorCode code, const QString &message)
+    {
+        auto error = Error(code, message);
+
+        qCCritical(lcStorage) << error.message();
+
+        Q_EMIT q_ptr->errorOccurred(error.code(), error.message());
+        Q_EMIT q_ptr->finished();
+
+        return error;
+    }
+
     QString m_key;
     QString m_storageFileName;
     ApplicationInfo m_applicationInfo;
 
-    QSettings *m_settings;
+    std::unique_ptr<QSettings> m_settings;
     StorageConnection *m_connection;
 
     friend class Storage;
@@ -380,25 +529,45 @@ void Storage::setKey(const QString &key)
     d_ptr->setKey(key);
 }
 
-bool Storage::changeKey(const QString &oldKey, const QString &newKey)
+Error Storage::changeKey(const QString &oldKey, const QString &newKey)
 {
     d_ptr->setKey(oldKey);
 
-    QSqlQuery query = d_ptr->databaseQuery();
-    bool valid = d_ptr->isConnectionValid();
+    QSqlQuery query;
+    if (const auto error = d_ptr->openQuery(query); error.isError()) {
+        return error;
+    }
 
-    if (!valid) {
-        return false;
+    if (!d_ptr->isConnectionValid()) {
+        return Error(ErrorCode::PermissionDenied,
+                     QStringLiteral("The current key does not open %1")
+                         .arg(d_ptr->storageFileName()));
     }
 
     d_ptr->setKey(newKey);
 
-    valid = query.exec(QStringLiteral("PRAGMA rekey='%1';").arg(d_ptr->escapeKey(newKey)));
+    if (!query.exec(QStringLiteral("PRAGMA rekey='%1';").arg(d_ptr->escapeKey(newKey)))) {
+        // Restores the state the caller handed us, so that a failed change does
+        // not leave the storage holding a key it was never rekeyed to.
+        d_ptr->setKey(oldKey);
 
-    return valid && d_ptr->isConnectionValid();
+        return Error(ErrorCode::DatabaseFailure,
+                     QStringLiteral("Could not change the key of %1")
+                         .arg(d_ptr->storageFileName()));
+    }
+
+    if (!d_ptr->isConnectionValid()) {
+        return Error(ErrorCode::DatabaseFailure,
+                     QStringLiteral("The storage %1 is not readable with the new key")
+                         .arg(d_ptr->storageFileName()));
+    }
+
+    qCInfo(lcStorage) << "key changed for" << d_ptr->storageFileName();
+
+    return {};
 }
 
-bool Storage::initialize(bool withSchema)
+Error Storage::initialize(bool withSchema)
 {
     return d_ptr->initialize(withSchema);
 }
@@ -455,125 +624,196 @@ QRegularExpression Storage::minPasswordGuidelines() const
     return minPasswordPattern();
 }
 
-bool Storage::storeItem(const BankingItem *bankingItem)
+Error Storage::storeItem(const BankingItem *bankingItem)
 {
-    auto query = d_ptr->databaseQuery();
-
-    if (bankingItem->isValid()) {
-        auto map = bankingItem->toMap();
-
-        const auto type = bankingItem->itemType();
-        if (type.startsWith(QLatin1StringView("Account"))) {
-            query.prepare(AccountInsertQuery);
-        } else if (type.startsWith(QLatin1StringView("ReferenceAccount"))) {
-        } else if (type.startsWith(QLatin1StringView("Transaction"))) {
-            query.prepare(TransactionInsertQuery);
-        }
-
-        for (const auto &[key, value] : std::as_const(map).asKeyValueRange()) {
-            query.bindValue(key, value);
-        }
-
-        const auto success = query.exec();
-        if (!success) {
-            Q_EMIT errorOccurred(Error::StoreItem, d_ptr->lastErrorMessage());
-            Q_EMIT finished();
-            return false;
-        }
-
-        map.clear();
+    if (bankingItem == nullptr) {
+        return Error(ErrorCode::InvalidInput, QStringLiteral("No banking item to store"));
     }
 
-    query.clear();
+    const auto type = bankingItem->itemType();
+
+    if (!bankingItem->isValid()) {
+        // Used to return success without having written anything.
+        return Error(ErrorCode::InvalidInput,
+                     QStringLiteral("Invalid banking item of type %1").arg(type));
+    }
+
+    auto insertQuery = QLatin1StringView();
+    if (type == QLatin1StringView("Account")) {
+        insertQuery = AccountInsertQuery;
+    } else if (type == QLatin1StringView("Transaction")) {
+        insertQuery = TransactionInsertQuery;
+    } else {
+        // ReferenceAccount, Category and Contact have no table of their own yet.
+        // The branch used to be empty, which sent an unprepared query on its way.
+        return Error(ErrorCode::NotImplemented,
+                     QStringLiteral("Storing an item of type %1 is not implemented").arg(type));
+    }
+
+    QSqlQuery query;
+    if (const auto error = d_ptr->openQuery(query); error.isError()) {
+        Q_EMIT errorOccurred(error.code(), error.message());
+        Q_EMIT finished();
+
+        return error;
+    }
+
+    if (!query.prepare(insertQuery)) {
+        return Error(ErrorCode::DatabaseFailure,
+                     QStringLiteral("Could not prepare the insert for type %1: %2")
+                         .arg(type, query.lastError().text()));
+    }
+
+    const auto map = bankingItem->toMap();
+    const auto placeholders = placeholdersOf(insertQuery);
+
+    for (const auto &[key, value] : map.asKeyValueRange()) {
+        if (!placeholders.contains(key)) {
+            // bindValue would drop the property without a word. The property is
+            // not persisted, which is a gap in the schema, not a failure of this
+            // write; the item itself is stored.
+            qCWarning(lcStorage) << "property" << key << "of type" << type
+                                 << "has no column and is not stored";
+            continue;
+        }
+
+        query.bindValue(QLatin1Char(':') + key, value);
+    }
+
+    if (!query.exec()) {
+        auto error = Error(ErrorCode::DatabaseFailure,
+                           QStringLiteral("Could not store an item of type %1: %2")
+                               .arg(type, d_ptr->lastErrorMessage()));
+
+        qCCritical(lcStorage) << error.message();
+
+        Q_EMIT errorOccurred(error.code(), error.message());
+        Q_EMIT finished();
+
+        return error;
+    }
+
+    qCDebug(lcStorage) << "stored an item of type" << type;
 
     Q_EMIT finished();
 
-    return true;
+    return {};
 }
 
 void Storage::receiveItems(Type type, int offset, int limit)
 {
-    auto columnList = QMap<int, QString>();
-    auto query = d_ptr->databaseQuery();
+    const auto reportError = [this](ErrorCode code, const QString &message) {
+        qCCritical(lcStorage) << message;
 
-    bool executed = false;
-    int index = 0;
+        Q_EMIT errorOccurred(code, message);
+        Q_EMIT finished();
+    };
 
+    auto table = QString();
     switch (type) {
     case Storage::StorageAccount:
-        columnList = d_ptr->tableColumns(QStringLiteral("accounts"));
-        executed = query.exec(
-            QStringLiteral("SELECT * FROM accounts LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
-        break;
-    case Storage::StorageReferenceAccount:
-        columnList = d_ptr->tableColumns(QStringLiteral("refaccounts"));
-        executed = query.exec(
-            QStringLiteral("SELECT * FROM refaccounts LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
+        table = QStringLiteral("accounts");
         break;
     case Storage::StorageTransaction:
-        columnList = d_ptr->tableColumns(QStringLiteral("transactions"));
-        executed = query.exec(
-            QStringLiteral("SELECT * FROM transactions LIMIT %1 OFFSET %2;").arg(limit).arg(offset));
+        table = QStringLiteral("transactions");
         break;
-    case Storage::StorageCategories: {
-    } break;
-    case Storage::StorageContacts: {
-    } break;
-    }
-
-    if (!executed) {
-        Q_EMIT errorOccurred(Storage::StoreItem, d_ptr->lastErrorMessage());
-        Q_EMIT finished();
+    case Storage::StorageReferenceAccount:
+    case Storage::StorageCategories:
+    case Storage::StorageContacts:
+        // These three have no table of their own in the schema. The branches used
+        // to be empty, which ended in a message that named the previous statement
+        // instead of the cause.
+        reportError(ErrorCode::NotImplemented,
+                    QStringLiteral("Reading items of type %1 is not implemented")
+                        .arg(QString::fromUtf8(
+                            QMetaEnum::fromType<Storage::Type>().valueToKey(type))));
         return;
     }
+
+    const auto columnList = d_ptr->tableColumns(table);
+    if (columnList.isEmpty()) {
+        reportError(ErrorCode::DatabaseFailure,
+                    QStringLiteral("No columns found for the table %1").arg(table));
+        return;
+    }
+
+    QSqlQuery query;
+    if (const auto error = d_ptr->openQuery(query); error.isError()) {
+        reportError(error.code(), error.message());
+        return;
+    }
+
+    // The table name is interpolated because SQL knows no binding for an
+    // identifier. It comes from the switch above, never from outside. The window
+    // is bound.
+    const auto statement = QStringLiteral("SELECT * FROM %1 LIMIT :limit OFFSET :offset;")
+                               .arg(table);
+
+    if (!query.prepare(statement)) {
+        reportError(ErrorCode::DatabaseFailure,
+                    QStringLiteral("Could not prepare the read of %1: %2")
+                        .arg(table, query.lastError().text()));
+        return;
+    }
+
+    query.bindValue(QStringLiteral(":limit"), limit);
+    query.bindValue(QStringLiteral(":offset"), offset);
+
+    if (!query.exec()) {
+        reportError(ErrorCode::DatabaseFailure,
+                    QStringLiteral("Could not read the table %1: %2")
+                        .arg(table, query.lastError().text()));
+        return;
+    }
+
+    // numRowsAffected() is undefined for a SELECT and SQLite answers -1, which
+    // turned the progress negative. The count comes from a query of its own. A
+    // failure there costs the progress reporting, not the read itself.
+    const auto rowCount = d_ptr->windowedRowCount(table, offset, limit);
+    if (!rowCount.hasValue()) {
+        qCWarning(lcStorage) << "no progress reporting:" << rowCount.error().message();
+    }
+
+    const int totalRows = rowCount.hasValue() ? rowCount.value() : 0;
 
     auto bankingItems = BankingItems();
     auto map = QMap<QString, QVariant>();
-
-    if (columnList.isEmpty()) {
-        Q_EMIT errorOccurred(Storage::StoreItem, tr("Not columns for store item found."));
-        Q_EMIT finished();
-        return;
-    }
-
-    int totalRows = query.numRowsAffected();
+    int index = 0;
 
     while (query.next()) {
-        for (const auto &[key, value] : std::as_const(columnList).asKeyValueRange()) {
-            map[QStringLiteral(":") + value] = query.value(key);
+        for (const auto &[key, value] : columnList.asKeyValueRange()) {
+            map[value] = query.value(key);
         }
 
         switch (type) {
         case Storage::StorageAccount:
             bankingItems << Account::fromMap(map);
             break;
-        case Storage::StorageReferenceAccount:
-            bankingItems << ReferenceAccount::fromMap(map);
-            break;
         case Storage::StorageTransaction:
             bankingItems << Transaction::fromMap(map);
             break;
+        case Storage::StorageReferenceAccount:
         case Storage::StorageCategories:
-            break;
         case Storage::StorageContacts:
-            break;
+            Q_UNREACHABLE();
         }
 
-        const auto percentage = index * 100.0 / totalRows;
-        Q_EMIT progressChanged((int) percentage);
-
         ++index;
+
+        if (totalRows > 0) {
+            Q_EMIT progressChanged(qMin(index * 100 / totalRows, 100));
+        }
 
         map.clear();
     }
 
     if (bankingItems.isEmpty()) {
-        Q_EMIT errorOccurred(Storage::StoreItem, tr("No items found"));
-        Q_EMIT finished();
+        reportError(ErrorCode::NotFound,
+                    QStringLiteral("No items found in the table %1").arg(table));
         return;
     }
 
-    columnList.clear();
+    qCDebug(lcStorage) << "read" << bankingItems.size() << "items from" << table;
 
     Q_EMIT itemsReceived(bankingItems);
 

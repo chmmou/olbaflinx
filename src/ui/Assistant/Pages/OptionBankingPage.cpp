@@ -18,6 +18,8 @@
 #include "ui/Assistant/Pages/OptionBankingPage.h"
 
 #include "core/Banking/Banking.h"
+#include "ui/ErrorMessage.h"
+#include "ui/Logging.h"
 
 #include "ui_OptionBankingPage.h"
 
@@ -46,9 +48,13 @@ public:
 
         // The page is the parent so that it releases the backend.
         banking = new Banking(applicationInfo, q_ptr);
-        banking->initialize(applicationInfo.name,
-                            applicationInfo.version,
-                            QStringLiteral("3E1B97FF72A24783EC2215B12"));
+
+        if (const auto error = banking->initialize(applicationInfo.name,
+                                                   applicationInfo.version,
+                                                   QStringLiteral("3E1B97FF72A24783EC2215B12"));
+            error.isError()) {
+            qCWarning(lcUi) << "could not initialize the banking backend:" << error.message();
+        }
     }
 
     void addItems(const BankingItems &items)
@@ -101,6 +107,17 @@ void OptionBankingPage::initialize(const ApplicationInfo &applicationInfo)
         d_ptr->addItems(items);
     });
 
+    // Without this the errors of the backend had no receiver. The page says what
+    // went wrong in its subtitle; a modal box would block a wizard the user can
+    // still go back in.
+    connect(d_ptr->banking,
+            &Banking::errorOccurred,
+            this,
+            [this](ErrorCode code, const QString &reason) {
+                qCWarning(lcUi) << "error from the banking backend:" << reason;
+                setSubTitle(userMessage(code));
+            });
+
     d_ptr->banking->accounts();
 }
 
@@ -125,7 +142,15 @@ void OptionBankingPage::showSetupDialog()
 {
     d_ptr->isComplete = false;
 
-    int result = d_ptr->banking->setupAccounts();
+    // 1 means the dialog was accepted, 0 that the user dismissed it. Anything
+    // below is a failure of the backend, which used to go by unnoticed.
+    const int result = d_ptr->banking->setupAccounts();
+    if (result < 0) {
+        qCWarning(lcUi) << "the account setup dialog failed with" << result;
+        setSubTitle(userMessage(ErrorCode::BankingFailure));
+        return;
+    }
+
     if (result == 1) {
         d_ptr->banking->accounts();
     }

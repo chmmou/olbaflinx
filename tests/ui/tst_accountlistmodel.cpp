@@ -37,18 +37,18 @@ private:
     {
         QMap<QString, QVariant> map = {};
 
-        map[QStringLiteral(":type")] = 1;
-        map[QStringLiteral(":uniqueId")] = 4711;
-        map[QStringLiteral(":backend_name")] = QStringLiteral("aqhbci");
-        map[QStringLiteral(":owner_name")] = QStringLiteral("Max Mustermann");
-        map[QStringLiteral(":account_name")] = accountName;
-        map[QStringLiteral(":currency")] = QStringLiteral("EUR");
-        map[QStringLiteral(":iban")] = QStringLiteral("DE02500105170137075030");
-        map[QStringLiteral(":bic")] = QStringLiteral("INGDDEFF");
-        map[QStringLiteral(":bank_code")] = QStringLiteral("50010517");
-        map[QStringLiteral(":bank_name")] = QStringLiteral("ING-DiBa");
-        map[QStringLiteral(":account_number")] = QStringLiteral("0137075030");
-        map[QStringLiteral(":balance")] = 12.5;
+        map[QStringLiteral("type")] = 1;
+        map[QStringLiteral("unique_id")] = 4711;
+        map[QStringLiteral("backend_name")] = QStringLiteral("aqhbci");
+        map[QStringLiteral("owner_name")] = QStringLiteral("Max Mustermann");
+        map[QStringLiteral("account_name")] = accountName;
+        map[QStringLiteral("currency")] = QStringLiteral("EUR");
+        map[QStringLiteral("iban")] = QStringLiteral("DE02500105170137075030");
+        map[QStringLiteral("bic")] = QStringLiteral("INGDDEFF");
+        map[QStringLiteral("bank_code")] = QStringLiteral("50010517");
+        map[QStringLiteral("bank_name")] = QStringLiteral("ING-DiBa");
+        map[QStringLiteral("account_number")] = QStringLiteral("0137075030");
+        map[QStringLiteral("balance")] = 12.5;
 
         return map;
     }

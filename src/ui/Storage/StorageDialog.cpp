@@ -17,6 +17,7 @@
 #include "ui/Storage/StorageDialog.h"
 
 #include "ui/App.h"
+#include "ui/Logging.h"
 #include "ui/Storage/NewStorageItem.h"
 
 #include "core/Banking/BankingItem.h"
@@ -121,8 +122,8 @@ public:
         scrollAreaStorage->setObjectName(QStringLiteral("scrollAreaStorage"));
         scrollAreaStorage->setWidgetResizable(true);
 
-        // QT-CPP-080: no parent on purpose. QScrollArea::setWidget takes over
-        // ownership in the next line, a parent here would be undone right away.
+        // No parent on purpose. QScrollArea::setWidget takes over ownership in
+        // the next line, a parent here would be undone right away.
         auto scrollAreaStorageContents = new QWidget();
         scrollAreaStorageContents->setObjectName(QStringLiteral("scrollAreaStorageContents"));
 
@@ -217,7 +218,21 @@ private:
                     storage->setKey(password);
                     storage->setStorageFile(filePath);
 
-                    (void) storage->initialize(true);
+                    if (const auto error = storage->initialize(true); error.isError()) {
+                        // The technical message goes to the log, the dialog gets
+                        // the short form. Opening a vault is what the user just
+                        // asked for, so this one does block.
+                        qCWarning(lcUiStorage) << "could not open the storage:" << error.message();
+
+                        storage->close();
+                        QMessageBox::critical(
+                            q_ptr,
+                            tr("Error"),
+                            tr("Your data vault could not be opened. Check the password, or "
+                               "restore a backup if the file is damaged."));
+
+                        return;
+                    }
 
                     if (!storage->isValid()) {
                         storage->close();
@@ -237,14 +252,17 @@ private:
                     storage->receiveItems(Storage::StorageAccount);
                 });
 
-        // The third parameter carries the error message. It stays unused for
-        // now and is therefore unnamed; acting on it belongs to the error
-        // handling, which is not in place yet.
         connect(storageItem,
                 &NewStorageItem::storageDeleted,
                 q_ptr,
-                [](bool success, NewStorageItem *item, const QString &) {
+                [this](bool success, NewStorageItem *item, const QString &reason) {
                     if (!success) {
+                        qCWarning(lcUiStorage) << "could not remove the storage file:" << reason;
+
+                        QMessageBox::critical(q_ptr,
+                                              tr("Storage"),
+                                              tr("The data vault could not be removed. Check "
+                                                 "the permissions on the file."));
                         return;
                     }
 

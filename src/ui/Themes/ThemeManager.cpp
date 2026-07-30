@@ -17,6 +17,8 @@
 
 #include "ui/Themes/ThemeManager.h"
 
+#include "ui/Logging.h"
+
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QHash>
@@ -152,8 +154,7 @@ QPixmap ThemeManager::pixmap(const QString &name, const ThemeManager::Mode mode)
     if (QFile svgFile(filename); svgFile.open(QIODevice::ReadOnly)) {
         QSvgRenderer svgRenderer;
         if (svgRenderer.load(svg(svgFile.readAll()))) {
-            qDebug() << svgRenderer.isValid();
-            qDebug() << svgRenderer.defaultSize();
+            qCDebug(lcUiThemes) << "rendering" << name << "at" << svgRenderer.defaultSize();
 
             QImage pix(svgRenderer.defaultSize(), QImage::Format_ARGB6666_Premultiplied);
             //pix.fill(Qt::transparent);

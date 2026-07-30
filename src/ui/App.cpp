@@ -19,6 +19,8 @@
 #include "core/Logger/Logger.h"
 #include "core/Storage/Storage.h"
 #include "ui/Assistant/SetupAssistant.h"
+#include "ui/ErrorMessage.h"
+#include "ui/Logging.h"
 #include "ui/Models/AccountListModel.h"
 #include "ui/Themes/ThemeManagerIconNames.h"
 
@@ -28,12 +30,14 @@
 
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMessageBox>
+#include <QtWidgets/QStatusBar>
 
 #include <qtadvanceddocking-qt6/AutoHideDockContainer.h>
 #include <qtadvanceddocking-qt6/DockAreaWidget.h>
 #include <qtadvanceddocking-qt6/DockManager.h>
 #include <qtadvanceddocking-qt6/DockWidget.h>
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::ui;
 using namespace olbaflinx::ui::assistant;
 
@@ -65,6 +69,10 @@ public:
         q_ptr->setWindowIconText(QApplication::applicationName());
 
         QObject::connect(ui->appAboutAction, &QAction::triggered, q_ptr, [this] { showAbout(); });
+
+        // Every error core reports on an asynchronous path ends up here. Without
+        // this the signal had no receiver at all and the user saw nothing.
+        QObject::connect(storage, &Storage::errorOccurred, q_ptr, &App::showError);
     }
 
     ~Private()
@@ -189,6 +197,20 @@ void App::initialize()
 void App::setAccounts(const BankingItems &items)
 {
     d_ptr->accountListModel->setItems(items);
+}
+
+void App::showError(ErrorCode code, const QString &reason)
+{
+    // The technical message can name a file or a statement. It goes to the log,
+    // never to the screen.
+    qCWarning(lcUi) << "error from core:" << reason;
+
+    const QString message = userMessage(code);
+    if (message.isEmpty()) {
+        return;
+    }
+
+    statusBar()->showMessage(message);
 }
 
 bool App::event(QEvent *event)

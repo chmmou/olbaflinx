@@ -59,7 +59,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="313"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="316"/>
         <source>Account %1 [%2] - %3 - %4</source>
         <translation type="unfinished"></translation>
     </message>
@@ -367,48 +367,58 @@
 <context>
     <name>olbaflinx::core::banking::Banking</name>
     <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="157"/>
+        <location filename="../../src/core/Banking/Banking.cpp" line="172"/>
         <source>%1 Account Setup</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="252"/>
-        <source>The backend for banking was not initialized!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="261"/>
-        <source>No account list could be populated!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="272"/>
-        <source>No accounts were found!</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>olbaflinx::core::storage::Storage</name>
+    <name>olbaflinx::ui</name>
     <message>
-        <location filename="../../src/core/Storage/Storage.cpp" line="534"/>
-        <source>Not columns for store item found.</source>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="30"/>
+        <source>Nothing was found. Import your accounts to fill the storage.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Storage/Storage.cpp" line="571"/>
-        <source>No items found</source>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="34"/>
+        <source>The password does not open this storage. Check it and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="38"/>
+        <source>A record could not be used. It is incomplete and was not stored.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="42"/>
+        <source>A file could not be read or written. Check the path and its permissions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="46"/>
+        <source>The storage could not be used. Open it again or restore a backup.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="50"/>
+        <source>The banking backend reported a failure. Check the setup of your accounts.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="54"/>
+        <source>This part of the application is not finished yet.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>olbaflinx::ui::App</name>
     <message>
-        <location filename="../../src/ui/App.cpp" line="86"/>
+        <location filename="../../src/ui/App.cpp" line="94"/>
         <source>About %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/App.cpp" line="87"/>
+        <location filename="../../src/ui/App.cpp" line="95"/>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;Multibank-capable online banking software for Linux.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%3&quot;&gt;%3&lt;/a&gt;&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -416,85 +426,90 @@
 <context>
     <name>olbaflinx::ui::storage::NewStorageItem</name>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="88"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="89"/>
         <source>Information</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="89"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="90"/>
         <source>Passwort ändern</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="91"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="92"/>
         <source>Sicherungen</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="92"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="93"/>
         <source>Löschen</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="113"/>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="124"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="114"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="125"/>
         <source>Change Storage Password</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="131"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="132"/>
         <source>Choose an secure password possible with at least 6 letters, numbers and special characters.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="138"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="139"/>
         <source>Current Password</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="141"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="142"/>
         <source>New Password</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="160"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="161"/>
         <source>The current password cannot be empty!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="168"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="169"/>
         <source>The new password cannot be empty!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="178"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="179"/>
         <source>The password you have entered does not comply with the minimum guideline.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="192"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="193"/>
+        <source>The storage could not be opened. Check the current password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="203"/>
         <source>The current password is not correct!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="201"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="214"/>
         <source>The password could not be changed!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="223"/>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="260"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="236"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="273"/>
         <source>Storage</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="224"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="237"/>
         <source>Are you sure you want to delete your storage?
 This can not be undone!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="260"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="273"/>
         <source>Not implemented yet!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -502,27 +517,43 @@ This can not be undone!</source>
 <context>
     <name>olbaflinx::ui::storage::StorageDialog</name>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="114"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="115"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="208"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="209"/>
         <source>Created on %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="226"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="230"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="241"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="227"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="231"/>
+        <source>Your data vault could not be opened. Check the password, or restore a backup if the file is damaged.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="242"/>
         <source>Your data vault is corrupted and or not readable / writeable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="308"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="263"/>
+        <source>Storage</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="264"/>
+        <source>The data vault could not be removed. Check the permissions on the file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="326"/>
         <source>&lt;h1&gt;Welcome to OlbaFlinx&lt;/h1&gt;&lt;p&gt;Click the plus sign or type Ctrl+N to create a new data storage.&lt;/p&gt;&lt;p&gt;You can create as many vaults as you like, each with its own password, e.g. for different user and or accounts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>

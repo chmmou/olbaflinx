@@ -17,6 +17,7 @@
 #pragma once
 
 #include "core/Banking/BankingItem.h"
+#include "core/Error.h"
 
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QPushButton>
@@ -59,6 +60,17 @@ public:
     void initialize();
 
     void setAccounts(const BankingItems &items);
+
+    /**
+     * @brief Turns an error from core into something the user can act on.
+     *
+     * The technical message goes to the log, the status bar carries the short
+     * form. Nothing here is modal; none of these errors blocks the window.
+     *
+     * @param code The machine readable cause.
+     * @param reason The technical message. It never reaches the screen.
+     */
+    void showError(core::ErrorCode code, const QString &reason);
 
 protected:
     bool event(QEvent *event) override;
