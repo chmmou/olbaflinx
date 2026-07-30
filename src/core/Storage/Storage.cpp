@@ -449,11 +449,15 @@ public:
                                            .arg(storageFile.errorString()));
         }
 
-        QStringList sqlStatements = QTextStream(&storageFile).readAll().split(';');
+        const QStringList sqlStatements = QTextStream(&storageFile).readAll().split(';');
         QStringList queries = {};
 
-        for (auto &query : sqlStatements) {
-            queries << query.replace(QStringLiteral("#"), QStringLiteral(";")).trimmed();
+        // The replacement works on a copy. It used to mutate sqlStatements as a
+        // side effect of building the second list.
+        for (const auto &statement : sqlStatements) {
+            queries << QString(statement)
+                           .replace(QStringLiteral("#"), QStringLiteral(";"))
+                           .trimmed();
         }
 
         QSqlQuery query;
@@ -804,7 +808,8 @@ void Storage::receiveItems(Type type, int offset, int limit)
             Q_EMIT progressChanged(qMin(index * 100 / totalRows, 100));
         }
 
-        map.clear();
+        // No clear on purpose. Every row sets the same keys, so the inserts of
+        // the next round turn into assignments.
     }
 
     if (bankingItems.isEmpty()) {
