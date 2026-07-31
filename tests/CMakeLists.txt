@@ -15,91 +15,58 @@
 # * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # */
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+# Coverage slows every run down and drops a .gcda file next to every object
+# file. It used to be switched on unconditionally, in every configuration.
+option(ENABLE_COVERAGE "Build the tests with coverage instrumentation" OFF)
 
 find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS Test)
 
-### Adding tests here
-qt_add_executable(OlbaFlinxTests core/StorageTest.cpp)
-add_test(NAME OlbaFlinxTests COMMAND OlbaFlinxTests)
+# Every test is a target of its own with a CTest entry of its own, so that a
+# failure names the unit it belongs to. Additional arguments are the libraries
+# the test links beyond Qt6::Core and Qt6::Test.
+function(olbaflinx_add_test name source)
+    qt_add_executable(${name} ${source})
 
-qt_add_executable(TransactionTests core/tst_transaction.cpp)
-add_test(NAME TransactionTests COMMAND TransactionTests)
+    # For "TestHelpers.h", which sits next to the core test sources.
+    target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-qt_add_executable(StorageLifetimeTests core/tst_storage_lifetime.cpp)
-add_test(NAME StorageLifetimeTests COMMAND StorageLifetimeTests)
+    target_compile_options(${name} PRIVATE ${OLBAFLINX_WARNINGS})
+    target_compile_definitions(${name} PRIVATE ${OLBAFLINX_QT_DEPRECATION})
 
-qt_add_executable(StorageGuidelinesTests core/tst_storage.cpp)
-add_test(NAME StorageGuidelinesTests COMMAND StorageGuidelinesTests)
+    target_link_libraries(${name} PRIVATE Qt6::Core Qt6::Test ${ARGN})
 
-qt_add_executable(BankingTests core/tst_banking.cpp)
-add_test(NAME BankingTests COMMAND BankingTests)
-
-qt_add_executable(StorageErrorTests core/tst_storage_errors.cpp)
-add_test(NAME StorageErrorTests COMMAND StorageErrorTests)
-
-qt_add_executable(StorageKeyTests core/tst_storage_key.cpp)
-add_test(NAME StorageKeyTests COMMAND StorageKeyTests)
-
-qt_add_executable(AppErrorHandlingTests ui/tst_apperrorhandling.cpp)
-add_test(NAME AppErrorHandlingTests COMMAND AppErrorHandlingTests)
-
-qt_add_executable(AccountListModelTests ui/tst_accountlistmodel.cpp)
-add_test(NAME AccountListModelTests COMMAND AccountListModelTests)
-
-qt_add_executable(TransactionListModelTests ui/tst_transactionlistmodel.cpp)
-add_test(NAME TransactionListModelTests COMMAND TransactionListModelTests)
-
-qt_add_executable(StorageDialogTests ui/tst_storagedialog.cpp)
-add_test(NAME StorageDialogTests COMMAND StorageDialogTests)
-
-set(OLBAFLINX_CORE_TESTS
-        OlbaFlinxTests
-        TransactionTests
-        StorageLifetimeTests
-        StorageGuidelinesTests
-        StorageErrorTests
-        StorageKeyTests
-        BankingTests
-)
-set(OLBAFLINX_UI_TESTS
-        AccountListModelTests
-        TransactionListModelTests
-        StorageDialogTests
-        AppErrorHandlingTests
-)
-
-foreach (test_target ${OLBAFLINX_CORE_TESTS} ${OLBAFLINX_UI_TESTS})
-    # For "BaseTest.h", which sits next to the test sources.
-    target_include_directories(${test_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
-
-    target_compile_options(${test_target} PRIVATE ${OLBAFLINX_WARNINGS})
-    target_compile_definitions(${test_target} PRIVATE ${OLBAFLINX_QT_DEPRECATION})
-
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-        target_link_libraries(${test_target} PRIVATE gcov)
+    if (ENABLE_COVERAGE AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+        target_compile_options(${name} PRIVATE --coverage)
+        target_link_options(${name} PRIVATE --coverage)
     endif ()
-endforeach ()
+
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endfunction()
+
+### Adding tests here
 
 # The core targets link against Qt6::Core, Qt6::Test and OlbaFlinxCore only.
 # Adding Qt6::Widgets here would break the layering of core.
-foreach (test_target ${OLBAFLINX_CORE_TESTS})
-    target_link_libraries(${test_target} PRIVATE
-            OlbaFlinxCore::OlbaFlinxCore
-            Qt6::Core
-            Qt6::Test
-    )
-endforeach ()
+olbaflinx_add_test(tst_storage core/tst_storage.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_storage_key core/tst_storage_key.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_storage_errors core/tst_storage_errors.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_storage_lifetime core/tst_storage_lifetime.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_banking core/tst_banking.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_account core/tst_account.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_referenceaccount core/tst_referenceaccount.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_transaction core/tst_transaction.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_logger core/tst_logger.cpp OlbaFlinxCore::OlbaFlinxCore)
 
 # The ui targets need Widgets. They run without a display.
-foreach (test_target ${OLBAFLINX_UI_TESTS})
-    target_link_libraries(${test_target} PRIVATE
-            OlbaFlinxUi::OlbaFlinxUi
-            Qt6::Core
-            Qt6::Test
-            Qt6::Widgets
-    )
-
-    set_tests_properties(${test_target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-endforeach ()
+olbaflinx_add_test(tst_accountlistmodel ui/tst_accountlistmodel.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_transactionlistmodel ui/tst_transactionlistmodel.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_storagedialog ui/tst_storagedialog.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_apperrorhandling ui/tst_apperrorhandling.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_thememanager ui/tst_thememanager.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 ### Adding tests here

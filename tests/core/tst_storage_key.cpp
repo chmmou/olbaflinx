@@ -20,7 +20,7 @@
 #include "core/Error.h"
 #include "core/Storage/Storage.h"
 
-#include "BaseTest.h"
+#include "TestHelpers.h"
 
 #include <QtTest/QtTest>
 
@@ -35,11 +35,12 @@ namespace olbaflinx::core::storage::tests {
 using namespace olbaflinx::core::tests;
 
 /**
- * The key as it reaches SQLCipher. The pass phrase used to run through an escape
- * routine that read every character through QChar::toLatin1, which answers with a
- * signed char here. Its range check for the upper half of Latin-1 could never be
- * true, so every character outside 32 to 126 was dropped from the key silently.
- * The store still opened, because the same loss happened on every open.
+ * The key as it reaches SQLCipher, and the policy a key has to satisfy before it
+ * gets there. The pass phrase used to run through an escape routine that read
+ * every character through QChar::toLatin1, which answers with a signed char here.
+ * Its range check for the upper half of Latin-1 could never be true, so every
+ * character outside 32 to 126 was dropped from the key silently. The store still
+ * opened, because the same loss happened on every open.
  */
 class StorageKeyTest final : public QObject
 {
@@ -91,19 +92,44 @@ private:
         return opened;
     }
 
+    static bool accepts(const QString &password)
+    {
+        const Storage storage(applicationInfo());
+        return storage.minPasswordGuidelines().match(password).hasMatch();
+    }
+
+    /**
+     * The longest key the policy allows. Built here so that the length stays in
+     * one place, see the decision on key handling from 2026-07-30.
+     */
+    static constexpr int MaximumPasswordLength = 128;
+
+    static QString maximumLengthPassword()
+    {
+        return QStringLiteral("Ab1!")
+               + QString(MaximumPasswordLength - 4, QLatin1Char('c'));
+    }
+
 private Q_SLOTS:
     void initTestCase();
 
-    void passwordWithUmlautsUnlocksStorage();
-    void passwordWithQuoteUnlocksStorage();
-    void passwordWithCjkUnlocksStorage();
+    void passwordUnlocksStorage_data();
+    void passwordUnlocksStorage();
     void truncatedPasswordDoesNotUnlockStorage();
     void wrongPasswordIsRejected();
     void storageFileIsNotPlaintextSqlite();
     void changeKeyPreservesData();
     void changeKeyLeavesOldKeyInvalid();
-    void receiveItemsRejectsNegativeOffset();
-    void receiveItemsRejectsExcessiveLimit();
+    void receiveItemsRejectsInvalidWindow_data();
+    void receiveItemsRejectsInvalidWindow();
+
+    void minPasswordGuidelinesReturnsValidPattern();
+    void minPasswordGuidelinesIsStable();
+    void passwordPolicyBoundsLengthAtTheDecidedMaximum();
+    void passwordPolicyAccepts_data();
+    void passwordPolicyAccepts();
+    void passwordPolicyRejects_data();
+    void passwordPolicyRejects();
 };
 
 void StorageKeyTest::initTestCase()
@@ -114,35 +140,30 @@ void StorageKeyTest::initTestCase()
     QVERIFY(workingDirectory.isValid());
 }
 
-void StorageKeyTest::passwordWithUmlautsUnlocksStorage()
-{
-    const auto file = storageFile("umlauts");
-    const auto password = QStringLiteral("Paßwort-Ümlaut-2026");
-
-    createStorage(file, password);
-
-    QVERIFY(opens(file, password));
-}
-
 /**
+ * Every character a pass phrase may carry has to survive the way into SQLCipher.
  * The single quote is the one character that could end the string literal the key
- * travels in. It is doubled, the double quote and the backslash carry no meaning
- * there and stay as they are.
+ * travels in; it is doubled. The double quote and the backslash carry no meaning
+ * there and stay as they are. Everything outside 32 to 126 used to be dropped.
  */
-void StorageKeyTest::passwordWithQuoteUnlocksStorage()
+void StorageKeyTest::passwordUnlocksStorage_data()
 {
-    const auto file = storageFile("quotes");
-    const auto password = QStringLiteral("M'yF13\"stP\\$44W0$3d/");
+    QTest::addColumn<QString>("password");
 
-    createStorage(file, password);
-
-    QVERIFY(opens(file, password));
+    QTest::newRow("ascii") << QStringLiteral("Kennwort-2026!aA");
+    QTest::newRow("quotes") << QStringLiteral("M'yF13\"stP\\$44W0$3d/");
+    QTest::newRow("umlauts") << QStringLiteral("Paßwort-Ümlaut-2026");
+    QTest::newRow("cjk") << QStringLiteral("密码-Passwort-2026");
+    // Outside the basic multilingual plane, so a surrogate pair in UTF-16.
+    QTest::newRow("emoji") << QStringLiteral("Schlüssel-2026!aA\U0001F511");
+    QTest::newRow("maxLength") << maximumLengthPassword();
 }
 
-void StorageKeyTest::passwordWithCjkUnlocksStorage()
+void StorageKeyTest::passwordUnlocksStorage()
 {
-    const auto file = storageFile("cjk");
-    const auto password = QStringLiteral("密码-Passwort-2026");
+    QFETCH(QString, password);
+
+    const auto file = storageFile(QTest::currentDataTag());
 
     createStorage(file, password);
 
@@ -216,7 +237,7 @@ void StorageKeyTest::changeKeyPreservesData()
 
         QVERIFY(!storage.initialize(true).isError());
 
-        const auto account = BaseTest::createFakeAccount();
+        const auto account = TestHelpers::createFakeAccount();
         QVERIFY(!storage.storeItem(account.get()).isError());
 
         QVERIFY(!storage.changeKey(oldPassword, newPassword).isError());
@@ -262,9 +283,21 @@ void StorageKeyTest::changeKeyLeavesOldKeyInvalid()
 /**
  * The window used to travel into the statement unchecked.
  */
-void StorageKeyTest::receiveItemsRejectsNegativeOffset()
+void StorageKeyTest::receiveItemsRejectsInvalidWindow_data()
 {
-    const auto file = storageFile("negativeOffset");
+    QTest::addColumn<int>("offset");
+    QTest::addColumn<int>("limit");
+
+    QTest::newRow("negativeOffset") << -1 << 50;
+    QTest::newRow("excessiveLimit") << 0 << std::numeric_limits<int>::max();
+}
+
+void StorageKeyTest::receiveItemsRejectsInvalidWindow()
+{
+    QFETCH(int, offset);
+    QFETCH(int, limit);
+
+    const auto file = storageFile(QTest::currentDataTag());
 
     Storage storage(applicationInfo());
     storage.setKey(QStringLiteral("Paßwort-Ümlaut-2026"));
@@ -274,7 +307,7 @@ void StorageKeyTest::receiveItemsRejectsNegativeOffset()
 
     QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
 
-    storage.receiveItems(Storage::StorageAccount, -1, 50);
+    storage.receiveItems(Storage::StorageAccount, offset, limit);
 
     QCOMPARE(errorSpy.count(), 1);
     QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
@@ -282,24 +315,95 @@ void StorageKeyTest::receiveItemsRejectsNegativeOffset()
     storage.close();
 }
 
-void StorageKeyTest::receiveItemsRejectsExcessiveLimit()
+/**
+ * The pattern used to be built by a macro on every call. A typo in the escaping
+ * would only have shown up as a never matching password. The check on
+ * QRegularExpression::isValid catches that at the source.
+ */
+void StorageKeyTest::minPasswordGuidelinesReturnsValidPattern()
 {
-    const auto file = storageFile("excessiveLimit");
+    const Storage storage(applicationInfo());
 
-    Storage storage(applicationInfo());
-    storage.setKey(QStringLiteral("Paßwort-Ümlaut-2026"));
-    storage.setStorageFile(file);
+    const QRegularExpression pattern = storage.minPasswordGuidelines();
 
-    QVERIFY(!storage.initialize(true).isError());
+    QVERIFY(pattern.isValid());
+    QVERIFY(!pattern.pattern().isEmpty());
+    QCOMPARE(pattern.errorString(), QStringLiteral("no error"));
+}
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+/**
+ * The pattern is now held in a function local static. Two calls have to yield
+ * the same pattern, otherwise the compiled form is not shared.
+ */
+void StorageKeyTest::minPasswordGuidelinesIsStable()
+{
+    const Storage storage(applicationInfo());
 
-    storage.receiveItems(Storage::StorageAccount, 0, std::numeric_limits<int>::max());
+    const QRegularExpression first = storage.minPasswordGuidelines();
+    const QRegularExpression second = storage.minPasswordGuidelines();
 
-    QCOMPARE(errorSpy.count(), 1);
-    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+    QCOMPARE(first.pattern(), second.pattern());
+    QCOMPARE(first, second);
+}
 
-    storage.close();
+/**
+ * The two rows named maxLength and tooLong sit on either side of the bound. This
+ * holds the bound itself in place, so that a change to the policy shows up here
+ * and not as a row that quietly tests nothing.
+ */
+void StorageKeyTest::passwordPolicyBoundsLengthAtTheDecidedMaximum()
+{
+    QCOMPARE(maximumLengthPassword().length(), MaximumPasswordLength);
+}
+
+/**
+ * The backslash, 0x5C, used to reach the class of special characters only through
+ * a range that also covered every digit and every capital letter. Removing that
+ * range would have taken the backslash out along with the digits, so it now
+ * stands in the class on its own. The rows below hold that in place, together
+ * with the two characters outside ASCII the class names explicitly.
+ */
+void StorageKeyTest::passwordPolicyAccepts_data()
+{
+    QTest::addColumn<QString>("password");
+
+    QTest::newRow("documentedExample") << QStringLiteral("M'yF13\"stP\\$44W0$3d/");
+    QTest::newRow("umlautAsSpecialChar") << QStringLiteral("Paßwort-Ümlaut-2026");
+    QTest::newRow("backslash") << QStringLiteral("Passwort\\mit1X");
+    QTest::newRow("euroSign") << QStringLiteral("Passwort€mit1X");
+    QTest::newRow("maxLength") << maximumLengthPassword();
+}
+
+void StorageKeyTest::passwordPolicyAccepts()
+{
+    QFETCH(QString, password);
+
+    QVERIFY(accepts(password));
+}
+
+/**
+ * The class of special characters used to carry the sequence '#-_', which a
+ * character class reads as a range from 0x23 to 0x5F. That covers every digit and
+ * every capital letter, so the lookahead for a special character matched on those
+ * alone and asked for nothing beyond the two lookaheads before it.
+ *
+ * An unbounded length is an unchecked size, see QT-SEC-004. There used to be no
+ * upper bound at all.
+ */
+void StorageKeyTest::passwordPolicyRejects_data()
+{
+    QTest::addColumn<QString>("password");
+
+    QTest::newRow("digitsOnlyAsSpecialChar") << QStringLiteral("Abcdefgh1234");
+    QTest::newRow("tooShort") << QStringLiteral("Abcdef1!");
+    QTest::newRow("tooLong") << maximumLengthPassword() + QLatin1Char('c');
+}
+
+void StorageKeyTest::passwordPolicyRejects()
+{
+    QFETCH(QString, password);
+
+    QVERIFY(!accepts(password));
 }
 
 } // namespace olbaflinx::core::storage::tests

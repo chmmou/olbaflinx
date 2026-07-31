@@ -22,7 +22,7 @@
 #include "core/Error.h"
 #include "core/Storage/Storage.h"
 
-#include "BaseTest.h"
+#include "TestHelpers.h"
 
 #include <QtTest/QtTest>
 
@@ -237,7 +237,7 @@ void StorageErrorTest::receiveItemsEmitsProgressWithinRange()
     QVERIFY(!storage.initialize(true).isError());
 
     for (int i = 0; i < 3; ++i) {
-        const auto account = BaseTest::createFakeAccount();
+        const auto account = TestHelpers::createFakeAccount();
         QVERIFY(!storage.storeItem(account.get()).isError());
     }
 

@@ -16,133 +16,254 @@
  */
 
 #include "core/ApplicationInfo.h"
+#include "core/Banking/Account/Account.h"
+#include "core/Error.h"
 #include "core/Storage/Storage.h"
 
+#include "TestHelpers.h"
+
+#include <QtCore/QList>
 #include <QtTest/QtTest>
 
+#include <memory>
+
 using namespace olbaflinx::core;
+using namespace olbaflinx::core::banking;
+using namespace olbaflinx::core::banking::account;
 using namespace olbaflinx::core::storage;
 
 namespace olbaflinx::core::storage::tests {
 
-class StorageGuidelinesTest final : public QObject
+using namespace olbaflinx::core::tests;
+
+/**
+ * Opening, closing, keys, settings and the round trip of a record. Every test
+ * function gets a temporary directory of its own, so no two runs of this binary
+ * share a file and nothing survives the run.
+ */
+class StorageTest final : public QObject
 {
     Q_OBJECT
 
 private:
+    std::unique_ptr<QTemporaryDir> workingDirectory;
+
     static ApplicationInfo applicationInfo()
     {
         return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxStorageGuidelinesTest"),
+                QStringLiteral("OlbaFlinxStorageTest"),
                 QStringLiteral("1.0.0")};
     }
 
-    static bool accepts(const QString &password)
+    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+
+    QString storageFile() const
     {
-        const Storage storage(applicationInfo());
-        return storage.minPasswordGuidelines().match(password).hasMatch();
+        return workingDirectory->filePath(QStringLiteral("storage.obfx"));
     }
 
 private Q_SLOTS:
     void initTestCase();
-    void minPasswordGuidelinesReturnsValidPattern();
-    void minPasswordGuidelinesIsStable();
-    void passwordPolicyRejectsDigitsOnlyAsSpecialChar();
-    void passwordPolicyRejectsTooShort();
-    void passwordPolicyRejectsTooLong();
-    void passwordPolicyAcceptsUmlautAsSpecialChar();
-    void passwordPolicyAcceptsBackslash();
-    void passwordPolicyAcceptsTheDocumentedExample();
+    void init();
+    void cleanup();
+
+    void isValidReturnsFalseWithoutInitialization();
+    void initializeRejectsEmptyStorageFile();
+    void initializeRejectsEmptyPassword();
+    void initializeCreatesUsableStorage();
+    void changeKeyMakesOldPasswordInvalid();
+    void settingReturnsTheDefaultForAnUnknownKey();
+    void storeSettingPersistsValueUnderGroup();
+    void storeItemPersistsAccountAndEmitsFinished();
 };
 
-void StorageGuidelinesTest::initTestCase()
+void StorageTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
 }
 
 /**
- * The pattern used to be built by a macro on every call. A typo in the escaping
- * would only have shown up as a never matching password. The check on
- * QRegularExpression::isValid catches that at the source.
+ * init and cleanup run around every test function, not once per class. That is
+ * what makes the order of the functions irrelevant.
  */
-void StorageGuidelinesTest::minPasswordGuidelinesReturnsValidPattern()
+void StorageTest::init()
 {
-    const Storage storage(applicationInfo());
-
-    const QRegularExpression pattern = storage.minPasswordGuidelines();
-
-    QVERIFY(pattern.isValid());
-    QVERIFY(!pattern.pattern().isEmpty());
-    QCOMPARE(pattern.errorString(), QStringLiteral("no error"));
+    workingDirectory = std::make_unique<QTemporaryDir>();
+    QVERIFY(workingDirectory->isValid());
 }
 
-/**
- * The pattern is now held in a function local static. Two calls have to yield
- * the same pattern, otherwise the compiled form is not shared.
- */
-void StorageGuidelinesTest::minPasswordGuidelinesIsStable()
+void StorageTest::cleanup()
 {
-    const Storage storage(applicationInfo());
-
-    const QRegularExpression first = storage.minPasswordGuidelines();
-    const QRegularExpression second = storage.minPasswordGuidelines();
-
-    QCOMPARE(first.pattern(), second.pattern());
-    QCOMPARE(first, second);
+    workingDirectory.reset();
 }
 
-/**
- * The class of special characters used to carry the sequence '#-_', which a
- * character class reads as a range from 0x23 to 0x5F. That covers every digit and
- * every capital letter, so the lookahead for a special character matched on those
- * alone and asked for nothing beyond the two lookaheads before it.
- */
-void StorageGuidelinesTest::passwordPolicyRejectsDigitsOnlyAsSpecialChar()
+void StorageTest::isValidReturnsFalseWithoutInitialization()
 {
-    QVERIFY(!accepts(QStringLiteral("Abcdefgh1234")));
+    Storage storage(applicationInfo());
+    storage.close();
+
+    QVERIFY(!storage.isValid());
 }
 
-void StorageGuidelinesTest::passwordPolicyRejectsTooShort()
+void StorageTest::initializeRejectsEmptyStorageFile()
 {
-    QVERIFY(!accepts(QStringLiteral("Abcdef1!")));
+    Storage storage(applicationInfo());
+    storage.setKey(password());
+    storage.setStorageFile(QString());
+
+    // Without a file there is no connection to open. The call used to report
+    // that through a signal nobody listened to.
+    const auto error = storage.initialize(true);
+
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::DatabaseFailure);
+    QVERIFY(!storage.isValid());
+
+    storage.close();
 }
 
-/**
- * An unbounded length is an unchecked size, see QT-SEC-004. There used to be no
- * upper bound at all.
- */
-void StorageGuidelinesTest::passwordPolicyRejectsTooLong()
+void StorageTest::initializeRejectsEmptyPassword()
 {
-    const auto password = QStringLiteral("Ab1!") + QString(125, QLatin1Char('c'));
-    QCOMPARE(password.length(), 129);
+    const auto file = storageFile();
 
-    QVERIFY(!accepts(password));
-    QVERIFY(accepts(password.left(128)));
+    Storage storage(applicationInfo());
+    storage.setKey(QString());
+    storage.setStorageFile(file);
+
+    // An empty key opens the file, it just leaves it unencrypted. The storage is
+    // not usable that way, which isValid reports.
+    (void) storage.initialize(true);
+
+    QVERIFY(!storage.isValid());
+    storage.close();
+
+    QVERIFY(QFile::exists(file));
 }
 
-void StorageGuidelinesTest::passwordPolicyAcceptsUmlautAsSpecialChar()
+void StorageTest::initializeCreatesUsableStorage()
 {
-    QVERIFY(accepts(QStringLiteral("Paßwort-Ümlaut-2026")));
+    const auto file = storageFile();
+
+    Storage storage(applicationInfo());
+    storage.setKey(password());
+    storage.setStorageFile(file);
+
+    QVERIFY(!storage.initialize(true).isError());
+    QVERIFY(storage.isValid());
+
+    storage.close();
+
+    QVERIFY(QFile::exists(file));
 }
 
-/**
- * The backslash, 0x5C, used to reach the class only through the range described
- * above. Removing that range would have taken it out along with the digits, so it
- * now stands in the class on its own. This test holds that in place.
- */
-void StorageGuidelinesTest::passwordPolicyAcceptsBackslash()
+void StorageTest::changeKeyMakesOldPasswordInvalid()
 {
-    QVERIFY(accepts(QStringLiteral("Passwort\\mit1X")));
+    const auto file = storageFile();
+    const auto newPassword = QStringLiteral("eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
+
+    Storage storage(applicationInfo());
+    storage.setKey(password());
+    storage.setStorageFile(file);
+
+    QVERIFY(!storage.initialize(true).isError());
+    QVERIFY(!storage.changeKey(password(), newPassword).isError());
+
+    storage.close();
+
+    storage.setKey(password());
+    storage.setStorageFile(file);
+
+    // The old key no longer opens the file. Applying the schema fails, and that
+    // now reaches the caller instead of ending in an unheard signal.
+    QVERIFY(storage.initialize(true).isError());
+    QVERIFY(!storage.isValid());
+
+    storage.setKey(newPassword);
+    storage.setStorageFile(file);
+
+    QVERIFY(!storage.initialize(true).isError());
+    QVERIFY(storage.isValid());
+
+    storage.close();
 }
 
-void StorageGuidelinesTest::passwordPolicyAcceptsTheDocumentedExample()
+void StorageTest::settingReturnsTheDefaultForAnUnknownKey()
 {
-    QVERIFY(accepts(QStringLiteral("M'yF13\"stP\\$44W0$3d/")));
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Vaults"));
+
+    const auto vaults = storage
+                            .setting(QStringLiteral("Paths"),
+                                     QStringLiteral("Vaults"),
+                                     QStringList())
+                            .toStringList();
+
+    QCOMPARE(vaults.size(), 0);
+}
+
+void StorageTest::storeSettingPersistsValueUnderGroup()
+{
+    Storage storage(applicationInfo());
+
+    const QStringList written = {workingDirectory->filePath(QStringLiteral("first.obfx")),
+                                 workingDirectory->filePath(QStringLiteral("second.obfx"))};
+
+    storage.storeSetting(QStringLiteral("Paths"), written, QStringLiteral("Vaults"));
+
+    const auto read = storage
+                          .setting(QStringLiteral("Paths"),
+                                   QStringLiteral("Vaults"),
+                                   QStringList())
+                          .toStringList();
+
+    QCOMPARE(read, written);
+}
+
+void StorageTest::storeItemPersistsAccountAndEmitsFinished()
+{
+    Storage storage(applicationInfo());
+
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    storage.setKey(password());
+    storage.setStorageFile(storageFile());
+
+    QVERIFY(!storage.initialize(true).isError());
+    QVERIFY(storage.isValid());
+
+    const auto first = TestHelpers::createFakeAccount();
+    QVERIFY(first->isValid());
+
+    const auto second = TestHelpers::createFakeAccount();
+    QVERIFY(second->isValid());
+
+    QVERIFY(!storage.storeItem(first.get()).isError());
+    QVERIFY(!storage.storeItem(second.get()).isError());
+
+    // Every completed write reports finished once, which is where two of the
+    // three emissions come from.
+    QCOMPARE(finishedSpy.count(), 2);
+
+    storage.receiveItems(Storage::StorageAccount);
+
+    QCOMPARE(itemsSpy.count(), 1);
+    QCOMPARE(finishedSpy.count(), 3);
+
+    const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
+    QCOMPARE(items.size(), 2);
+
+    // The receiver owns the records. They have to survive the return from the
+    // signal; Storage used to release them right afterwards.
+    QVERIFY(items.at(0) != nullptr);
+    QCOMPARE(items.at(0)->itemType(), QStringLiteral("Account"));
+
+    storage.close();
 }
 
 } // namespace olbaflinx::core::storage::tests
 
-QTEST_APPLESS_MAIN(olbaflinx::core::storage::tests::StorageGuidelinesTest)
+QTEST_MAIN(olbaflinx::core::storage::tests::StorageTest)
 
 #include "tst_storage.moc"
