@@ -89,6 +89,13 @@ jobs:
           workdir="$(mktemp -d)"
           cd "$workdir"
 
+          # Every ldconfig below is load bearing, not housekeeping. aqbanking
+          # generates its type sources with typemaker2, a program that ships
+          # with gwenhywfar and links against it. Without a refreshed cache the
+          # freshly installed library is invisible to it and the generation
+          # fails with "cannot open shared object file".
+          echo "$DEPS_PREFIX/lib" | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
+
           # gwenhywfar carries the Qt binding the project links against. Asking
           # for the qt5 gui here is what left gwengui-qt6 unavailable before.
           git clone --recursive https://git.aquamaniac.de/git/gwenhywfar
@@ -98,6 +105,7 @@ jobs:
           ./configure --prefix="$DEPS_PREFIX" --with-guis="cpp qt6"
           make --jobs=$(nproc) all
           sudo make install
+          sudo ldconfig
           cd "$workdir"
 
           git clone --recursive https://git.aquamaniac.de/git/libchipcard
@@ -107,6 +115,7 @@ jobs:
           ./configure --prefix="$DEPS_PREFIX"
           make --jobs=$(nproc) all
           sudo make install
+          sudo ldconfig
           cd "$workdir"
 
           # libchipcard reads datadir before it defines it. pkg-config resolves
@@ -123,6 +132,7 @@ jobs:
           make typefiles
           make --jobs=$(nproc) all
           sudo make install
+          sudo ldconfig
           cd "$workdir"
 
           git clone https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
@@ -133,6 +143,7 @@ jobs:
             -DCMAKE_INSTALL_PREFIX="$DEPS_PREFIX"
           cmake --build cbuild
           sudo cmake --install cbuild
+          sudo ldconfig
           cd "$workdir"
 
           # The plugin has to carry the driver name the project asks for, and
@@ -167,7 +178,8 @@ jobs:
 
       - name: Register the dependencies
         run: |
-          sudo ldconfig "$DEPS_PREFIX/lib"
+          echo "$DEPS_PREFIX/lib" | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
+          sudo ldconfig
           echo "$DEPS_PREFIX/bin" >> "$GITHUB_PATH"
           echo "PKG_CONFIG_PATH=$DEPS_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
           echo "CMAKE_PREFIX_PATH=$DEPS_PREFIX:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"

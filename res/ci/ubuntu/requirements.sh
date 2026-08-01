@@ -28,6 +28,11 @@ LIBCHIPCARD_VERSION="5.1.6"
 ADS_VERSION="5.0.0"
 QSQLCIPHER_VERSION="v6.6-1"
 
+# Every ldconfig below is load bearing, not housekeeping. aqbanking generates
+# its type sources with typemaker2, a program that ships with gwenhywfar and
+# links against it. Without a refreshed cache the freshly installed library is
+# invisible to it and the generation fails with "cannot open shared object
+# file".
 currentDirectory="$(dirname $(readlink -f ${BASH_SOURCE:-$0}))"
 
 cd $currentDirectory
@@ -39,6 +44,7 @@ make -f Makefile.cvs
 ./configure --prefix=/usr --with-guis="cpp qt6"
 make --jobs=$(nproc) all
 make install
+ldconfig
 
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/aqbanking
@@ -50,6 +56,7 @@ make typedefs
 make typefiles
 make --jobs=$(nproc) all
 make install
+ldconfig
 
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/libchipcard
@@ -59,6 +66,7 @@ make -f Makefile.cvs
 ./configure --prefix=/usr
 make --jobs=$(nproc) all
 make install
+ldconfig
 
 cd $currentDirectory
 git clone --recursive https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
@@ -69,6 +77,7 @@ cd cbuild
 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr ..
 ninja
 ninja install
+ldconfig
 
 cd $currentDirectory
 git clone https://github.com/bAmpT/qsqlcipher-qt6-cmake.git
@@ -82,6 +91,7 @@ cd cbuild
 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DQT_GENERATE_SBOM=OFF ..
 ninja
 ninja install
+ldconfig
 
 cd $currentDirectory
 rm -rf libchipcard aqbanking gwenhywfar Qt-Advanced-Docking-System qsqlcipher-qt6-cmake
