@@ -87,7 +87,6 @@ target_link_libraries(OlbaFlinxCore
         PkgConfig::PKG_AQBANKING
         PRIVATE
         Qt6::Concurrent
-        PkgConfig::PKG_GWENHYWFAR_QT
         PkgConfig::PKG_LIBCHIPCARD_CLIENT
 )
 
@@ -159,6 +158,12 @@ target_link_libraries(OlbaFlinxUi
         Qt6::Gui
         Qt6::Svg
         ads::qtadvanceddocking-qt6
+        # The Qt implementation of the gwenhywfar user interface. It carries Qt
+        # Widgets in its own DT_NEEDED, along with Designer, UiTools and Help,
+        # so every consumer loads them. That is why it sits here and not with
+        # the core: a core test would otherwise pull a display library it has
+        # no use for.
+        PkgConfig::PKG_GWENHYWFAR_QT
 )
 
 # ----------------------------------------------------------------------------

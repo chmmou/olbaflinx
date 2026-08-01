@@ -50,7 +50,38 @@ private Q_SLOTS:
     void accountsWithoutInitializationReportsAnError();
     void initializeOpensTheBackendUnderTheTemporaryHome();
     void accountsWithoutAnyConfiguredAccountReportsNotFound();
+    void initializeWithoutAnInterfaceReportsAnError();
 };
+
+namespace {
+
+/**
+ * The non-interactive interface of gwenhywfar. It answers no prompt and shows no
+ * dialog, which is all a headless test needs, and it carries no Qt: that is the
+ * point of handing the interface in from outside instead of letting the core
+ * build a Qt one.
+ *
+ * Ownership stays here. Banking takes the pointer and never frees it.
+ */
+class ScopedConsoleGui
+{
+public:
+    ScopedConsoleGui()
+        : m_gui(GWEN_Gui_new())
+    {}
+
+    ~ScopedConsoleGui() { GWEN_Gui_free(m_gui); }
+
+    ScopedConsoleGui(const ScopedConsoleGui &) = delete;
+    ScopedConsoleGui &operator=(const ScopedConsoleGui &) = delete;
+
+    [[nodiscard]] GWEN_GUI *get() const { return m_gui; }
+
+private:
+    GWEN_GUI *m_gui;
+};
+
+} // namespace
 
 /**
  * AqBanking keeps its configuration below AQBANKING_HOME. Without pointing that
@@ -110,9 +141,12 @@ void BankingTest::initializeOpensTheBackendUnderTheTemporaryHome()
 {
     Banking banking(applicationInfo());
 
+    const ScopedConsoleGui gui;
+
     const auto error = banking.initialize(QStringLiteral("OlbaFlinxBankingTest"),
                                           QStringLiteral("1.0.0"),
-                                          QStringLiteral("0123456789ABCDEF"));
+                                          QStringLiteral("0123456789ABCDEF"),
+                                          gui.get());
 
     QVERIFY2(!error.isError(), qPrintable(error.message()));
 
@@ -133,10 +167,13 @@ void BankingTest::accountsWithoutAnyConfiguredAccountReportsNotFound()
 {
     Banking banking(applicationInfo());
 
+    const ScopedConsoleGui gui;
+
     QVERIFY(!banking
                  .initialize(QStringLiteral("OlbaFlinxBankingTest"),
                              QStringLiteral("1.0.0"),
-                             QStringLiteral("0123456789ABCDEF"))
+                             QStringLiteral("0123456789ABCDEF"),
+                             gui.get())
                  .isError());
 
     QSignalSpy errorSpy(&banking, &Banking::errorOccurred);
@@ -157,6 +194,26 @@ void BankingTest::accountsWithoutAnyConfiguredAccountReportsNotFound()
     QVERIFY(arguments.at(1).toString().contains(QStringLiteral("No accounts")));
 
     banking.finalize();
+}
+
+/**
+ * The failure case for the interface. A missing one is refused here, where the
+ * caller can be told about it, and not left to gwenhywfar. gwenhywfar asserts on
+ * it the moment it takes a file lock, which AB_Banking_Fini does, so the process
+ * aborted inside finalize with a message about gui.c and nothing about the cause.
+ */
+void BankingTest::initializeWithoutAnInterfaceReportsAnError()
+{
+    Banking banking(applicationInfo());
+
+    const auto error = banking.initialize(QStringLiteral("OlbaFlinxBankingTest"),
+                                          QStringLiteral("1.0.0"),
+                                          QStringLiteral("0123456789ABCDEF"),
+                                          nullptr);
+
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::InvalidInput);
+    QVERIFY(error.message().contains(QStringLiteral("user interface")));
 }
 
 } // namespace olbaflinx::core::banking::tests

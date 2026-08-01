@@ -23,6 +23,11 @@
 #include "core/Banking/Account/Account.h"
 #include "core/Error.h"
 
+// The C interface of the gwenhywfar user interface. It pulls no Qt module; the
+// Qt implementation of it lives in the ui layer, which is where the widgets
+// belong.
+#include <gwenhywfar/gui.h>
+
 #include <QtCore/QObject>
 
 namespace olbaflinx::core::banking {
@@ -41,7 +46,8 @@ using namespace ::account;
  * @package olbaflinx::core::banking
  *
  * Ownership: the creator owns the instance. The accounts reported through
- * itemsReceived pass into the ownership of the receiver.
+ * itemsReceived pass into the ownership of the receiver. The user interface
+ * handed to initialize stays with its creator; see there.
  */
 class OLBAFLINX_CORE_EXPORT Banking : public QObject
 {
@@ -62,11 +68,19 @@ public:
      * @param name Application name registered by German HBCI ZKA
      * @param version Application version registered by German HBCI ZKA
      * @param key The FinTS registration key from German ZKA
+     * @param gui The user interface the backend asks for a PIN, a TAN and a
+     *  dialog. It stays the property of the caller: this class neither frees it
+     *  in finalize nor in its destructor, and it has to outlive this instance.
+     *  It must not be null. gwenhywfar asserts on a missing interface as soon as
+     *  it takes a file lock, which AB_Banking_Fini does, so a null one would not
+     *  fail here but abort the process later. A caller with no display passes
+     *  GWEN_Gui_new(), the non-interactive interface of gwenhywfar, and frees it
+     *  with GWEN_Gui_free() afterwards.
      *
      * @return A default constructed Error on success, otherwise the reason. The
      *  caller has to check it, the return type is [[nodiscard]].
      */
-    Error initialize(const QString &name, const QString &version, const QString &key);
+    Error initialize(const QString &name, const QString &version, const QString &key, GWEN_GUI *gui);
 
     /**
      * @brief Finalize the banking backend and free all resources.

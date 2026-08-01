@@ -26,8 +26,6 @@
 #include <gwenhywfar/gui.h>
 #include <gwenhywfar/gwenhywfar.h>
 
-#include <gwen-gui-qt5/qt5_gui.hpp>
-
 #include <aqbanking/banking.h>
 #include <aqbanking/banking_dialogs.h>
 #include <aqbanking/banking_online.h>
@@ -54,7 +52,6 @@ class Banking::Private
 public:
     explicit Private(Banking *banking, ApplicationInfo applicationInfo)
         : gwenGui(nullptr)
-        , qtGui(nullptr)
         , aqBanking(nullptr)
         , m_isInitialized(false)
         , m_chipCardClient(nullptr)
@@ -64,7 +61,7 @@ public:
 
     ~Private() { finalize(); }
 
-    Error initialize(const QString &name, const QString &version, const QString &key)
+    Error initialize(const QString &name, const QString &version, const QString &key, GWEN_GUI *gui)
     {
         if (name.isEmpty() || version.isEmpty()) {
             return Error(ErrorCode::InvalidInput,
@@ -73,8 +70,18 @@ public:
                              .arg(name, version));
         }
 
-        // We don't initialize AQ Banking & Gwen GUI twice
-        m_isInitialized = (aqBanking != nullptr) && (gwenGui != nullptr);
+        // Refused here rather than left to abort the process later. gwenhywfar
+        // asserts on a missing interface the moment it takes a file lock, and
+        // AB_Banking_Fini takes one, so the failure would surface far from its
+        // cause. A caller without a display passes GWEN_Gui_new().
+        if (gui == nullptr) {
+            return Error(ErrorCode::InvalidInput,
+                         QStringLiteral("Banking needs a user interface, GWEN_Gui_new() will do"));
+        }
+
+        // We don't initialize AQ Banking & Gwen GUI twice. The flag used to be
+        // derived from the two handles, which no longer works: a caller may pass
+        // no user interface at all, and then gwenGui stays null on purpose.
         if (m_isInitialized) {
             return Error(ErrorCode::InvalidInput,
                          QStringLiteral("The banking backend is already initialized"));
@@ -86,8 +93,9 @@ public:
                          QStringLiteral("GWEN_Init failed with %1").arg(rv));
         }
 
-        qtGui = new QT5_Gui();
-        gwenGui = qtGui->getCInterface();
+        // The interface belongs to the caller. Building it here would drag Qt
+        // Widgets into a library that is meant to be usable without a display.
+        gwenGui = gui;
         GWEN_Gui_SetGui(gwenGui);
 
         const QByteArray local8BitName = name.toLocal8Bit();
@@ -118,7 +126,7 @@ public:
 
         LC_Client_Init(m_chipCardClient);
 
-        m_isInitialized = ((aqBanking != nullptr) && (gwenGui != nullptr));
+        m_isInitialized = (aqBanking != nullptr);
         if (!m_isInitialized) {
             return Error(ErrorCode::BankingFailure,
                          QStringLiteral("The banking backend did not come up"));
@@ -133,23 +141,23 @@ public:
     {
         if (isInitialized()) {
             AB_Gui_Unextend(gwenGui);
+
             int rv = AB_Banking_Fini(aqBanking);
             if (rv == AB_SUCCESS) {
                 AB_Banking_free(aqBanking);
             }
 
+            // The interface is detached, not freed. It belongs to whoever passed
+            // it to initialize, and freeing it here would release it a second
+            // time when that owner goes.
             GWEN_Gui_SetGui(nullptr);
-            GWEN_Gui_free(gwenGui);
             GWEN_Fini();
 
             LC_Client_Fini(m_chipCardClient);
             LC_Client_free(m_chipCardClient);
 
-            qtGui = nullptr;
             gwenGui = nullptr;
             aqBanking = nullptr;
-            m_chipCardClient = nullptr;
-
             m_chipCardClient = nullptr;
         }
 
@@ -224,7 +232,6 @@ public:
     }
 
     GWEN_GUI *gwenGui;
-    QT5_Gui *qtGui;
     AB_BANKING *aqBanking;
 
 private:
@@ -247,9 +254,12 @@ Banking::~Banking()
     delete d_ptr;
 }
 
-Error Banking::initialize(const QString &name, const QString &version, const QString &key)
+Error Banking::initialize(const QString &name,
+                          const QString &version,
+                          const QString &key,
+                          GWEN_GUI *gui)
 {
-    return d_ptr->initialize(name, version, key);
+    return d_ptr->initialize(name, version, key, gui);
 }
 
 void Banking::finalize()
