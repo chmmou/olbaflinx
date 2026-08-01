@@ -33,10 +33,17 @@ private:
      * Builds a transaction with a type set, which the default constructor cannot produce.
      * AB_Transaction_new() initialises type to AB_Transaction_TypeUnknown.
      */
-    static Transaction *createTypedTransaction(TransactionType type)
+    static Transaction *createTypedTransaction(TransactionType type,
+                                               const QString &endToEndReference = QString())
     {
         auto abTransaction = AB_Transaction_new();
         AB_Transaction_SetType(abTransaction, type);
+
+        if (!endToEndReference.isEmpty()) {
+            AB_Transaction_SetEndToEndReference(abTransaction,
+                                                endToEndReference.toUtf8().constData());
+        }
+
         AB_Transaction_SetUniqueId(abTransaction, 4711);
         AB_Transaction_SetLocalIban(abTransaction, "DE02500105170137075030");
         AB_Transaction_SetRemoteIban(abTransaction, "DE02120300000000202051");
@@ -62,6 +69,11 @@ private Q_SLOTS:
     void transactionIsValidAcceptsKnownType();
     void transactionToStringOmitsPersonalData();
     void transactionToStringHandlesEmptyTransaction();
+    void toMapAndBackYieldsTheSameTransaction();
+    void toMapKeepsNonAsciiNames();
+    void toMapOfAnEmptyTransactionCarriesTheSameKeys();
+    void toMapCarriesAHashOfTheEndToEndReferenceOnly();
+    void itemTypeIsTheNameOfTheClass();
 };
 
 void TransactionTest::transactionIsValidRejectsUnknownType()
@@ -121,6 +133,95 @@ void TransactionTest::transactionToStringHandlesEmptyTransaction()
 
     QVERIFY(!result.isEmpty());
     QVERIFY(result.contains(QString::number(transaction.uniqueId())));
+}
+
+/**
+ * The round trip is what the storage relies on. The write side used to prefix
+ * every key with a colon while the read side asked without one, so every
+ * transaction read back carried nothing but default values.
+ */
+void TransactionTest::toMapAndBackYieldsTheSameTransaction()
+{
+    const QScopedPointer<Transaction> written(
+        createTypedTransaction(AB_Transaction_TypeTransaction));
+
+    const auto read = Transaction::fromMap(written->toMap());
+    QVERIFY(read != nullptr);
+
+    QCOMPARE(read->type(), written->type());
+    QCOMPARE(read->uniqueId(), written->uniqueId());
+    QCOMPARE(read->localIban(), written->localIban());
+    QCOMPARE(read->remoteIban(), written->remoteIban());
+    QCOMPARE(read->remoteName(), written->remoteName());
+    QCOMPARE(read->localName(), written->localName());
+    QCOMPARE(read->remoteAccountNumber(), written->remoteAccountNumber());
+    QCOMPARE(read->value(), written->value());
+    QCOMPARE(read->currency(), written->currency());
+}
+
+void TransactionTest::toMapKeepsNonAsciiNames()
+{
+    const QScopedPointer<Transaction> written(
+        createTypedTransaction(AB_Transaction_TypeTransaction));
+
+    auto map = written->toMap();
+    map[QStringLiteral("remote_name")] = QStringLiteral("Erika Müller-Groß");
+    map[QStringLiteral("purpose")] = QStringLiteral("Miete für März, 90 €");
+
+    const auto read = Transaction::fromMap(map);
+    QVERIFY(read != nullptr);
+
+    QCOMPARE(read->remoteName(), QStringLiteral("Erika Müller-Groß"));
+    QCOMPARE(read->purpose(), QStringLiteral("Miete für März, 90 €"));
+}
+
+/**
+ * A transaction without any field set still has to answer with the full set of
+ * columns. A map that shrinks with the content would leave the binding of the
+ * insert statement without a value.
+ */
+void TransactionTest::toMapOfAnEmptyTransactionCarriesTheSameKeys()
+{
+    const Transaction empty;
+    const QScopedPointer<Transaction> filled(
+        createTypedTransaction(AB_Transaction_TypeTransaction));
+
+    QCOMPARE(empty.toMap().keys(), filled->toMap().keys());
+}
+
+/**
+ * The hash is built over the end to end reference and over nothing else. Two
+ * transactions that differ in type, amount and parties therefore share a hash as
+ * long as neither carries such a reference, which is the ordinary case for an
+ * incoming booking. The column named hash identifies nothing.
+ *
+ * This test states what the class does today. It fails once the hash covers the
+ * content, which is the point at which it has to be rewritten.
+ */
+void TransactionTest::toMapCarriesAHashOfTheEndToEndReferenceOnly()
+{
+    const QScopedPointer<Transaction> first(createTypedTransaction(AB_Transaction_TypeTransaction));
+    const QScopedPointer<Transaction> second(createTypedTransaction(AB_Transaction_TypeTransfer));
+    const QScopedPointer<Transaction> referenced(
+        createTypedTransaction(AB_Transaction_TypeTransaction, QStringLiteral("E2E-4711")));
+
+    const auto hashOf = [](const Transaction *transaction) {
+        return transaction->toMap().value(QStringLiteral("hash")).toString();
+    };
+
+    QVERIFY(!hashOf(first.data()).isEmpty());
+
+    // Different type, different amount, same empty reference.
+    QCOMPARE(hashOf(second.data()), hashOf(first.data()));
+
+    QVERIFY(hashOf(referenced.data()) != hashOf(first.data()));
+}
+
+void TransactionTest::itemTypeIsTheNameOfTheClass()
+{
+    const Transaction transaction;
+
+    QCOMPARE(transaction.itemType(), QStringLiteral("Transaction"));
 }
 
 } // namespace olbaflinx::core::banking::transaction::tests
