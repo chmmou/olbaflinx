@@ -4,25 +4,61 @@
 
 ### Anforderungen
 
-- [CMake](https://github.com/Kitware/CMake/releases/tag/v3.22.3) >= 3.22
+- [CMake](https://github.com/Kitware/CMake/releases/tag/v3.22.3) >= 3.22, dazu Ninja
 ---
-- [Qt 6](https://www.qt.io/download-qt-installer) >= 6.6.1
+- [Qt 6](https://www.qt.io/download-qt-installer) >= 6.8 LTS
 - [Qt SQLite Plugin für SQLCipher](https://github.com/bAmpT/qsqlcipher-qt6-cmake/tree/6.6-cmake) >= 6.6-cmake branch
-- [Qt Advanced Docking System](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System) >= 4.3.0
+- [Qt Advanced Docking System](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System) >= 5.0.0
 ---
-- [gwenhywfar](https://www.aquamaniac.de/rdm/projects/gwenhywfar/files) >= 5.12.0 (für das Bauen des Qt5 Plugins mit Qt6)
+- [gwenhywfar](https://www.aquamaniac.de/rdm/projects/gwenhywfar/files) >= 5.12.0, gebaut mit `--with-guis="cpp qt6"`
 - [aqbanking](https://www.aquamaniac.de/rdm/projects/aqbanking/files) >= 6.6.0 (für neue FinTS URLs und vor allem wegen behobene Fehler)
-- [libchipcard](https://www.aquamaniac.de/rdm/projects/libchipcard/files) >= 5.1.6 (für Kartenleser-Unterstützung)
+- [libchipcard](https://www.aquamaniac.de/rdm/projects/libchipcard/files) >= 5.1 (für Kartenleser-Unterstützung)
 ---
+
+Ein C++20-fähiger Compiler wird vorausgesetzt. Die Konfiguration bricht ab, wenn ein installiertes Qt unterhalb von 6.8 gefunden wird.
 
 ### Erstellungsprozess
 
-Die Abhängigkeit qsqlcipher-qt6-cmake wird verwendet, um alle sensiblen Daten in verschlüsselter Form zu speichern. Unter anderem wird auch die Abhängigkeit [Qt Advanced Docking System](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System) verwendet. 
+Die Abhängigkeit qsqlcipher-qt6-cmake wird verwendet, um alle sensiblen Daten in verschlüsselter Form zu speichern. Unter anderem wird auch die Abhängigkeit [Qt Advanced Docking System](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System) verwendet.
 
-Die Bibliotheken `aqbanking, gwenhywfar, libchipcard` sind jedoch im Ubuntu 24.04 LTS Repository veraltet. Deshalb laden wir die jeweiligen Projekte aus dem offiziellen Git Repository herunter und bauen es aus den Quellen selbst. Das hat auch den Vorteil, dass wir das `gwenhywfar gwengui-qt5` Plugin mit Qt 6 bauen können.
+Die Bibliotheken `aqbanking, gwenhywfar, libchipcard` sind in den Distributions-Repositorien häufig veraltet. Deshalb laden wir die jeweiligen Projekte aus dem offiziellen Git Repository herunter und bauen sie aus den Quellen selbst. gwenhywfar wird dabei mit der Qt-6-Oberfläche gebaut, weil das Projekt gegen `gwengui-qt6` linkt.
 
 Einige Abhängigkeiten benötigen weitere Abhängigkeiten. Diese müssen zuerst installiert werden. Das Installieren der Abhängigkeiten hängt vom jeweiligen System ab was genutzt wird. [Hier](res/ci/ubuntu/Dockerfile) die Befehle für ein Ubuntu basiertes System.
 
-Zum einfachen Erstellen der Anwendung stelle ich ein [Dockerfile](res/ci/ubuntu/Dockerfile) bereit. Dieses Dockerfile wird auch auf GitHub verwendet, um die Tests laufen zu lassen.
+Zum einfachen Erstellen der Anwendung stelle ich ein [Dockerfile](res/ci/ubuntu/Dockerfile) für Ubuntu und eines für [openSUSE](res/ci/opensuse/Dockerfile) bereit. Die Versionen der Abhängigkeiten stehen in der jeweiligen [requirements.sh](res/ci/ubuntu/requirements.sh) und sind mit denen des GitHub-Laufs identisch.
 
-Will man jedoch die Anwendung auf seinem eigenen Linux System erstellen empfehle ich, dass man sich die [Dockerfile](res/ci/ubuntu/Dockerfile)-Datei und die dazugehörige [requirements.sh](res/ci/ubuntu/requirements.sh)-Datei genauer anschaut.
+### Bauen
+
+Die Build-Konfigurationen stehen in `CMakePresets.json`, gebaut wird nach `cbuild/`.
+
+```bash
+cmake --preset debug
+cmake --build --preset debug
+ctest --preset debug
+```
+
+Der Preset `debug` baut die Tests mit, der Preset `release` nicht.
+
+```bash
+cmake --preset release
+cmake --build --preset release
+```
+
+### Übersetzungen
+
+Die Kataloge liegen in `res/i18n/`. Die `.qm`-Dateien entstehen im Bauverzeichnis und werden in die Anwendung eingebettet.
+
+```bash
+cmake --build --preset debug --target update_translations
+cmake --build --preset debug --target release_translations
+```
+
+`update_translations` liest die Quellen erneut ein und schreibt neue Einträge in die `.ts`-Dateien.
+
+### Installation
+
+```bash
+cmake --install cbuild/release --prefix /pfad/zum/ziel
+```
+
+Der Installationsschritt zieht über die Deployment-API von Qt die benötigten Qt-Bibliotheken, die Plugins und die Qt-Übersetzungen mit. Im Debug-Build landet die Installation unter `$HOME/.OlbaFlinx`.

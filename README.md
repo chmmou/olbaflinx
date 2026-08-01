@@ -2,7 +2,7 @@
 
 | Projekt         | Typ         | Lizenz                                                                              | Status                                                                                                                                                                                        |
 |-----------------|-------------|-------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| OlbaFlinx Tests | Test        | [![Lizenz: GPL v3](res/license-gplv3.svg)](https://www.gnu.org/licenses/gpl-3.0)    | [![Ubuntu (CTests)](https://github.com/chmmou/olbaflinx/actions/workflows/ubuntu-tests.yml/badge.svg?branch=develop)](https://github.com/chmmou/olbaflinx/actions/workflows/ubuntu-tests.yml) |
+| OlbaFlinx Tests | Test        | [![Lizenz: GPL v3](res/license-gplv3.svg)](https://www.gnu.org/licenses/gpl-3.0)    | [![Ubuntu (CTests)](https://github.com/chmmou/olbaflinx/actions/workflows/ubuntu-tests.yml/badge.svg?branch=develop-qt6)](https://github.com/chmmou/olbaflinx/actions/workflows/ubuntu-tests.yml) |
 | OlbaFlinx App   | Applikation | [![Lizenz: GPL v3](res/license-gplv3.svg)](https://www.gnu.org/licenses/gpl-3.0)    | [![experimental](res/experimental.svg)](https://github.com/chmmou/olbaflinx)                                                                                                                  |
 | OlbaFlinx Core  | Bibliothek  | [![Lizenz: LGPL v3](res/license-lgplv3.svg)](https://www.gnu.org/licenses/lgpl-3.0) | [![experimental](res/experimental.svg)](https://github.com/chmmou/olbaflinx)                                                                                                                  |
 
@@ -39,9 +39,32 @@ OlbaFlinx Core beinhaltet die Businesslogik für OlbaFlinx.
    3. usw.
 8. u. v. m.
 
-### Installation
+### Aufbau
 
-Die Installation kann in der [Installation Anleitung](INSTALL.md) gefunden werden.
+| Verzeichnis      | Inhalt                                                                       |
+|------------------|------------------------------------------------------------------------------|
+| `src/core/`      | `OlbaFlinxCore`, die Bibliothek mit der Businesslogik, ohne Oberflaeche       |
+| `src/ui/`        | `OlbaFlinxUi`, die Widgets, Dialoge und Praesentationsmodelle                 |
+| `src/main.cpp`   | `OlbaFlinxApp`, die ausfuehrbare Anwendung                                     |
+| `tests/core/`    | Tests der Kernbibliothek, laufen ohne Anzeige                                 |
+| `tests/ui/`      | Tests der Oberflaechenschicht                                                 |
+| `res/`           | Ressourcen, Uebersetzungen unter `res/i18n/`, CI-Abbilder unter `res/ci/`     |
+
+`OlbaFlinxCore` steht unter LGPLv3, `OlbaFlinxUi` und `OlbaFlinxApp` unter GPLv3. Beide Bibliotheken werden statisch gebunden.
+
+### Bauen
+
+Die Konfigurationen stehen in `CMakePresets.json`. Gebaut wird nach `cbuild/`.
+
+```bash
+cmake --preset debug
+cmake --build --preset debug
+ctest --preset debug
+```
+
+Fuer die Auslieferung dient `--preset release`. Er baut ohne Tests und ohne Zusicherungen.
+
+Voraussetzungen und die Herkunft der Abhaengigkeiten stehen in der [Installationsanleitung](INSTALL.md). Versionen, SPDX-Bezeichner und Bezugsquellen der Drittanbieterkomponenten stehen in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## ToDo
 
@@ -92,5 +115,3 @@ Der OlbaFlinx App Quellcode wird unter der [GNU General Public License Version 3
 | qsqlcipher-qt6-cmake       | [LGPL v3](https://github.com/bAmpT/qsqlcipher-qt6-cmake/blob/6.6-cmake/LICENSE)                               |
 | Qt Advanced Docking System | [LGPL v2.1](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System?tab=LGPL-2.1-1-ov-file)            |
 | Qt 6                       | [Mehrfach Lizenz](https://www.qt.io/qt-licensing)                                                             |
-
-Versionen, SPDX-Bezeichner und Bezugsquellen der Drittanbieterkomponenten stehen in [THIRD_PARTY.md](THIRD_PARTY.md).

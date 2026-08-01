@@ -103,6 +103,9 @@ public:
     {
         ui->appCentralWidget->initialize(q_ptr);
 
+        // Kept on purpose as the reference for the pending docking rework, and
+        // not activated: accountWidget() returns nullptr, so every call on aw
+        // below would dereference a null pointer.
         /*CDockManager::setConfigFlags(CDockManager::DefaultBaseConfig);
         CDockManager::setConfigFlag(CDockManager::OpaqueSplitterResize, true);
         CDockManager::setConfigFlag(CDockManager::XmlCompressionEnabled, false);

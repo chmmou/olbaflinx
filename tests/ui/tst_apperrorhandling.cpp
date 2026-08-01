@@ -55,6 +55,7 @@ private Q_SLOTS:
     void everyErrorCodeHasAUserMessage();
     void userMessageCarriesNoTechnicalDetail();
     void storageErrorReachesTheWindow();
+    void windowShowsItselfAndCarriesTheAboutEntry();
 };
 
 void AppErrorHandlingTest::initTestCase()
@@ -129,6 +130,32 @@ void AppErrorHandlingTest::storageErrorReachesTheWindow()
     QCOMPARE(shown, userMessage(ErrorCode::PermissionDenied));
     QVERIFY(!shown.contains(QStringLiteral("PRAGMA")));
     QVERIFY(!shown.contains(QStringLiteral("/home/")));
+}
+
+/**
+ * The window used to stay invisible on the startup path, which put the menu
+ * entry carrying the version out of reach at runtime. Both are checked here so
+ * that a future change to the startup order cannot take them away unnoticed.
+ */
+void AppErrorHandlingTest::windowShowsItselfAndCarriesTheAboutEntry()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    App app(&logger, &storage);
+    app.initialize();
+    app.show();
+
+    QVERIFY(QTest::qWaitForWindowExposed(&app));
+    QVERIFY(app.isVisible());
+
+    const auto actions = app.findChildren<QAction *>();
+    const auto about = std::find_if(actions.cbegin(), actions.cend(), [](const QAction *action) {
+        return action->objectName() == QStringLiteral("appAboutAction");
+    });
+
+    QVERIFY(about != actions.cend());
+    QVERIFY((*about)->isEnabled());
 }
 
 } // namespace olbaflinx::ui::tests
