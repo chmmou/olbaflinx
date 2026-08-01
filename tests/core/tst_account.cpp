@@ -40,6 +40,7 @@ private Q_SLOTS:
     void fromMapKeepsNonAsciiNames();
     void toMapAndBackYieldsTheSameAccount();
     void toMapAndBackKeepsTheReferenceAccounts();
+    void toMapKeepsTheReferenceAccountsAfterTheAccountIsGone();
     void isValidRejectsTheUnusableTypes_data();
     void isValidRejectsTheUnusableTypes();
     void isValidAcceptsAKnownType();
@@ -148,14 +149,40 @@ void AccountTest::toMapAndBackKeepsTheReferenceAccounts()
     QCOMPARE(referenceAccounts.at(0)->iban(), QStringLiteral("DE02120300000000202051"));
     QCOMPARE(referenceAccounts.at(0)->ownerName(), QStringLiteral("Erika Müller-Groß"));
 
-    qDeleteAll(referenceAccounts);
-
     // Asked a second time. The list is still there, which it would not be if the
-    // first call had released it.
+    // first call had released it. No release here either: the entries are shared
+    // and go when the last holder does.
     const auto again = account->referenceAccounts();
     QCOMPARE(again.size(), 1);
+}
 
-    qDeleteAll(again);
+/**
+ * The property map carries the reference accounts, and it outlives the account it
+ * was taken from. Nothing in this function releases them.
+ *
+ * Against a list of raw pointers this leaked one wrapper per entry, because the
+ * only holder was a QVariant and a QVariant deletes nothing. The leak is not
+ * visible as a failed assertion; it needs a run under AddressSanitizer.
+ */
+void AccountTest::toMapKeepsTheReferenceAccountsAfterTheAccountIsGone()
+{
+    QMap<QString, QVariant> map;
+
+    {
+        const auto account = Account::fromMap(
+            TestHelpers::createFakeAccountMapWithReferenceAccount());
+        QVERIFY(account != nullptr);
+
+        map = account->toMap();
+    }
+
+    QVERIFY(map.value(QStringLiteral("refAccounts")).canConvert<ReferenceAccounts>());
+
+    const auto referenceAccounts = qvariant_cast<ReferenceAccounts>(
+        map.value(QStringLiteral("refAccounts")));
+
+    QCOMPARE(referenceAccounts.size(), 1);
+    QCOMPARE(referenceAccounts.at(0)->iban(), QStringLiteral("DE02120300000000202051"));
 }
 
 void AccountTest::isValidRejectsTheUnusableTypes_data()

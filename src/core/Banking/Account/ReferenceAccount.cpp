@@ -105,13 +105,8 @@ QString ReferenceAccount::subAccountNumber() const
 
 std::shared_ptr<ReferenceAccount> ReferenceAccount::fromMap(const QMap<QString, QVariant> &map)
 {
-    return std::shared_ptr<ReferenceAccount>(create(map));
-}
-
-ReferenceAccount *ReferenceAccount::create(const QMap<QString, QVariant> &map)
-{
     if (map.isEmpty()) {
-        return nullptr;
+        return {};
     }
 
     // The values used to be dropped and an empty account handed back, so every
@@ -143,7 +138,7 @@ ReferenceAccount *ReferenceAccount::create(const QMap<QString, QVariant> &map)
 
     // The constructor duplicates what it is handed, so the structure built here
     // is freed again right after.
-    auto *referenceAccount = new ReferenceAccount(abRefAccount);
+    auto referenceAccount = std::make_shared<ReferenceAccount>(abRefAccount);
 
     AB_ReferenceAccount_free(abRefAccount);
 

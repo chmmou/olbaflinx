@@ -66,6 +66,7 @@ private Q_SLOTS:
     void enableTwiceKeepsTheFirstFile();
     void setLevelWithoutEnableHasNoEffect();
     void nonAsciiMessageReachesTheFile();
+    void nonAsciiPathReachesTheFile();
 };
 
 void LoggerTest::init()
@@ -167,6 +168,25 @@ void LoggerTest::nonAsciiMessageReachesTheFile()
     logger.disable();
 
     QVERIFY(contentsOf(file).contains(QStringLiteral("Überweisung an Müller-Groß über 12,50 Euro")));
+}
+
+/**
+ * The path is handed to the C logger as bytes. toLocal8Bit answers the locale
+ * codec and drops what it cannot map, so under a locale that is not UTF-8 the
+ * logger opened a different file than the caller named, or none at all.
+ * QFile::encodeName answers what open() needs.
+ */
+void LoggerTest::nonAsciiPathReachesTheFile()
+{
+    const auto file = logFile(QStringLiteral("Überweisungen-Müller-Groß"));
+
+    Logger logger;
+    logger.enable(Logger::Notice, file);
+    logger.log(QStringLiteral("written to a path with umlauts"));
+    logger.disable();
+
+    QVERIFY(QFile::exists(file));
+    QVERIFY(contentsOf(file).contains(QStringLiteral("written to a path with umlauts")));
 }
 
 } // namespace olbaflinx::core::logger::tests

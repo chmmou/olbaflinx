@@ -311,8 +311,6 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
     QCOMPARE(referenceAccounts.at(0)->iban(), QStringLiteral("DE02120300000000202051"));
     QCOMPARE(referenceAccounts.at(0)->ownerName(), QStringLiteral("Erika Müller-Groß"));
 
-    qDeleteAll(referenceAccounts);
-
     storage.close();
 }
 

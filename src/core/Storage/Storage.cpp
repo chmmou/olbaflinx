@@ -28,7 +28,6 @@
 #include <QtCore/QDate>
 #include <QtCore/QFile>
 #include <QtCore/QMetaEnum>
-#include <QtCore/QScopeGuard>
 #include <QtCore/QSet>
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>
@@ -847,8 +846,8 @@ public:
      * Reference accounts belong to the account that holds them. An account is
      * written whole, so the rows of an earlier write go first.
      *
-     * Ownership: the list travels through QVariant as raw pointers, created by
-     * Account::referenceAccounts. They are deleted here, where the list ends.
+     * Ownership: the entries are shared. Whichever holder goes last releases
+     * them, so an early return from this function leaks nothing.
      */
     Error storeReferenceAccounts(const QVariant &accountId, const QVariant &referenceAccounts)
     {
@@ -856,8 +855,7 @@ public:
             return {};
         }
 
-        auto accounts = qvariant_cast<ReferenceAccounts>(referenceAccounts);
-        const auto guard = qScopeGuard([&accounts] { qDeleteAll(accounts); });
+        const auto accounts = qvariant_cast<ReferenceAccounts>(referenceAccounts);
 
         QSqlQuery query;
         if (const auto error = openQuery(query); error.isError()) {
@@ -878,7 +876,7 @@ public:
                              .arg(accountId.toString(), query.lastError().text()));
         }
 
-        for (const auto referenceAccount : std::as_const(accounts)) {
+        for (const auto &referenceAccount : std::as_const(accounts)) {
             if (referenceAccount == nullptr || !referenceAccount->isValid()) {
                 continue;
             }
@@ -941,8 +939,8 @@ public:
             return;
         }
 
-        // Ownership passes to Account::fromMap, which deletes the list once it has
-        // copied the values into the account spec.
+        // The entries are shared with Account::fromMap, which copies their values
+        // into the account spec and then lets go of them.
         auto referenceAccounts = ReferenceAccounts();
         const auto record = query.record();
 
@@ -952,7 +950,7 @@ public:
                 referenceMap[record.fieldName(column)] = query.value(column);
             }
 
-            if (auto *referenceAccount = ReferenceAccount::create(referenceMap)) {
+            if (auto referenceAccount = ReferenceAccount::fromMap(referenceMap)) {
                 referenceAccounts << referenceAccount;
             }
         }
