@@ -19,8 +19,8 @@
 
 #include <gwenhywfar/logger.h>
 
-#define OLBAFLINX_CORE_LOGDOMAIN "de.chm-projects.oblaflinx"
-#define OLBAFLINX_CORE_LOGDOMAIN_IDENT "oblaflinx"
+#define OLBAFLINX_CORE_LOGDOMAIN "de.chm-projects.olbaflinx"
+#define OLBAFLINX_CORE_LOGDOMAIN_IDENT "olbaflinx"
 
 using namespace olbaflinx::core::logger;
 
