@@ -94,7 +94,14 @@ jobs:
           # with gwenhywfar and links against it. Without a refreshed cache the
           # freshly installed library is invisible to it and the generation
           # fails with "cannot open shared object file".
-          echo "$DEPS_PREFIX/lib" | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
+          # The Qt directory goes in as well. libtool decides at configure time
+          # which directories it considers system paths, and it silently drops
+          # a library handed to it as an absolute .so path outside of those.
+          # That is what leaves libgwengui-qt6 without a single Qt entry in its
+          # DT_NEEDED, which no search path can repair afterwards.
+          printf '%s\n%s\n' "$DEPS_PREFIX/lib" "$QT_ROOT_DIR/lib" \
+            | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
+          sudo ldconfig
 
           # gwenhywfar carries the Qt binding the project links against. Asking
           # for the qt5 gui here is what left gwengui-qt6 unavailable before.
@@ -102,10 +109,24 @@ jobs:
           cd gwenhywfar
           git checkout "$GWENHYWFAR_VERSION"
           make -f Makefile.cvs
-          ./configure --prefix="$DEPS_PREFIX" --with-guis="cpp qt6"
+          # -L names the Qt directory to libtool as a search path, so that it
+          # keeps the Qt libraries instead of discarding them.
+          ./configure --prefix="$DEPS_PREFIX" --with-guis="cpp qt6" \
+            LDFLAGS="-L$QT_ROOT_DIR/lib"
           make --jobs=$(nproc) all
           sudo make install
           sudo ldconfig
+
+          # Fail here rather than fifteen minutes later at the link of the
+          # tests, where the same cause shows up as a pile of undefined
+          # references to QComboBox and friends.
+          if ! objdump -p "$DEPS_PREFIX/lib/libgwengui-qt6.so" | grep -q "NEEDED.*libQt6Widgets"; then
+            echo "::error::libgwengui-qt6 was linked without Qt Widgets."
+            echo "libtool dropped the Qt libraries again. Its idea of the"
+            echo "system search paths did not pick up $QT_ROOT_DIR/lib."
+            objdump -p "$DEPS_PREFIX/lib/libgwengui-qt6.so" | grep NEEDED
+            exit 1
+          fi
           cd "$workdir"
 
           git clone --recursive https://git.aquamaniac.de/git/libchipcard
@@ -178,7 +199,8 @@ jobs:
 
       - name: Register the dependencies
         run: |
-          echo "$DEPS_PREFIX/lib" | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
+          printf '%s\n%s\n' "$DEPS_PREFIX/lib" "$QT_ROOT_DIR/lib" \
+            | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
           sudo ldconfig
           echo "$DEPS_PREFIX/bin" >> "$GITHUB_PATH"
           echo "PKG_CONFIG_PATH=$DEPS_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"

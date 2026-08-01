@@ -45,6 +45,16 @@ make --jobs=$(nproc) all
 make install
 ldconfig
 
+# Qt comes from the package manager here and therefore sits in a system
+# library directory, so libtool keeps it. The Ubuntu image installs Qt
+# elsewhere and has to name the directory; see its requirements.sh. Checked
+# all the same, because a silent drop here would only surface much later as
+# undefined references into Qt Widgets.
+objdump -p /usr/local/lib/libgwengui-qt6.so | grep -q "NEEDED.*libQt6Widgets" || {
+    echo "libgwengui-qt6 was linked without Qt Widgets, libtool dropped them" >&2
+    exit 1
+}
+
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/aqbanking
 cd aqbanking
