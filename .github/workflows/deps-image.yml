@@ -1,0 +1,99 @@
+name: Dependency image
+
+# The image carries Qt and the five libraries the project builds against:
+# gwenhywfar with its qt6 binding, aqbanking, libchipcard, the Qt Advanced
+# Docking System and the SQLCipher sql driver.
+#
+# It exists so that the test run stops cloning them. Five clones against three
+# foreign servers made every run depend on their availability, and they were
+# fetched by tag, which can be moved. The image is addressed by a tag naming the
+# Qt version, and the digest of the run that produced it stands in its log.
+#
+# This is the only workflow with write access to the registry. The test run keeps
+# read access to the repository and nothing more.
+
+on:
+  workflow_dispatch:
+    inputs:
+      qt_version:
+        description: "The Qt version the image carries. The default is the minimum the project declares."
+        required: false
+        default: "6.8.3"
+  push:
+    branches: [ develop-qt6 ]
+    paths:
+      - 'res/ci/ubuntu/**'
+      - '.github/workflows/deps-image.yml'
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}/ci-ubuntu
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # The one right this workflow has that the test run does not.
+      packages: write
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7.0.1
+
+      - name: Decide the Qt version
+        id: qt
+        run: |
+          set -euo pipefail
+          # A push carries no input, so the default lives here as well as in the
+          # Dockerfile. Both name the minimum the project declares.
+          version="${{ github.event.inputs.qt_version || '6.8.3' }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building the image for Qt $version"
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Log in to the registry
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: res/ci/ubuntu
+          file: res/ci/ubuntu/Dockerfile
+          push: true
+          # The tag names the Qt version. No 'latest': it would move the test run
+          # to another image without a change being visible in the repository.
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:qt${{ steps.qt.outputs.version }}
+          build-args: |
+            QT_VERSION=${{ steps.qt.outputs.version }}
+          # The image is large and rarely rebuilt, so the layer cache is worth
+          # more here than the storage it costs.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Say what the image promises
+        run: |
+          set -euo pipefail
+          image="${{ env.REGISTRY }}/${{ env.IMAGE }}:qt${{ steps.qt.outputs.version }}"
+
+          # Checked here rather than left for the first red test run. A missing
+          # sql driver shows up there as fourteen failing targets and says
+          # nothing about the image.
+          docker run --rm "$image" bash -lc '
+            set -euo pipefail
+            qmake6 -query QT_VERSION
+            pkg-config --modversion gwenhywfar aqbanking libchipcard-client
+            test -f "$(qmake6 -query QT_INSTALL_PLUGINS)/sqldrivers/libqsqlcipher.so"
+            objdump -p /usr/lib/libgwengui-qt6.so | grep -q "NEEDED.*libQt6Widgets"
+            echo "the image carries what the test run expects"
+          '

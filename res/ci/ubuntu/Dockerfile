@@ -14,7 +14,26 @@
 # * You should have received a copy of the GNU General Public License
 # * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # */
+# The two values this file needs, each written once. They stand before the first
+# FROM so that both stages inherit them; a stage that uses one re-declares the
+# name without a default, which is how docker carries a global argument in.
+#
+# The Qt version used to stand at three places in this file and at a fourth in a
+# patch file, with two of them disagreeing.
+#
+# The default is the minimum version the project declares. Building the image
+# against it is what makes that declaration worth anything; a newer Qt would
+# build too and would silently stop testing the floor. Pass --build-arg
+# QT_VERSION=... to get a second image for a newer one.
+ARG QT_VERSION=6.8.3
+
+# The docking library. requirements.sh builds it; here the version is only
+# needed to reach the installed file by name.
+ARG ADS_VERSION=5.0.0
+
 FROM ubuntu:26.04 AS verify
+
+ARG QT_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -94,16 +113,21 @@ RUN pip install --break-system-packages aqtinstall
 # Sql, Svg and Widgets, all of which are in the base package. Two of the
 # modules installed before, Qt Network Authorization and Qt WebEngine, carry
 # licences that would bind the application if it ever used them.
-RUN aqt install-qt linux desktop 6.11.1 linux_gcc_64 --outputdir /opt/qt
+RUN aqt install-qt linux desktop ${QT_VERSION} linux_gcc_64 --outputdir /opt/qt
 
 FROM scratch AS root
+
+# Re-declared without a default so that the values from before the first FROM
+# reach this stage.
+ARG QT_VERSION
+ARG ADS_VERSION
 
 LABEL org.opencontainers.image.title="OlbaFlinx Docker Image CI"
 LABEL org.opencontainers.image.description="The officially containerd continuous integration docker image of OlbaFlinx."
 LABEL org.opencontainers.image.authors="Alexander Saal <developer@olbaflinx.chm-projects.de> (@chmmou)"
-LABEL org.opencontainers.image.url="https://github.com/chmmou/olbaflinx/tree/develop/res/ci/README.md"
-LABEL org.opencontainers.image.documentation="https://github.com/chmmou/olbaflinx/tree/develop/res/ci"
-LABEL org.opencontainers.image.source="https://github.com/chmmou/olbaflinx/tree/develop/res/ci"
+LABEL org.opencontainers.image.url="https://github.com/chmmou/olbaflinx/tree/develop-qt6/res/ci"
+LABEL org.opencontainers.image.documentation="https://github.com/chmmou/olbaflinx/tree/develop-qt6/res/ci"
+LABEL org.opencontainers.image.source="https://github.com/chmmou/olbaflinx/tree/develop-qt6/res/ci"
 LABEL org.opencontainers.image.licenses="GPL-3.0-or-later"
 LABEL org.opencontainers.image.version="1.0"
 LABEL org.opencontainers.image.revision="1"
@@ -126,21 +150,21 @@ ENV LC_TELEPHONE=en_US.UTF-8
 ENV LC_TIME=en_US.UTF-8
 
 ENV QT_QPA_PLATFORM="offscreen"
-ENV PATH="/opt/qt/6.11.1/gcc_64/bin:/opt/qt/6.11.1/gcc_64/libexec:${PATH}"
+ENV QT_VERSION=${QT_VERSION}
+ENV PATH="/opt/qt/${QT_VERSION}/gcc_64/bin:/opt/qt/${QT_VERSION}/gcc_64/libexec:${PATH}"
 
 WORKDIR /workspace
 
 COPY ./libchipcard-client.pc.patch .
-COPY ./qsqlcipher.patch .
 COPY ./requirements.sh .
 
 RUN ./requirements.sh
 
 RUN patch -p1 /usr/lib/pkgconfig/libchipcard-client.pc < ./libchipcard-client.pc.patch
-RUN patchelf --set-rpath '$ORIGIN:/opt/qt/6.11.1/gcc_64/lib' /usr/lib/x86_64-linux-gnu/libqtadvanceddocking-qt6.so.5.0.0
+RUN patchelf --set-rpath "\$ORIGIN:/opt/qt/${QT_VERSION}/gcc_64/lib" \
+    /usr/lib/x86_64-linux-gnu/libqtadvanceddocking-qt6.so.${ADS_VERSION}
 
 RUN rm ./libchipcard-client.pc.patch
-RUN rm ./qsqlcipher.patch
 RUN rm ./requirements.sh
 
 CMD ["/bin/bash"]

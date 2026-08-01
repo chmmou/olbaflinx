@@ -25,7 +25,15 @@ Die Bibliotheken `aqbanking, gwenhywfar, libchipcard` sind in den Distributions-
 
 Einige Abhängigkeiten benötigen weitere Abhängigkeiten. Diese müssen zuerst installiert werden. Das Installieren der Abhängigkeiten hängt vom jeweiligen System ab was genutzt wird. [Hier](res/ci/ubuntu/Dockerfile) die Befehle für ein Ubuntu basiertes System.
 
-Zum einfachen Erstellen der Anwendung stelle ich ein [Dockerfile](res/ci/ubuntu/Dockerfile) für Ubuntu und eines für [openSUSE](res/ci/opensuse/Dockerfile) bereit. Die Versionen der Abhängigkeiten stehen in der jeweiligen [requirements.sh](res/ci/ubuntu/requirements.sh) und sind mit denen des GitHub-Laufs identisch.
+Zum einfachen Erstellen der Anwendung stelle ich ein [Dockerfile](res/ci/ubuntu/Dockerfile) für Ubuntu und eines für [openSUSE](res/ci/opensuse/Dockerfile) bereit. Die Versionen der Abhängigkeiten stehen in der jeweiligen [requirements.sh](res/ci/ubuntu/requirements.sh), jeweils mit dem Commit, auf den die Quelle festgenagelt ist. Ein Tag lässt sich verschieben, ein Commit nicht; zwei Läufe desselben Skripts bauen deshalb dieselben Quellen.
+
+Die Qt-Version steht im Dockerfile an einer Stelle, als `ARG QT_VERSION`. Voreingestellt ist 6.8 LTS, die Mindestversion des Projekts. Für ein Abbild mit einer neueren Version:
+
+```bash
+docker build --build-arg QT_VERSION=6.11.1 -t olbaflinx-ci res/ci/ubuntu
+```
+
+Der automatische Lauf baut diese Abhängigkeiten nicht mehr selbst. Er zieht ein vorgebautes Abbild aus der GitHub Container Registry, das der Workflow [deps-image.yml](.github/workflows/deps-image.yml) aus demselben Dockerfile erzeugt. Das Abbild-Tag nennt die Qt-Version.
 
 ### Bauen
 
