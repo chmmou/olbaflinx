@@ -16,22 +16,33 @@
 # * You should have received a copy of the GNU General Public License
 # * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # */
+# The same versions the workflow under .github/workflows pins. Picking the
+# newest tag instead would drift between the image and the automated run, and
+# libchipcard's newest tag is a beta.
+GWENHYWFAR_VERSION="5.14.1"
+AQBANKING_VERSION="6.9.2"
+LIBCHIPCARD_VERSION="5.1.6"
+ADS_VERSION="5.0.0"
+QSQLCIPHER_VERSION="v6.6-1"
+
 currentDirectory="$(dirname $(readlink -f ${BASH_SOURCE:-$0}))"
 
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/gwenhywfar
 cd gwenhywfar
-#git checkout $(git tag --sort=-creatordate | head -n 1)
-git checkout thb-202505-qt6
+git checkout $GWENHYWFAR_VERSION
 make -f Makefile.cvs
-./configure --prefix=/usr/local --with-guis="cpp qt5"
+# The project links gwengui-qt6. gwenhywfar refuses qt5 and qt6 together. The
+# release carries the qt6 binding, the thb-202505-qt6 branch is no longer
+# needed for it.
+./configure --prefix=/usr/local --with-guis="cpp qt6"
 make --jobs=$(nproc) all
 make install
 
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/aqbanking
 cd aqbanking
-git checkout $(git tag --sort=-creatordate | head -n 1)
+git checkout $AQBANKING_VERSION
 ACLOCAL_FLAGS="-I /usr/local/share/aclocal -I /usr/share/aclocal $ACLOCAL_FLAGS" make -f Makefile.cvs
 PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:$PKG_CONFIG_PATH" ./configure --prefix=/usr/local
 LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH" make typedefs
@@ -42,7 +53,7 @@ LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH" make install
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/libchipcard
 cd libchipcard
-git checkout 5.1.6
+git checkout $LIBCHIPCARD_VERSION
 ACLOCAL_FLAGS="-I /usr/local/share/aclocal -I /usr/share/aclocal $ACLOCAL_FLAGS" make -f Makefile.cvs
 PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:$PKG_CONFIG_PATH" ./configure --prefix=/usr/local
 LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH" make --jobs=$(nproc) all
@@ -51,7 +62,7 @@ LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH" make install
 cd $currentDirectory
 git clone --recursive https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
 cd Qt-Advanced-Docking-System
-git checkout $(git tag --sort=-creatordate | head -n 1)
+git checkout $ADS_VERSION
 mkdir cbuild
 cd cbuild 
 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr/local ..
@@ -61,7 +72,7 @@ ninja install
 cd $currentDirectory
 git clone https://github.com/bAmpT/qsqlcipher-qt6-cmake.git
 cd qsqlcipher-qt6-cmake
-git checkout $(git tag --sort=-creatordate | head -n 1)
+git checkout $QSQLCIPHER_VERSION
 git submodule update --init --recursive
 cp ../qsqlcipher.patch .
 git apply ./qsqlcipher.patch

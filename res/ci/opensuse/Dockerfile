@@ -24,6 +24,7 @@ RUN zypper --non-interactive refresh && \
         gcc-c++ \
         make \
         cmake \
+        ninja \
         git \
         nano \
         libopenssl* \

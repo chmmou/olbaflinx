@@ -19,21 +19,31 @@
 
 set -euxo pipefail
 
+# The same versions the workflow under .github/workflows pins. Picking the
+# newest tag instead would drift between the image and the automated run, and
+# libchipcard's newest tag is a beta.
+GWENHYWFAR_VERSION="5.14.1"
+AQBANKING_VERSION="6.9.2"
+LIBCHIPCARD_VERSION="5.1.6"
+ADS_VERSION="5.0.0"
+QSQLCIPHER_VERSION="v6.6-1"
+
 currentDirectory="$(dirname $(readlink -f ${BASH_SOURCE:-$0}))"
 
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/gwenhywfar
 cd gwenhywfar
-git checkout $(git tag --sort=-creatordate | head -n 1)
+git checkout $GWENHYWFAR_VERSION
 make -f Makefile.cvs
-./configure --prefix=/usr --with-guis="cpp qt5"
+# The project links gwengui-qt6. gwenhywfar refuses qt5 and qt6 together.
+./configure --prefix=/usr --with-guis="cpp qt6"
 make --jobs=$(nproc) all
 make install
 
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/aqbanking
 cd aqbanking
-git checkout $(git tag --sort=-creatordate | head -n 1)
+git checkout $AQBANKING_VERSION
 make -f Makefile.cvs
 ./configure --prefix=/usr
 make typedefs
@@ -44,7 +54,7 @@ make install
 cd $currentDirectory
 git clone --recursive https://git.aquamaniac.de/git/libchipcard
 cd libchipcard
-git checkout 5.1.6
+git checkout $LIBCHIPCARD_VERSION
 make -f Makefile.cvs
 ./configure --prefix=/usr
 make --jobs=$(nproc) all
@@ -53,9 +63,9 @@ make install
 cd $currentDirectory
 git clone --recursive https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
 cd Qt-Advanced-Docking-System
-git checkout $(git tag --sort=-creatordate | head -n 1)
+git checkout $ADS_VERSION
 mkdir cbuild
-cd cbuild 
+cd cbuild
 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr ..
 ninja
 ninja install
@@ -63,7 +73,7 @@ ninja install
 cd $currentDirectory
 git clone https://github.com/bAmpT/qsqlcipher-qt6-cmake.git
 cd qsqlcipher-qt6-cmake
-git checkout $(git tag --sort=-creatordate | head -n 1)
+git checkout $QSQLCIPHER_VERSION
 git submodule update --init --recursive
 cp ../qsqlcipher.patch .
 git apply ./qsqlcipher.patch

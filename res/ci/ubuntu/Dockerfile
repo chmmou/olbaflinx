@@ -90,7 +90,11 @@ RUN update-locale LC_ALL=en_US.UTF-8 \
     LC_TIME=en_US.UTF-8
 
 RUN pip install --break-system-packages aqtinstall
-RUN aqt install-qt linux desktop 6.11.1 linux_gcc_64 --outputdir /opt/qt -m qt5compat qtnetworkauth qtpdf qtwebchannel qtwebengine qtwebsockets qtwebview
+# No extra modules. The project links Concurrent, Core, Gui, LinguistTools,
+# Sql, Svg and Widgets, all of which are in the base package. Two of the
+# modules installed before, Qt Network Authorization and Qt WebEngine, carry
+# licences that would bind the application if it ever used them.
+RUN aqt install-qt linux desktop 6.11.1 linux_gcc_64 --outputdir /opt/qt
 
 FROM scratch AS root
 
