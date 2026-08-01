@@ -23,6 +23,8 @@
 #include "ui/Assistant/SetupAssistant.h"
 #include "ui/Storage/StorageDialog.h"
 
+#include <QtCore/QLocale>
+#include <QtCore/QTranslator>
 #include <QtWidgets/QApplication>
 
 using namespace olbaflinx::core;
@@ -34,15 +36,8 @@ using namespace olbaflinx::ui::storage;
 
 int main(int argc, char *argv[])
 {
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-#endif
-
-#if QT_VERSION > QT_VERSION_CHECK(5, 14, 0)
     QApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-#endif
 
     QApplication::setApplicationName(QStringLiteral("OlbaFlinx"));
     QApplication::setApplicationVersion(QStringLiteral(OLBAFLINX_VERSION));
@@ -52,6 +47,17 @@ int main(int argc, char *argv[])
     QApplication a(argc, argv);
 
     QObject::connect(&a, &QApplication::lastWindowClosed, &a, &QApplication::quit);
+
+    // The catalogues are embedded under the resource prefix set by
+    // qt_add_translations. A missing catalogue leaves the source strings in
+    // place, which is why the return value only gates the installation.
+    QTranslator translator;
+    if (translator.load(QLocale(),
+                        QStringLiteral("OlbaFlinxApp"),
+                        QStringLiteral("_"),
+                        QStringLiteral(":/i18n"))) {
+        QApplication::installTranslator(&translator);
+    }
 
     const ApplicationInfo applicationInfo{QApplication::organizationName(),
                                           QApplication::applicationName(),

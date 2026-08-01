@@ -48,13 +48,10 @@ find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS
         Concurrent
         Core
         Gui
-        Help
         LinguistTools
-        Network
         Sql
         Svg
         Widgets
-        Xml
 )
 qt_standard_project_setup(REQUIRES ${OLBAFLINX_QT_MIN_VERSION})
 

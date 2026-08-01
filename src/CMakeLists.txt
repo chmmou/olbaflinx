@@ -33,6 +33,11 @@ set(OLBAFLINX_RES_DIR ${CMAKE_SOURCE_DIR}/res)
 
 # ----------------------------------------------------------------------------
 # OlbaFlinxCore, LGPLv3, see src/core/LICENSE
+#
+# Built statically, against the usual advice to link an LGPL library
+# dynamically. The obligation is met because the full source of this library is
+# published, so anyone can change it and link the application anew. Qt itself
+# is linked dynamically.
 # ----------------------------------------------------------------------------
 
 qt_add_resources(CORE_RESOURCES ${OLBAFLINX_RES_DIR}/OlbaFlinxCore.qrc)
@@ -82,8 +87,6 @@ target_link_libraries(OlbaFlinxCore
         PkgConfig::PKG_AQBANKING
         PRIVATE
         Qt6::Concurrent
-        Qt6::Network
-        Qt6::Xml
         PkgConfig::PKG_GWENHYWFAR_QT
         PkgConfig::PKG_LIBCHIPCARD_CLIENT
 )
@@ -162,24 +165,11 @@ target_link_libraries(OlbaFlinxUi
 # OlbaFlinxApp, GPLv3, see src/ui/LICENSE
 # ----------------------------------------------------------------------------
 
-set(APP_TS_FILES
-        ${OLBAFLINX_RES_DIR}/i18n/OlbaFlinxApp_de_DE.ts
-        ${OLBAFLINX_RES_DIR}/i18n/OlbaFlinxApp_en_US.ts
-)
-set_source_files_properties(${APP_TS_FILES} PROPERTIES
-        OUTPUT_LOCATION ${OLBAFLINX_RES_DIR}/i18n
-)
-
-qt_add_resources(APP_RESOURCES
-        ${OLBAFLINX_RES_DIR}/app.qrc
-        ${OLBAFLINX_RES_DIR}/i18n/translations.qrc
-)
-qt6_create_translation(APP_GENERATED_TS ${CMAKE_CURRENT_SOURCE_DIR} ${APP_TS_FILES})
+qt_add_resources(APP_RESOURCES ${OLBAFLINX_RES_DIR}/app.qrc)
 
 qt_add_executable(OlbaFlinxApp
         main.cpp
         ${APP_RESOURCES}
-        ${APP_GENERATED_TS}
 )
 
 set_target_properties(OlbaFlinxApp PROPERTIES OUTPUT_NAME "olbaflinx")
@@ -193,8 +183,32 @@ target_compile_options(OlbaFlinxApp PRIVATE ${OLBAFLINX_WARNINGS})
 
 target_link_libraries(OlbaFlinxApp PRIVATE
         OlbaFlinxUi::OlbaFlinxUi
-        Qt6::Help
         Qt6::Widgets
 )
 
-install(TARGETS OlbaFlinxApp DESTINATION bin)
+# The .qm files are generated in the build directory and embedded under the
+# resource prefix /i18n. The source targets are named explicitly so that the
+# test targets stay out of lupdate's reach.
+qt_add_translations(OlbaFlinxApp
+        SOURCE_TARGETS
+        OlbaFlinxCore
+        OlbaFlinxUi
+        OlbaFlinxApp
+        TS_FILES
+        ${OLBAFLINX_RES_DIR}/i18n/OlbaFlinxApp_de_DE.ts
+        ${OLBAFLINX_RES_DIR}/i18n/OlbaFlinxApp_en_US.ts
+        RESOURCE_PREFIX "/i18n"
+)
+
+install(TARGETS OlbaFlinxApp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Deployment goes through Qt's own API, never through copying libraries by
+# hand. It picks up the Qt translations as well; the ones of the application
+# itself travel inside the binary as a resource. Run it from the release
+# preset, a debug install carries the assertions and lands under $HOME.
+qt_generate_deploy_app_script(
+        TARGET OlbaFlinxApp
+        OUTPUT_SCRIPT OLBAFLINX_DEPLOY_SCRIPT
+        NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${OLBAFLINX_DEPLOY_SCRIPT})
