@@ -94,11 +94,6 @@ jobs:
           # with gwenhywfar and links against it. Without a refreshed cache the
           # freshly installed library is invisible to it and the generation
           # fails with "cannot open shared object file".
-          # The Qt directory goes in as well. libtool decides at configure time
-          # which directories it considers system paths, and it silently drops
-          # a library handed to it as an absolute .so path outside of those.
-          # That is what leaves libgwengui-qt6 without a single Qt entry in its
-          # DT_NEEDED, which no search path can repair afterwards.
           printf '%s\n%s\n' "$DEPS_PREFIX/lib" "$QT_ROOT_DIR/lib" \
             | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
           sudo ldconfig
@@ -109,12 +104,22 @@ jobs:
           cd gwenhywfar
           git checkout "$GWENHYWFAR_VERSION"
           make -f Makefile.cvs
-          # -L names the Qt directory to libtool as a search path, so that it
-          # keeps the Qt libraries instead of discarding them.
-          ./configure --prefix="$DEPS_PREFIX" --with-guis="cpp qt6" \
-            LDFLAGS="-L$QT_ROOT_DIR/lib"
-          make --jobs=$(nproc) all
-          sudo make install
+          ./configure --prefix="$DEPS_PREFIX" --with-guis="cpp qt6"
+
+          # configure writes QT_LIBS as a list of absolute .so paths, and
+          # libtool silently discards every one of them whose directory it does
+          # not hold for a system path. The library then ends up with no Qt
+          # entry in its DT_NEEDED at all. Handing it the same libraries as
+          # -L and -l makes libtool keep them. Reproduced and verified in a
+          # container: three entries afterwards, Widgets, Gui and Core, which
+          # are the ones actually used.
+          qt_libs="$(grep -m1 '^QT_LIBS = ' gui/qt5/Makefile | sed 's/^QT_LIBS = //')"
+          qt_libs="-L$QT_ROOT_DIR/lib $(printf '%s' "$qt_libs" \
+            | sed -E 's#[^ ]*/lib([A-Za-z0-9_]+)\.so#-l\1#g')"
+
+          make --jobs=$(nproc) all QT_LIBS="$qt_libs"
+          # libtool relinks on install, so it needs the same value there.
+          sudo make install QT_LIBS="$qt_libs"
           sudo ldconfig
 
           # Fail here rather than fifteen minutes later at the link of the
@@ -122,8 +127,8 @@ jobs:
           # references to QComboBox and friends.
           if ! objdump -p "$DEPS_PREFIX/lib/libgwengui-qt6.so" | grep -q "NEEDED.*libQt6Widgets"; then
             echo "::error::libgwengui-qt6 was linked without Qt Widgets."
-            echo "libtool dropped the Qt libraries again. Its idea of the"
-            echo "system search paths did not pick up $QT_ROOT_DIR/lib."
+            echo "libtool discarded the Qt libraries. The rewrite of QT_LIBS"
+            echo "into -L and -l form did not take."
             objdump -p "$DEPS_PREFIX/lib/libgwengui-qt6.so" | grep NEEDED
             exit 1
           fi

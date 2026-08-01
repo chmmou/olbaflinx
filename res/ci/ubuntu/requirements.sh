@@ -35,11 +35,7 @@ QSQLCIPHER_VERSION="v6.6-1"
 # file".
 currentDirectory="$(dirname $(readlink -f ${BASH_SOURCE:-$0}))"
 
-# Qt does not live in a system library directory in this image. libtool decides
-# at configure time which directories count as system paths and silently drops
-# a library handed to it as an absolute .so path outside of those. Without this
-# libgwengui-qt6 ends up with no Qt entry in its DT_NEEDED at all, and every
-# consumer then fails to link with undefined references into Qt Widgets.
+# Qt does not live in a system library directory in this image.
 QT_LIB_DIR="$(dirname "$(dirname "$(command -v qmake6 || command -v qmake)")")/lib"
 printf '%s\n' "$QT_LIB_DIR" > /etc/ld.so.conf.d/qt6.conf
 ldconfig
@@ -50,13 +46,23 @@ cd gwenhywfar
 git checkout $GWENHYWFAR_VERSION
 make -f Makefile.cvs
 # The project links gwengui-qt6. gwenhywfar refuses qt5 and qt6 together.
-./configure --prefix=/usr --with-guis="cpp qt6" LDFLAGS="-L$QT_LIB_DIR"
-make --jobs=$(nproc) all
-make install
+./configure --prefix=/usr --with-guis="cpp qt6"
+
+# configure writes QT_LIBS as a list of absolute .so paths, and libtool
+# silently discards every one of them whose directory it does not hold for a
+# system path. The library then ends up with no Qt entry in its DT_NEEDED at
+# all, and every consumer fails to link with undefined references into Qt
+# Widgets. Handing it the same libraries as -L and -l makes libtool keep them.
+qtLibs="$(grep -m1 '^QT_LIBS = ' gui/qt5/Makefile | sed 's/^QT_LIBS = //')"
+qtLibs="-L$QT_LIB_DIR $(printf '%s' "$qtLibs" | sed -E 's#[^ ]*/lib([A-Za-z0-9_]+)\.so#-l\1#g')"
+
+make --jobs=$(nproc) all QT_LIBS="$qtLibs"
+# libtool relinks on install, so it needs the same value there.
+make install QT_LIBS="$qtLibs"
 ldconfig
 
 objdump -p /usr/lib/libgwengui-qt6.so | grep -q "NEEDED.*libQt6Widgets" || {
-    echo "libgwengui-qt6 was linked without Qt Widgets, libtool dropped them" >&2
+    echo "libgwengui-qt6 was linked without Qt Widgets, libtool discarded them" >&2
     exit 1
 }
 
