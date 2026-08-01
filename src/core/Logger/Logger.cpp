@@ -19,6 +19,8 @@
 
 #include <gwenhywfar/logger.h>
 
+#include <QtCore/QFile>
+
 #define OLBAFLINX_CORE_LOGDOMAIN "de.chm-projects.olbaflinx"
 #define OLBAFLINX_CORE_LOGDOMAIN_IDENT "olbaflinx"
 
@@ -32,10 +34,17 @@ Logger::~Logger() = default;
 void Logger::enable(LoggerLevel level, const QString &logFile)
 {
     if (!GWEN_Logger_IsOpen(OLBAFLINX_CORE_LOGDOMAIN)) {
+        // A path is a sequence of bytes for the file system, not text for a
+        // reader. toLocal8Bit answers the locale codec, which drops what it
+        // cannot map; encodeName answers what open() actually needs. On a path
+        // with characters outside the locale the logger used to open the wrong
+        // file, or none.
+        const QByteArray encodedLogFile = QFile::encodeName(logFile);
+
         GWEN_Logger_Enable(OLBAFLINX_CORE_LOGDOMAIN, 1);
         GWEN_Logger_Open(OLBAFLINX_CORE_LOGDOMAIN,
                          OLBAFLINX_CORE_LOGDOMAIN_IDENT,
-                         logFile.isEmpty() ? nullptr : logFile.toLocal8Bit().constData(),
+                         logFile.isEmpty() ? nullptr : encodedLogFile.constData(),
                          logFile.isEmpty() ? GWEN_LoggerType_Console : GWEN_LoggerType_File,
                          GWEN_LoggerFacility_User);
         GWEN_Logger_SetLevel(OLBAFLINX_CORE_LOGDOMAIN, (GWEN_LOGGER_LEVEL) level);
