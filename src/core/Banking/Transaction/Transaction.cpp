@@ -17,12 +17,26 @@
 
 #include "core/Banking/Transaction/Transaction.h"
 
+#include <gwenhywfar/buffer.h>
 #include <gwenhywfar/gwendate.h>
 
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QIODevice>
 
+#include <memory>
+
 using namespace olbaflinx::core::banking::transaction;
+
+namespace {
+
+/**
+ * The C structures of the backend, held so that every path out of a function
+ * releases them. QT-CPP-071.
+ */
+using GwenDatePtr = std::unique_ptr<GWEN_DATE, decltype(&GWEN_Date_free)>;
+using GwenBufferPtr = std::unique_ptr<GWEN_BUFFER, decltype(&GWEN_Buffer_free)>;
+
+} // namespace
 
 class Transaction::Private
 {
@@ -38,6 +52,14 @@ public:
         abTransaction = nullptr;
     }
 
+    /**
+     * The fingerprint a booking is recognised by.
+     *
+     * It used to be taken over the end to end reference alone, which most
+     * bookings do not carry. Every one of those shared the hash of an empty
+     * string with every other, so they could not be told apart. The fields below
+     * are the ones that together identify a booking.
+     */
     QString calculateTransactionHash()
     {
         if (!q_ptr->hash().isEmpty()) {
@@ -47,45 +69,60 @@ public:
         QByteArray buffer;
         QDataStream out(&buffer, QIODevice::WriteOnly);
         out.setVersion(QDataStream::Qt_DefaultCompiledVersion);
-        out << q_ptr->endToEndReference();
 
-        const QByteArray hash = QCryptographicHash::hash(buffer, QCryptographicHash::Sha1);
+        out << q_ptr->uniqueAccountId() << q_ptr->uniqueId() << q_ptr->date() << q_ptr->valutaDate()
+            << q_ptr->value() << q_ptr->currency() << q_ptr->localIban() << q_ptr->remoteIban()
+            << q_ptr->remoteAccountNumber() << q_ptr->remoteName() << q_ptr->purpose()
+            << q_ptr->customerReference() << q_ptr->bankReference() << q_ptr->endToEndReference();
 
-        buffer.clear();
-
-        return {hash.toHex()};
+        return {QCryptographicHash::hash(buffer, QCryptographicHash::Sha256).toHex()};
     }
 
+    /**
+     * Reads a date out of the banking backend.
+     *
+     * A GWEN_DATE carries a year, a month and a day and nothing else. The
+     * template used to ask for a time as well, which the source cannot fill.
+     *
+     * A date that cannot be read answers with an invalid QDate. It used to
+     * answer with today, which put an invented day into booking data.
+     */
     static QDate toDate(const GWEN_DATE *gwenDate)
     {
-        if (gwenDate) {
-            auto buffer = GWEN_Buffer_new(nullptr, 16, 0, 1);
-            int rv = GWEN_Date_toStringWithTemplate(gwenDate, "DD.MM.YYYY HH:mm:ss", buffer);
-            if (rv != GWEN_SUCCESS) {
-                return QDate::currentDate();
-            }
-
-            auto start = GWEN_Buffer_GetStart(buffer);
-            QDate qDate = QDate::fromString(QString::fromUtf8(start),
-                                            QStringLiteral("dd.MM.yyyy HH:mm:ss"));
-
-            GWEN_Buffer_Reset(buffer);
-            GWEN_Buffer_free(buffer);
-
-            return qDate;
+        if (gwenDate == nullptr) {
+            return {};
         }
 
-        return QDate::currentDate();
+        // The early return below used to leak this buffer.
+        const GwenBufferPtr buffer(GWEN_Buffer_new(nullptr, 16, 0, 1), &GWEN_Buffer_free);
+
+        if (GWEN_Date_toStringWithTemplate(gwenDate, "DD.MM.YYYY", buffer.get()) != GWEN_SUCCESS) {
+            return {};
+        }
+
+        return QDate::fromString(QString::fromUtf8(GWEN_Buffer_GetStart(buffer.get())),
+                                 QStringLiteral("dd.MM.yyyy"));
     }
 
-    static GWEN_DATE *fromDate(const QDate &date)
+    /**
+     * Hands a date to the banking backend.
+     *
+     * Ownership stays here. Every setter of AB_TRANSACTION duplicates what it is
+     * given, so the handle has to be released again; it used to be dropped at all
+     * seven call sites.
+     *
+     * A date that is not set answers with an empty handle, which the setters read
+     * as "no date". It used to answer with today.
+     */
+    static GwenDatePtr fromDate(const QDate &date)
     {
         if (!date.isValid() || date.isNull()) {
-            return GWEN_Date_CurrentDate();
+            return {nullptr, &GWEN_Date_free};
         }
 
-        const auto fd = date.toString(QStringLiteral("yyyyMMdd")).toLocal8Bit();
-        return GWEN_Date_fromString(fd.constData());
+        const auto text = date.toString(QStringLiteral("yyyyMMdd")).toLatin1();
+
+        return {GWEN_Date_fromString(text.constData()), &GWEN_Date_free};
     }
 
     AB_TRANSACTION *abTransaction;
@@ -591,22 +628,22 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
                                      .toLocal8Bit()
                                      .constData());
     AB_Transaction_SetDate(abTransaction,
-                           Private::fromDate(map.value(QStringLiteral("date")).toDate()));
+                           Private::fromDate(map.value(QStringLiteral("date")).toDate()).get());
     AB_Transaction_SetValutaDate(abTransaction,
                                  Private::fromDate(
-                                     map.value(QStringLiteral("valuta_date")).toDate()));
+                                     map.value(QStringLiteral("valuta_date")).toDate()).get());
 
     auto value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("value")).toDouble());
     AB_Value_SetCurrency(value,
                          map.value(QStringLiteral("currency")).toString().toLocal8Bit().constData());
-    AB_Transaction_SetValue(abTransaction, AB_Value_dup(value));
+    AB_Transaction_SetValue(abTransaction, value);
     AB_Value_free(value);
     value = nullptr;
 
     value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("fees")).toDouble());
-    AB_Transaction_SetFees(abTransaction, AB_Value_dup(value));
+    AB_Transaction_SetFees(abTransaction, value);
     AB_Value_free(value);
     value = nullptr;
 
@@ -658,7 +695,7 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
         abTransaction, map.value(QStringLiteral("mandate_id")).toString().toLocal8Bit().constData());
     AB_Transaction_SetMandateDate(abTransaction,
                                   Private::fromDate(
-                                      map.value(QStringLiteral("mandate_date")).toDate()));
+                                      map.value(QStringLiteral("mandate_date")).toDate()).get());
     AB_Transaction_SetMandateDebitorName(abTransaction,
                                          map.value(QStringLiteral("mandate_debitor_name"))
                                              .toString()
@@ -710,11 +747,11 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
     AB_Transaction_SetExecutionDay(abTransaction,
                                    map.value(QStringLiteral("execution_day")).toUInt());
     AB_Transaction_SetFirstDate(abTransaction,
-                                Private::fromDate(map.value(QStringLiteral("first_date")).toDate()));
+                                Private::fromDate(map.value(QStringLiteral("first_date")).toDate()).get());
     AB_Transaction_SetLastDate(abTransaction,
-                               Private::fromDate(map.value(QStringLiteral("last_date")).toDate()));
+                               Private::fromDate(map.value(QStringLiteral("last_date")).toDate()).get());
     AB_Transaction_SetNextDate(abTransaction,
-                               Private::fromDate(map.value(QStringLiteral("next_date")).toDate()));
+                               Private::fromDate(map.value(QStringLiteral("next_date")).toDate()).get());
     AB_Transaction_SetUnitId(
         abTransaction, map.value(QStringLiteral("unit_id")).toString().toLocal8Bit().constData());
     AB_Transaction_SetUnitIdNameSpace(abTransaction,
@@ -730,23 +767,23 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
 
     value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("units")).toDouble());
-    AB_Transaction_SetUnits(abTransaction, AB_Value_dup(value));
+    AB_Transaction_SetUnits(abTransaction, value);
     AB_Value_free(value);
     value = nullptr;
 
     value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("unit_price_value")).toDouble());
-    AB_Transaction_SetUnitPriceValue(abTransaction, AB_Value_dup(value));
+    AB_Transaction_SetUnitPriceValue(abTransaction, value);
     AB_Value_free(value);
     value = nullptr;
 
     AB_Transaction_SetUnitPriceDate(abTransaction,
                                     Private::fromDate(
-                                        map.value(QStringLiteral("unit_price_date")).toDate()));
+                                        map.value(QStringLiteral("unit_price_date")).toDate()).get());
 
     value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("commission_value")).toDouble());
-    AB_Transaction_SetCommissionValue(abTransaction, AB_Value_dup(value));
+    AB_Transaction_SetCommissionValue(abTransaction, value);
     AB_Value_free(value);
     value = nullptr;
 

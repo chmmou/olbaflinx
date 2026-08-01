@@ -54,13 +54,26 @@ private:
         auto value = AB_Value_new();
         AB_Value_SetValueFromDouble(value, 42.5);
         AB_Value_SetCurrency(value, "EUR");
-        AB_Transaction_SetValue(abTransaction, AB_Value_dup(value));
+        // The setter duplicates what it is given, so the extra dup this used to
+        // pass was never released.
+        AB_Transaction_SetValue(abTransaction, value);
         AB_Value_free(value);
 
         const auto transaction = new Transaction(abTransaction);
         AB_Transaction_free(abTransaction);
 
         return transaction;
+    }
+
+    /**
+     * The property map of a typed transaction, as fromMap expects it.
+     */
+    static QMap<QString, QVariant> mapOfATypedTransaction()
+    {
+        const QScopedPointer<Transaction> transaction(
+            createTypedTransaction(AB_Transaction_TypeTransaction));
+
+        return transaction->toMap();
     }
 
 private Q_SLOTS:
@@ -72,7 +85,9 @@ private Q_SLOTS:
     void toMapAndBackYieldsTheSameTransaction();
     void toMapKeepsNonAsciiNames();
     void toMapOfAnEmptyTransactionCarriesTheSameKeys();
-    void toMapCarriesAHashOfTheEndToEndReferenceOnly();
+    void toMapCarriesAHashOverTheContent();
+    void dateSurvivesTheRoundTrip();
+    void anUnreadableDateIsInvalidRatherThanToday();
     void itemTypeIsTheNameOfTheClass();
 };
 
@@ -190,18 +205,13 @@ void TransactionTest::toMapOfAnEmptyTransactionCarriesTheSameKeys()
 }
 
 /**
- * The hash is built over the end to end reference and over nothing else. Two
- * transactions that differ in type, amount and parties therefore share a hash as
- * long as neither carries such a reference, which is the ordinary case for an
- * incoming booking. The column named hash identifies nothing.
- *
- * This test states what the class does today. It fails once the hash covers the
- * content, which is the point at which it has to be rewritten.
+ * The hash used to be taken over the end to end reference and nothing else. Two
+ * bookings that differ in parties and amount then shared it as long as neither
+ * carried such a reference, which is the ordinary case for an incoming booking.
  */
-void TransactionTest::toMapCarriesAHashOfTheEndToEndReferenceOnly()
+void TransactionTest::toMapCarriesAHashOverTheContent()
 {
     const QScopedPointer<Transaction> first(createTypedTransaction(AB_Transaction_TypeTransaction));
-    const QScopedPointer<Transaction> second(createTypedTransaction(AB_Transaction_TypeTransfer));
     const QScopedPointer<Transaction> referenced(
         createTypedTransaction(AB_Transaction_TypeTransaction, QStringLiteral("E2E-4711")));
 
@@ -210,11 +220,58 @@ void TransactionTest::toMapCarriesAHashOfTheEndToEndReferenceOnly()
     };
 
     QVERIFY(!hashOf(first.data()).isEmpty());
-
-    // Different type, different amount, same empty reference.
-    QCOMPARE(hashOf(second.data()), hashOf(first.data()));
-
     QVERIFY(hashOf(referenced.data()) != hashOf(first.data()));
+
+    // Same content, same hash. The fingerprint is a function of the booking, not
+    // of the moment it was taken.
+    const QScopedPointer<Transaction> again(createTypedTransaction(AB_Transaction_TypeTransaction));
+    QCOMPARE(hashOf(again.data()), hashOf(first.data()));
+
+    // Another party has to change it. Under the old rule it did not.
+    auto abTransaction = AB_Transaction_new();
+    AB_Transaction_SetType(abTransaction, AB_Transaction_TypeTransaction);
+    AB_Transaction_SetUniqueId(abTransaction, 4711);
+    AB_Transaction_SetLocalIban(abTransaction, "DE02500105170137075030");
+    AB_Transaction_SetRemoteIban(abTransaction, "DE02120300000000202051");
+    AB_Transaction_SetRemoteName(abTransaction, "Klaus Anders");
+    AB_Transaction_SetRemoteAccountNumber(abTransaction, "0137075030");
+
+    const QScopedPointer<Transaction> other(new Transaction(abTransaction));
+    AB_Transaction_free(abTransaction);
+
+    QVERIFY(hashOf(other.data()) != hashOf(first.data()));
+}
+
+/**
+ * A GWEN_DATE carries a year, a month and a day. The template used to ask for a
+ * time as well, so the parse failed and the caller was handed today instead.
+ */
+void TransactionTest::dateSurvivesTheRoundTrip()
+{
+    auto map = mapOfATypedTransaction();
+    map[QStringLiteral("date")] = QDate(2024, 3, 17);
+    map[QStringLiteral("valuta_date")] = QDate(2024, 3, 19);
+
+    const auto transaction = Transaction::fromMap(map);
+    QVERIFY(transaction != nullptr);
+
+    QCOMPARE(transaction->date(), QDate(2024, 3, 17));
+    QCOMPARE(transaction->valutaDate(), QDate(2024, 3, 19));
+}
+
+/**
+ * A booking without a date must not be given one. An invented day in booking
+ * data is worse than a missing one.
+ */
+void TransactionTest::anUnreadableDateIsInvalidRatherThanToday()
+{
+    auto map = mapOfATypedTransaction();
+    map[QStringLiteral("date")] = QDate();
+
+    const auto transaction = Transaction::fromMap(map);
+    QVERIFY(transaction != nullptr);
+
+    QVERIFY(!transaction->date().isValid());
 }
 
 void TransactionTest::itemTypeIsTheNameOfTheClass()

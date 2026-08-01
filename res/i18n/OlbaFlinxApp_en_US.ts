@@ -64,7 +64,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="774"/>
+        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="811"/>
         <source>Transaction %1 - %2 %3</source>
         <translation type="unfinished"></translation>
     </message>
