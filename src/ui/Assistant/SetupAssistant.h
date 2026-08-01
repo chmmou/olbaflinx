@@ -22,6 +22,12 @@
 
 namespace olbaflinx::ui::assistant {
 
+/**
+ * @brief Guides the first run: banking backend and account setup.
+ *
+ * Ownership: belongs to its parent widget. The ApplicationInfo is copied into
+ * the pages, nothing is kept by reference.
+ */
 class SetupAssistant : public QWizard
 {
     Q_OBJECT

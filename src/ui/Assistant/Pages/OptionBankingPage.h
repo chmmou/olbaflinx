@@ -24,6 +24,13 @@
 
 namespace olbaflinx::ui::assistant::pages {
 
+/**
+ * @brief The wizard page that connects to the banking backend and lists the
+ *  accounts it finds.
+ *
+ * Ownership: belongs to the wizard it is added to. The Banking instance it
+ * creates is owned by this page and released with it.
+ */
 class OptionBankingPage : public QWizardPage
 {
     Q_OBJECT

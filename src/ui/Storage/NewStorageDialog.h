@@ -20,6 +20,12 @@
 
 namespace olbaflinx::ui::storage {
 
+/**
+ * @brief The dialog that asks for the details of a new storage file.
+ *
+ * Ownership: belongs to its parent widget. It holds the NewStorageItem that
+ * carries the input fields and releases it with itself.
+ */
 class NewStorageDialog : public QDialog
 {
     Q_OBJECT

@@ -22,6 +22,12 @@
 
 namespace olbaflinx::ui {
 
+/**
+ * @brief The central area of the main window.
+ *
+ * Ownership: belongs to its parent widget, as every QWidget does. The window
+ * passed to initialize() is only borrowed, it is not kept beyond the call.
+ */
 class AppCentralWidget : public QWidget
 {
     Q_OBJECT

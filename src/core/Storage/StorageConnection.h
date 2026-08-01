@@ -23,6 +23,17 @@
 
 namespace olbaflinx::core::storage {
 
+/**
+ * @brief One named connection to an encrypted storage file.
+ *
+ * Ownership: the instance belongs to whoever creates it. The destructor
+ * removes the connection it registered with Qt, so an instance must not
+ * outlive the QSqlDatabase handles taken from database(); those stay valid
+ * only as long as this object lives.
+ *
+ * The connection name is derived per instance, which lets several storage
+ * files be open side by side without them sharing a handle.
+ */
 class OLBAFLINX_CORE_EXPORT StorageConnection
 {
 public:

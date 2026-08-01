@@ -21,6 +21,13 @@
 
 namespace olbaflinx::ui::themes {
 
+/**
+ * @brief The names of the icons a theme may carry, as compile time constants.
+ *
+ * Ownership: none. The struct is never instantiated, it only groups the
+ * constants. They cost nothing at runtime, so the full catalogue is kept even
+ * though the code uses one of them.
+ */
 struct ThemeManagerIconNames
 {
     static constexpr QLatin1StringView Activity = QLatin1StringView("activity");
