@@ -68,6 +68,12 @@ public:
     [[nodiscard]] quint32 uniqueId() const;
     [[nodiscard]] quint32 refUniqueId() const;
     [[nodiscard]] quint32 idForApplication() const;
+    /**
+     * @brief The string id an application may assign to a booking.
+     *
+     * Answers empty for every transaction that comes from the database. The
+     * value is deliberately not restored, see the comment in fromMap.
+     */
     [[nodiscard]] QString stringIdForApplication() const;
     [[nodiscard]] quint32 sessionId() const;
     [[nodiscard]] quint32 groupId() const;

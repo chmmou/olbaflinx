@@ -86,6 +86,7 @@ private Q_SLOTS:
     void toMapKeepsNonAsciiNames();
     void toMapOfAnEmptyTransactionCarriesTheSameKeys();
     void toMapCarriesAHashOverTheContent();
+    void theStringIdForTheApplicationIsNotRestored();
     void dateSurvivesTheRoundTrip();
     void anUnreadableDateIsInvalidRatherThanToday();
     void itemTypeIsTheNameOfTheClass();
@@ -239,6 +240,23 @@ void TransactionTest::toMapCarriesAHashOverTheContent()
     AB_Transaction_free(abTransaction);
 
     QVERIFY(hashOf(other.data()) != hashOf(first.data()));
+}
+
+/**
+ * The backend allocates this field wherever it fills it and releases it
+ * nowhere, so it is dropped on the way in. The column itself keeps its place;
+ * only its content is gone.
+ */
+void TransactionTest::theStringIdForTheApplicationIsNotRestored()
+{
+    auto map = mapOfATypedTransaction();
+    map[QStringLiteral("string_id_for_application")] = QStringLiteral("OLB-4711");
+
+    const auto transaction = Transaction::fromMap(map);
+    QVERIFY(transaction != nullptr);
+
+    QVERIFY(transaction->stringIdForApplication().isEmpty());
+    QVERIFY(transaction->toMap().contains(QStringLiteral("string_id_for_application")));
 }
 
 /**

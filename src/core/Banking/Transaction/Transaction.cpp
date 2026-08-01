@@ -553,11 +553,14 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
                                   map.value(QStringLiteral("ref_unique_id")).toUInt());
     AB_Transaction_SetIdForApplication(abTransaction,
                                        map.value(QStringLiteral("id_for_application")).toUInt());
-    AB_Transaction_SetStringIdForApplication(abTransaction,
-                                             map.value(QStringLiteral("string_id_for_application"))
-                                                 .toString()
-                                                 .toLocal8Bit()
-                                                 .constData());
+    // The string id an application may assign is deliberately not restored. Of
+    // the 44 character pointers an AB_TRANSACTION holds, it is the only one the
+    // backend never releases: its declaration lacks the flag that makes the
+    // generator emit the free, so every path that fills it allocates while
+    // AB_Transaction_free walks past it. Setting it here would cost one
+    // allocation per transaction read from the store, and releasing it here
+    // would turn into a double free the day the backend is fixed. The column
+    // keeps its place in toMap and in the table and carries an empty value.
     AB_Transaction_SetSessionId(abTransaction, map.value(QStringLiteral("session_id")).toUInt());
     AB_Transaction_SetGroupId(abTransaction, map.value(QStringLiteral("group_id")).toUInt());
     AB_Transaction_SetFiId(abTransaction,
