@@ -61,6 +61,7 @@ private Q_SLOTS:
     void applyPutsTheStyleSheetOnTheApplication();
     void applyLeavesTheStyleSheetAloneForAMissingFile();
     void applyReplacesTheStyleSheetOfAnEarlierTheme();
+    void reloadCarriesEveryRegisteredTheme();
     void pixmapIsEmptyForAnUnknownIcon_data();
     void pixmapIsEmptyForAnUnknownIcon();
 };
@@ -124,6 +125,34 @@ void ThemeManagerTest::applyReplacesTheStyleSheetOfAnEarlierTheme()
     manager.apply(application(), second);
 
     QCOMPARE(application()->styleSheet(), QStringLiteral("QWidget { color: #222222; }"));
+}
+
+/**
+ * reload used to look the value of its iterator up as if it were a key, which
+ * answers with an empty path, so the body of the loop never opened a file and
+ * the style sheet came back empty. Each round also replaced the whole sheet
+ * instead of adding to it, which left only one theme in effect.
+ */
+void ThemeManagerTest::reloadCarriesEveryRegisteredTheme()
+{
+    const QString first = writeStyleSheet(QStringLiteral("first"),
+                                          QStringLiteral("QLabel { color: #111111; }"));
+    const QString second = writeStyleSheet(QStringLiteral("second"),
+                                           QStringLiteral("QPushButton { color: #222222; }"));
+    QVERIFY(!first.isEmpty());
+    QVERIFY(!second.isEmpty());
+
+    const ThemeManager manager;
+    manager.apply(application(), first);
+    manager.apply(application(), second);
+
+    manager.reload();
+
+    const auto styleSheet = application()->styleSheet();
+
+    QVERIFY(!styleSheet.isEmpty());
+    QVERIFY(styleSheet.contains(QStringLiteral("QLabel { color: #111111; }")));
+    QVERIFY(styleSheet.contains(QStringLiteral("QPushButton { color: #222222; }")));
 }
 
 /**

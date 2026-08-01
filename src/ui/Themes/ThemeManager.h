@@ -28,12 +28,12 @@ public:
     Q_ENUM(Mode)
 
     /**
-     * Reloads the currently registered themes and re-applies them to the associated
-     * QApplication instance. This method clears the application's existing stylesheet
-     * and loads the styles from the registered theme files.
+     * Reads every registered theme file and hands the contents to the associated
+     * QApplication as one style sheet, replacing what was set before.
      *
-     * This function ensures all registered themes are reloaded and applied in sequential
-     * order without duplicating or bypassing any theme.
+     * The themes are concatenated in the order of their names, so where two of
+     * them state a rule for the same selector, the one read last wins. A theme
+     * whose file cannot be read is logged and left out; the others still apply.
      *
      * If no QApplication instance has been associated with the ThemeManager,
      * this method has no effect.

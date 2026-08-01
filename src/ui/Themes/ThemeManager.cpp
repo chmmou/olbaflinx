@@ -21,7 +21,7 @@
 
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
-#include <QtCore/QHash>
+#include <QtCore/QMap>
 #include <QtCore/QObject>
 
 #include <QtGui/QPainter>
@@ -53,26 +53,34 @@ public:
 
     void unregisterTheme(const QString &name)
     {
-        if (const auto themKey = themeName(name); !themes.contains(themKey)) {
+        // The condition used to ask for the absence of the key before removing
+        // it, so a registered theme could never be taken out again.
+        if (const auto themKey = themeName(name); themes.contains(themKey)) {
             themes.remove(themKey);
         }
     }
 
+    /**
+     * Reads every registered theme and hands the lot to the application at once.
+     *
+     * The loop used to look the value of the iterator up as if it were a key,
+     * which answers with an empty path, so its body never opened a file. Each
+     * round also replaced the whole style sheet rather than adding to it, which
+     * left only the last theme in effect.
+     */
     void reloadTheme()
     {
         if (!application) {
             return;
         }
 
-        application->setStyleSheet({});
+        auto styleSheet = QString();
 
         for (auto i = themes.cbegin(), end = themes.cend(); i != end; ++i) {
-            if (QFile file(themes.value(i.value()));
-                file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                application->setStyleSheet(file.readAll());
-                file.close();
-            }
+            styleSheet += readTheme(i.value());
         }
+
+        application->setStyleSheet(styleSheet);
     }
 
     void applyTheme(QApplication *app, const QString &name)
@@ -83,23 +91,43 @@ public:
             application = app;
         }
 
-        if (const auto themKey = themeName(name); themes.contains(themKey)) {
-            if (QFile file(themes.value(themKey));
-                file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                application->setStyleSheet(file.readAll());
-                file.close();
-            }
+        const auto themKey = themeName(name);
+        if (!themes.contains(themKey)) {
+            return;
+        }
+
+        // A theme that cannot be read leaves the one in force alone. Setting the
+        // empty result would strip the application of the style it already had.
+        if (const auto styleSheet = readTheme(themes.value(themKey)); !styleSheet.isEmpty()) {
+            application->setStyleSheet(styleSheet);
         }
     }
 
 private:
+    /**
+     * A theme that cannot be read costs its own rules, not those of the others.
+     * The failure used to pass without a word.
+     */
+    QString readTheme(const QString &path) const
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            qCWarning(lcUiThemes) << "could not read the theme" << path << file.errorString();
+            return {};
+        }
+
+        return QString::fromUtf8(file.readAll());
+    }
+
     [[nodiscard]] QString themeName(const QString &filename)
     {
         const QFileInfo fileInfo(filename);
         return fileInfo.baseName();
     }
 
-    QHash<QString, QString> themes = {};
+    // A map, not a hash. The themes are concatenated, so the order they are read
+    // in decides which rule wins, and the order of a hash is not defined.
+    QMap<QString, QString> themes = {};
     QApplication *application = nullptr;
 
     friend class ThemeManager;
@@ -131,6 +159,8 @@ QPixmap ThemeManager::pixmap(const QString &name, const ThemeManager::Mode mode)
     const auto filenameFormat = QStringLiteral(":/icons/%1/%2");
     auto filename = QString();
 
+    // No default branch. It turned off the warning about an unhandled value, was
+    // word for word the same as the branch for Light, and had no break.
     switch (mode) {
     case Mode::Dark:
         filename = filenameFormat.arg(QStringLiteral("dark"), name);
@@ -138,17 +168,16 @@ QPixmap ThemeManager::pixmap(const QString &name, const ThemeManager::Mode mode)
     case Mode::Light:
         filename = filenameFormat.arg(QStringLiteral("light"), name);
         break;
-    default:
-        filename = filenameFormat.arg(QStringLiteral("light"), name);
     }
 
+    // The prologue is joined on at byte level. Going through QString meant a
+    // decode and an encode, the second of them in the locale of the user, which
+    // contradicted the encoding the declaration itself names.
     const auto svg = [](const QByteArray &contents) -> QByteArray {
-        return QStringLiteral(
+        return QByteArrayLiteral(
                    R"(<?xml version="1.0" encoding="utf-8"?>)"
-                   R"(<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">)"
-                   R"(%1)")
-            .arg(QString::fromUtf8(contents))
-            .toLocal8Bit();
+                   R"(<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">)")
+               + contents;
     };
 
     if (QFile svgFile(filename); svgFile.open(QIODevice::ReadOnly)) {
@@ -156,8 +185,10 @@ QPixmap ThemeManager::pixmap(const QString &name, const ThemeManager::Mode mode)
         if (svgRenderer.load(svg(svgFile.readAll()))) {
             qCDebug(lcUiThemes) << "rendering" << name << "at" << svgRenderer.defaultSize();
 
-            QImage pix(svgRenderer.defaultSize(), QImage::Format_ARGB6666_Premultiplied);
-            //pix.fill(Qt::transparent);
+            QImage pix(svgRenderer.defaultSize(), QImage::Format_ARGB32_Premultiplied);
+            // Without this the pixels the renderer does not touch keep whatever
+            // the allocation left behind.
+            pix.fill(Qt::transparent);
 
             auto painter = QPainter(&pix);
             painter.save();

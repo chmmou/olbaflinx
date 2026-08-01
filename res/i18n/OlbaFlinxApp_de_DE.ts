@@ -428,12 +428,12 @@
 <context>
     <name>olbaflinx::ui::App</name>
     <message>
-        <location filename="../../src/ui/App.cpp" line="94"/>
+        <location filename="../../src/ui/App.cpp" line="93"/>
         <source>About %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/App.cpp" line="95"/>
+        <location filename="../../src/ui/App.cpp" line="94"/>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;Multibank-capable online banking software for Linux.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%3&quot;&gt;%3&lt;/a&gt;&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>

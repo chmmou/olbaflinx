@@ -22,7 +22,6 @@
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
 #include "ui/Models/AccountListModel.h"
-#include "ui/Themes/ThemeManagerIconNames.h"
 
 #include "ui_App.h"
 
