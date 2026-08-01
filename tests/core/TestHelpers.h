@@ -62,6 +62,39 @@ public:
     }
 
     /**
+     * A reference account with every field set. Ownership passes to the caller,
+     * which for a property map means to Account::fromMap.
+     */
+    static ReferenceAccount *createFakeReferenceAccount()
+    {
+        return ReferenceAccount::create({
+            {QStringLiteral("account_type"), 1},
+            {QStringLiteral("owner_name"), QStringLiteral("Erika Müller-Groß")},
+            {QStringLiteral("owner_name2"), QStringLiteral("Max Mustermann")},
+            {QStringLiteral("account_name"), QStringLiteral("Sparkonto")},
+            {QStringLiteral("iban"), QStringLiteral("DE02120300000000202051")},
+            {QStringLiteral("bic"), QStringLiteral("BYLADEM1001")},
+            {QStringLiteral("country"), QStringLiteral("de")},
+            {QStringLiteral("bank_code"), QStringLiteral("12030000")},
+            {QStringLiteral("account_number"), QStringLiteral("0000202051")},
+            {QStringLiteral("sub_account_number"), QStringLiteral("01")},
+        });
+    }
+
+    /**
+     * An account map that carries one reference account, so that the write path
+     * across all three tables can be exercised.
+     */
+    static QMap<QString, QVariant> createFakeAccountMapWithReferenceAccount()
+    {
+        auto map = createFakeAccountMap();
+        map[QStringLiteral("refAccounts")] = QVariant::fromValue(
+            ReferenceAccounts{createFakeReferenceAccount()});
+
+        return map;
+    }
+
+    /**
      * Twelve letters. The former version added a random offset to 'A', which also
      * covers the six characters between 'Z' and 'a'.
      */

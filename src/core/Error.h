@@ -51,6 +51,10 @@ enum class ErrorCode {
     BankingFailure,
     /** The operation is not implemented yet. */
     NotImplemented,
+    /** The database driver the storage needs is not registered with Qt. */
+    DriverMissing,
+    /** The schema of the file does not match the one this build understands. */
+    SchemaMismatch,
 };
 Q_ENUM_NS(ErrorCode)
 

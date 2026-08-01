@@ -58,9 +58,11 @@ private:
 private Q_SLOTS:
     void everyFieldSurvivesTheConstructor();
     void nonAsciiOwnerNameSurvivesTheConstructor();
-    void isValidCannotRejectAnyAccountType();
-    void isValidAcceptsTheDefaultConstructedAccount();
+    void isValidAcceptsAnAccountTypeTheLibraryKnows();
+    void isValidRejectsTheDefaultConstructedAccount();
     void fromMapReturnsAnEmptyPointerForAnEmptyMap();
+    void fromMapCarriesEveryFieldOfTheRow();
+    void toStringNamesTheAccount();
     void toMapCarriesEveryFieldOfTheAccount();
     void itemTypeIsTheNameOfTheClass();
 };
@@ -88,16 +90,11 @@ void ReferenceAccountTest::nonAsciiOwnerNameSurvivesTheConstructor()
 }
 
 /**
- * isValid compares the account type against -1, but AqBanking holds that type in
- * a uint8_t. The value never reaches the comparison: -1 arrives as 255. isValid
- * therefore answers true for every type it can be given, and the failure case it
- * was written for does not exist.
- *
- * This test states what the class does today, not what it should do. It fails as
- * soon as the comparison is corrected, which is the point at which it has to be
- * rewritten into the rejection case.
+ * The comparison used to run against -1, which AqBanking never delivers because
+ * it keeps the type in a uint8_t: -1 arrives as 255. Unknown, which is zero, is
+ * the value the library uses for a type it has not been told.
  */
-void ReferenceAccountTest::isValidCannotRejectAnyAccountType()
+void ReferenceAccountTest::isValidAcceptsAnAccountTypeTheLibraryKnows()
 {
     auto abReferenceAccount = AB_ReferenceAccount_new();
     AB_ReferenceAccount_SetAccountType(abReferenceAccount, static_cast<uint8_t>(-1));
@@ -109,11 +106,12 @@ void ReferenceAccountTest::isValidCannotRejectAnyAccountType()
     QVERIFY(referenceAccount.isValid());
 }
 
-void ReferenceAccountTest::isValidAcceptsTheDefaultConstructedAccount()
+void ReferenceAccountTest::isValidRejectsTheDefaultConstructedAccount()
 {
     const ReferenceAccount referenceAccount;
 
-    QVERIFY(referenceAccount.isValid());
+    QCOMPARE(referenceAccount.accountType(), 0);
+    QVERIFY(!referenceAccount.isValid());
 }
 
 void ReferenceAccountTest::fromMapReturnsAnEmptyPointerForAnEmptyMap()
@@ -121,6 +119,38 @@ void ReferenceAccountTest::fromMapReturnsAnEmptyPointerForAnEmptyMap()
     const auto referenceAccount = ReferenceAccount::fromMap({});
 
     QVERIFY(referenceAccount == nullptr);
+}
+
+/**
+ * fromMap used to discard the map it was handed and answer with a blank account,
+ * so every reference account read back from the database was empty.
+ */
+void ReferenceAccountTest::fromMapCarriesEveryFieldOfTheRow()
+{
+    const auto source = createFilledReferenceAccount();
+    const auto referenceAccount = ReferenceAccount::fromMap(source->toMap());
+
+    QVERIFY(referenceAccount != nullptr);
+    QCOMPARE(referenceAccount->accountType(), 1);
+    QCOMPARE(referenceAccount->ownerName(), QStringLiteral("Erika Müller-Groß"));
+    QCOMPARE(referenceAccount->ownerName2(), QStringLiteral("Max Mustermann"));
+    QCOMPARE(referenceAccount->accountName(), QStringLiteral("Girokonto"));
+    QCOMPARE(referenceAccount->iban(), QStringLiteral("DE02120300000000202051"));
+    QCOMPARE(referenceAccount->bic(), QStringLiteral("BYLADEM1001"));
+    QCOMPARE(referenceAccount->country(), QStringLiteral("de"));
+    QCOMPARE(referenceAccount->bankCode(), QStringLiteral("12030000"));
+    QCOMPARE(referenceAccount->accountNumber(), QStringLiteral("0000202051"));
+    QCOMPARE(referenceAccount->subAccountNumber(), QStringLiteral("01"));
+}
+
+void ReferenceAccountTest::toStringNamesTheAccount()
+{
+    const auto referenceAccount = createFilledReferenceAccount();
+    const auto text = referenceAccount->toString();
+
+    QVERIFY(!text.isEmpty());
+    QVERIFY(text.contains(QStringLiteral("0000202051")));
+    QVERIFY(text.contains(QStringLiteral("Erika Müller-Groß")));
 }
 
 void ReferenceAccountTest::toMapCarriesEveryFieldOfTheAccount()

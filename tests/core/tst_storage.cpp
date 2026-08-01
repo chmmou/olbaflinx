@@ -23,6 +23,8 @@
 #include "TestHelpers.h"
 
 #include <QtCore/QList>
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlQuery>
 #include <QtTest/QtTest>
 
 #include <memory>
@@ -75,6 +77,8 @@ private Q_SLOTS:
     void settingReturnsTheDefaultForAnUnknownKey();
     void storeSettingPersistsValueUnderGroup();
     void storeItemPersistsAccountAndEmitsFinished();
+    void storeItemKeepsBalanceAndReferenceAccounts();
+    void initializeRejectsAFileFromANewerVersion();
 };
 
 void StorageTest::initTestCase()
@@ -258,6 +262,100 @@ void StorageTest::storeItemPersistsAccountAndEmitsFinished()
     // signal; Storage used to release them right afterwards.
     QVERIFY(items.at(0) != nullptr);
     QCOMPARE(items.at(0)->itemType(), QStringLiteral("Account"));
+
+    storage.close();
+}
+
+/**
+ * The balance and the reference accounts of an account live in tables of their
+ * own. Both used to be handed to bindValue under keys the insert statement did
+ * not name, where they were dropped without a word.
+ */
+void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
+{
+    Storage storage(applicationInfo());
+
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+
+    storage.setKey(password());
+    storage.setStorageFile(storageFile());
+
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto account = Account::fromMap(
+        TestHelpers::createFakeAccountMapWithReferenceAccount());
+    QVERIFY(account->isValid());
+
+    const auto balance = account->balance();
+    QVERIFY(balance > 0.0);
+
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    storage.receiveItems(Storage::StorageAccount);
+
+    QCOMPARE(itemsSpy.count(), 1);
+
+    const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
+    QCOMPARE(items.size(), 1);
+
+    const auto readBack = std::dynamic_pointer_cast<Account>(items.at(0));
+    QVERIFY(readBack != nullptr);
+    QCOMPARE(readBack->balance(), balance);
+    QCOMPARE(readBack->uniqueId(), account->uniqueId());
+
+    const auto referenceAccounts = readBack->referenceAccounts();
+    QCOMPARE(referenceAccounts.size(), 1);
+    QCOMPARE(referenceAccounts.at(0)->iban(), QStringLiteral("DE02120300000000202051"));
+    QCOMPARE(referenceAccounts.at(0)->ownerName(), QStringLiteral("Erika Müller-Groß"));
+
+    qDeleteAll(referenceAccounts);
+
+    storage.close();
+}
+
+/**
+ * A file whose schema is newer than this build understands is refused before
+ * anything reads from it or writes to it. Columns this build does not know would
+ * otherwise be ignored on read and dropped on the next write.
+ */
+void StorageTest::initializeRejectsAFileFromANewerVersion()
+{
+    {
+        Storage storage(applicationInfo());
+        storage.setKey(password());
+        storage.setStorageFile(storageFile());
+
+        QVERIFY(!storage.initialize(true).isError());
+        storage.close();
+    }
+
+    {
+        auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
+                                                  QStringLiteral("StorageTestFuture"));
+        database.setDatabaseName(storageFile());
+
+        QVERIFY(database.open());
+
+        auto key = password();
+        key.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+        QSqlQuery query(database);
+        QVERIFY(query.exec(QStringLiteral("PRAGMA key='%1';").arg(key)));
+        QVERIFY(query.exec(QStringLiteral(
+            "INSERT INTO migrations (name) VALUES ('0099_from_the_future');")));
+
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(QStringLiteral("StorageTestFuture"));
+
+    Storage storage(applicationInfo());
+    storage.setKey(password());
+    storage.setStorageFile(storageFile());
+
+    const auto error = storage.initialize(true);
+
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::SchemaMismatch);
 
     storage.close();
 }

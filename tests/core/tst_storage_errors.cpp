@@ -37,6 +37,23 @@ namespace olbaflinx::core::storage::tests {
 using namespace olbaflinx::core::tests;
 
 /**
+ * A record of a type the storage has no table for. Account, Transaction and
+ * ReferenceAccount all have one, so the rejecting branch needs a type of its own
+ * to stay reachable.
+ */
+class UnsupportedItem final : public BankingItem
+{
+public:
+    [[nodiscard]] bool isValid() const override { return true; }
+    [[nodiscard]] QString toString() const override { return itemType(); }
+    [[nodiscard]] QMap<QString, QVariant> toMap() const override
+    {
+        return {{QStringLiteral("name"), QStringLiteral("Groceries")}};
+    }
+    [[nodiscard]] QString itemType() const override { return QStringLiteral("Category"); }
+};
+
+/**
  * Every error path of Storage. The class used to answer with a bool and to send
  * the reason through a signal that had no receiver anywhere in the project.
  */
@@ -152,9 +169,10 @@ void StorageErrorTest::storeItemRejectsNullItem()
 }
 
 /**
- * The branch for a reference account used to be empty. No statement was
+ * The branch for a type without a table used to be empty. No statement was
  * prepared, and the bind and exec that followed failed with a message that did
- * not name the cause.
+ * not name the cause. It used to be reached with a reference account, which now
+ * has a table of its own.
  */
 void StorageErrorTest::storeItemRejectsUnsupportedType()
 {
@@ -164,14 +182,14 @@ void StorageErrorTest::storeItemRejectsUnsupportedType()
 
     QVERIFY(!storage.initialize(true).isError());
 
-    const ReferenceAccount referenceAccount;
-    QVERIFY(referenceAccount.isValid());
+    const UnsupportedItem item;
+    QVERIFY(item.isValid());
 
-    const auto error = storage.storeItem(&referenceAccount);
+    const auto error = storage.storeItem(&item);
 
     QVERIFY(error.isError());
     QCOMPARE(error.code(), ErrorCode::NotImplemented);
-    QVERIFY(error.message().contains(referenceAccount.itemType()));
+    QVERIFY(error.message().contains(item.itemType()));
 
     storage.close();
 }

@@ -53,6 +53,14 @@ QString olbaflinx::ui::userMessage(const ErrorCode code)
     case ErrorCode::NotImplemented:
         return QCoreApplication::translate("olbaflinx::ui",
                                            "This part of the application is not finished yet.");
+    case ErrorCode::DriverMissing:
+        return QCoreApplication::translate("olbaflinx::ui",
+                                           "The database component this program needs is missing "
+                                           "from the installation.");
+    case ErrorCode::SchemaMismatch:
+        return QCoreApplication::translate("olbaflinx::ui",
+                                           "This storage was written by a different version of "
+                                           "the program and cannot be opened.");
     }
 
     return {};

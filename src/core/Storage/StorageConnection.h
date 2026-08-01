@@ -53,6 +53,15 @@ public:
     [[nodiscard]] bool isValid() const;
 
     /**
+     * Tells whether the driver this connection was asked for is registered with
+     * Qt. A deployment without the SQLCipher plugin fails to open every file,
+     * which without this is indistinguishable from a wrong pass phrase.
+     *
+     * @return true if the driver is available; false otherwise.
+     */
+    [[nodiscard]] bool isDriverAvailable() const;
+
+    /**
      * Checks if the storage connection is currently open and usable.
      *
      * @return True if the storage connection is valid and open; otherwise, false.
@@ -65,14 +74,14 @@ public:
      * @return true if the transaction was successfully started, false if the
      *         connection is not open or the transaction initiation failed.
      */
-    bool beginTransaction();
+    [[nodiscard]] bool beginTransaction();
 
     /**
      * Commits the current active transaction in the database.
      *
      * @return true if the transaction was successfully committed; false otherwise.
      */
-    bool commitTransaction();
+    [[nodiscard]] bool commitTransaction();
 
     /**
      * Rolls back the current transaction on the database connection if it is open.
@@ -80,7 +89,7 @@ public:
      *
      * @return True if the transaction was successfully rolled back, false otherwise.
      */
-    bool rollbackTransaction();
+    [[nodiscard]] bool rollbackTransaction();
 
     /**
      * Retrieves the last error message from the associated database connection.
@@ -94,6 +103,7 @@ public:
 
 protected:
     QString m_connectionName;
+    bool m_driverAvailable = false;
 };
 
 } // namespace olbaflinx::core::storage

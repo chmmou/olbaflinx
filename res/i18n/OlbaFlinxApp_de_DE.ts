@@ -59,13 +59,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="316"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="317"/>
         <source>Account %1 [%2] - %3 - %4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="774"/>
         <source>Transaction %1 - %2 %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/core/Banking/Account/ReferenceAccount.cpp" line="162"/>
+        <source>Reference account %1 [%2] - %3</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -407,6 +412,16 @@
     <message>
         <location filename="../../src/ui/ErrorMessage.cpp" line="54"/>
         <source>This part of the application is not finished yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="57"/>
+        <source>The database component this program needs is missing from the installation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/ErrorMessage.cpp" line="61"/>
+        <source>This storage was written by a different version of the program and cannot be opened.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

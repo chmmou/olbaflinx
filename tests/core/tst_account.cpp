@@ -39,6 +39,7 @@ private Q_SLOTS:
     void fromMapKeepsIdsBeyondTheSignedRange();
     void fromMapKeepsNonAsciiNames();
     void toMapAndBackYieldsTheSameAccount();
+    void toMapAndBackKeepsTheReferenceAccounts();
     void isValidRejectsTheUnusableTypes_data();
     void isValidRejectsTheUnusableTypes();
     void isValidAcceptsAKnownType();
@@ -131,6 +132,31 @@ void AccountTest::toMapAndBackYieldsTheSameAccount()
     QCOMPARE(second->accountNumber(), first->accountNumber());
     QCOMPARE(second->balance(), first->balance());
     QCOMPARE(second->toString(), first->toString());
+}
+
+/**
+ * referenceAccounts used to release the list the account spec holds, which left
+ * the spec with a dangling list and its destructor walking into an assertion.
+ */
+void AccountTest::toMapAndBackKeepsTheReferenceAccounts()
+{
+    const auto account = Account::fromMap(
+        TestHelpers::createFakeAccountMapWithReferenceAccount());
+    QVERIFY(account != nullptr);
+
+    const auto referenceAccounts = account->referenceAccounts();
+    QCOMPARE(referenceAccounts.size(), 1);
+    QCOMPARE(referenceAccounts.at(0)->iban(), QStringLiteral("DE02120300000000202051"));
+    QCOMPARE(referenceAccounts.at(0)->ownerName(), QStringLiteral("Erika Müller-Groß"));
+
+    qDeleteAll(referenceAccounts);
+
+    // Asked a second time. The list is still there, which it would not be if the
+    // first call had released it.
+    const auto again = account->referenceAccounts();
+    QCOMPARE(again.size(), 1);
+
+    qDeleteAll(again);
 }
 
 void AccountTest::isValidRejectsTheUnusableTypes_data()

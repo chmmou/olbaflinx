@@ -54,7 +54,7 @@ public:
     /**
      * @brief Storage type enumeration
      */
-    enum Type {
+    enum Type : int {
         StorageAccount = 1,
         StorageReferenceAccount,
         StorageTransaction,

@@ -25,9 +25,10 @@
 #include "core/Result.h"
 
 #include <QtCore/QCryptographicHash>
+#include <QtCore/QDate>
 #include <QtCore/QFile>
 #include <QtCore/QMetaEnum>
-#include <QtCore/QScopedPointer>
+#include <QtCore/QScopeGuard>
 #include <QtCore/QSet>
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>
@@ -140,6 +141,7 @@ bool isKnownTable(const QString &table)
         QStringLiteral("categories"),
         QStringLiteral("contacts"),
         QStringLiteral("migrations"),
+        QStringLiteral("refaccounts"),
         QStringLiteral("transaction_categories"),
         QStringLiteral("transactions"),
     };
@@ -147,15 +149,69 @@ bool isKnownTable(const QString &table)
     return knownTables.contains(table);
 }
 
-constexpr auto AccountInsertQuery = QLatin1StringView(
-    "INSERT INTO accounts (`type`, unique_id, backend_name, owner_name, "
-    "account_name, currency, memo, iban, bic, country, bank_code, bank_name, "
-    "branch_id, account_number, sub_account_number) "
-    "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, "
-    ":currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, "
-    ":branch_id, :account_number, :sub_account_number);");
+/**
+ * The schema this build writes and understands. It is the number carried by the
+ * highest migration the resource file installs. A file above it was written by a
+ * newer build and is refused; a file below it is brought up by setupTables,
+ * whose statements all create what is missing rather than what is new.
+ */
+constexpr int CurrentSchemaVersion = 2;
 
-constexpr auto TransactionInsertQuery = QLatin1StringView(
+/**
+ * The number a migration name carries in its first four characters. Names
+ * without one, as older files hold them, count as zero.
+ */
+constexpr auto SchemaVersionQuery = QLatin1StringView(
+    "SELECT COALESCE(MAX(CAST(substr(name, 1, 4) AS INTEGER)), 0) FROM migrations "
+    "WHERE migrated = 1;");
+
+/**
+ * prepare takes a QString, so a view would be converted at every call. These
+ * statements run once per stored item and the one for a transaction is about
+ * 2400 characters long. QT-CPP-051.
+ */
+const QString &accountInsertQuery()
+{
+    static const QString statement = QStringLiteral(
+        "INSERT INTO accounts (`type`, unique_id, backend_name, owner_name, "
+        "account_name, currency, memo, iban, bic, country, bank_code, bank_name, "
+        "branch_id, account_number, sub_account_number) "
+        "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, "
+        ":currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, "
+        ":branch_id, :account_number, :sub_account_number);");
+
+    return statement;
+}
+
+/**
+ * The balance of an account goes to a table of its own, which carries the day
+ * and the currency the figure belongs to. A row per account, replaced on every
+ * write, which is what the UNIQUE on account_id in the schema is for.
+ */
+const QString &balanceInsertQuery()
+{
+    static const QString statement = QStringLiteral(
+        "INSERT INTO balances (account_id, `date`, `value`, `type`, currency) "
+        "VALUES (:account_id, :date, :value, :type, :currency) "
+        "ON CONFLICT (account_id) DO UPDATE SET "
+        "`date` = excluded.`date`, `value` = excluded.`value`, "
+        "`type` = excluded.`type`, currency = excluded.currency;");
+
+    return statement;
+}
+
+const QString &referenceAccountInsertQuery()
+{
+    static const QString statement = QStringLiteral(
+        "INSERT INTO refaccounts (account_id, account_type, owner_name, owner_name2, "
+        "account_name, iban, bic, country, bank_code, account_number, sub_account_number) "
+        "VALUES (:account_id, :account_type, :owner_name, :owner_name2, :account_name, "
+        ":iban, :bic, :country, :bank_code, :account_number, :sub_account_number);");
+
+    return statement;
+}
+
+constexpr auto TransactionInsertQueryText = QLatin1StringView(
     "INSERT INTO transactions (account_id, `type`, sub_type, command, status, "
     "unique_account_id, unique_id, ref_unique_id, id_for_application, "
     "string_id_for_application, session_id, group_id, fi_id, local_iban, local_bic, "
@@ -186,24 +242,65 @@ constexpr auto TransactionInsertQuery = QLatin1StringView(
     ":unit_id_name_space, :ticker_symbol, :units, :unit_price_value, :unit_price_date, "
     ":commission_value, :memo, :hash);");
 
+const QString &transactionInsertQuery()
+{
+    static const QString statement = QString::fromLatin1(TransactionInsertQueryText);
+
+    return statement;
+}
+
 /**
  * Collects the placeholder names an insert statement carries, without the
  * leading colon. A property whose key is missing from that set would be dropped
  * by QSqlQuery::bindValue without a word, which is how the balance of an
  * account went missing.
  */
-QSet<QString> placeholdersOf(QLatin1StringView statement)
+QSet<QString> placeholdersOf(const QString &statement)
 {
     static const QRegularExpression placeholder(QStringLiteral(":([A-Za-z_][A-Za-z0-9_]*)"));
 
     auto names = QSet<QString>();
 
-    auto matches = placeholder.globalMatch(QString::fromLatin1(statement));
+    auto matches = placeholder.globalMatch(statement);
     while (matches.hasNext()) {
         names.insert(matches.next().captured(1));
     }
 
     return names;
+}
+
+/**
+ * The columns each table must carry for the statements above to bind. Checked
+ * against pragma_table_info after the schema ran, so that a file which lost a
+ * column, or was written by a build that did not have it yet, is named as such
+ * rather than failing later on a bind that says nothing.
+ */
+const QMap<QString, QStringList> &expectedColumns()
+{
+    static const QMap<QString, QStringList> columns = {
+        {QStringLiteral("accounts"),
+         {QStringLiteral("id"), QStringLiteral("type"), QStringLiteral("unique_id"),
+          QStringLiteral("backend_name"), QStringLiteral("owner_name"),
+          QStringLiteral("account_name"), QStringLiteral("currency"), QStringLiteral("memo"),
+          QStringLiteral("iban"), QStringLiteral("bic"), QStringLiteral("country"),
+          QStringLiteral("bank_code"), QStringLiteral("bank_name"), QStringLiteral("branch_id"),
+          QStringLiteral("account_number"), QStringLiteral("sub_account_number"),
+          QStringLiteral("balance")}},
+        {QStringLiteral("balances"),
+         {QStringLiteral("id"), QStringLiteral("account_id"), QStringLiteral("date"),
+          QStringLiteral("value"), QStringLiteral("type"), QStringLiteral("currency")}},
+        {QStringLiteral("refaccounts"),
+         {QStringLiteral("id"), QStringLiteral("account_id"), QStringLiteral("account_type"),
+          QStringLiteral("owner_name"), QStringLiteral("owner_name2"),
+          QStringLiteral("account_name"), QStringLiteral("iban"), QStringLiteral("bic"),
+          QStringLiteral("country"), QStringLiteral("bank_code"),
+          QStringLiteral("account_number"), QStringLiteral("sub_account_number")}},
+        {QStringLiteral("migrations"),
+         {QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("migrated"),
+          QStringLiteral("created_at")}},
+    };
+
+    return columns;
 }
 
 } // namespace
@@ -272,6 +369,15 @@ public:
         initResource();
 
         m_connection = new StorageConnection(m_storageFileName);
+
+        if (!m_connection->isDriverAvailable()) {
+            // Without the plugin no file opens at all. Told apart from a wrong
+            // pass phrase, because the two ask for entirely different remedies.
+            return reportSchemaFailure(ErrorCode::DriverMissing,
+                                       QStringLiteral("The database driver the storage needs is "
+                                                      "not installed"));
+        }
+
         if (!m_connection->isOpen()) {
             // The message of the driver names the file and the reason, it is for
             // the log. The code tells the caller that the store could not be
@@ -290,8 +396,119 @@ public:
 
         qCInfo(lcStorage) << "storage opened" << m_storageFileName;
 
+        // Read before anything else touches the file. A schema this build does
+        // not know may hold columns it would silently ignore on read and drop on
+        // write.
+        const auto versionBefore = schemaVersion();
+        if (!versionBefore.hasValue()) {
+            return reportSchemaFailure(versionBefore.error().code(),
+                                       versionBefore.error().message());
+        }
+
+        if (versionBefore.value() > CurrentSchemaVersion) {
+            return reportSchemaFailure(ErrorCode::SchemaMismatch,
+                                       QStringLiteral("The storage %1 was written by a newer "
+                                                      "version of this program")
+                                           .arg(m_storageFileName));
+        }
+
         if (withSchema) {
-            return setupTables();
+            if (const auto error = setupTables(); error.isError()) {
+                return error;
+            }
+
+            return verifySchema(versionBefore.value());
+        }
+
+        if (versionBefore.value() < CurrentSchemaVersion) {
+            return reportSchemaFailure(ErrorCode::SchemaMismatch,
+                                       QStringLiteral("The storage %1 is at schema version %2 and "
+                                                      "has to be migrated to %3")
+                                           .arg(m_storageFileName)
+                                           .arg(versionBefore.value())
+                                           .arg(CurrentSchemaVersion));
+        }
+
+        return {};
+    }
+
+    /**
+     * The schema version of the open file. A file without the migrations table
+     * has not been set up yet and counts as version zero.
+     */
+    Result<int> schemaVersion()
+    {
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            return error;
+        }
+
+        if (!query.exec(QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' "
+                                       "AND name = 'migrations';"))
+            || !query.next()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not read the schema version of %1: %2")
+                             .arg(m_storageFileName, query.lastError().text()));
+        }
+
+        if (query.value(0).toInt() == 0) {
+            return 0;
+        }
+
+        if (!query.exec(QString::fromLatin1(SchemaVersionQuery)) || !query.next()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not read the schema version of %1: %2")
+                             .arg(m_storageFileName, query.lastError().text()));
+        }
+
+        return query.value(0).toInt();
+    }
+
+    /**
+     * Runs after the schema statements. It confirms that the file now carries the
+     * version this build writes, and that the tables the insert statements bind
+     * against hold the columns they name.
+     */
+    Error verifySchema(int versionBefore)
+    {
+        const auto versionAfter = schemaVersion();
+        if (!versionAfter.hasValue()) {
+            return reportSchemaFailure(versionAfter.error().code(), versionAfter.error().message());
+        }
+
+        if (versionAfter.value() != CurrentSchemaVersion) {
+            return reportSchemaFailure(ErrorCode::SchemaMismatch,
+                                       QStringLiteral("The storage %1 is at schema version %2 "
+                                                      "after the migration, expected %3")
+                                           .arg(m_storageFileName)
+                                           .arg(versionAfter.value())
+                                           .arg(CurrentSchemaVersion));
+        }
+
+        if (versionAfter.value() != versionBefore) {
+            qCInfo(lcStorage) << "migrated" << m_storageFileName << "from schema version"
+                              << versionBefore << "to" << versionAfter.value();
+        }
+
+        for (const auto &[table, columns] : expectedColumns().asKeyValueRange()) {
+            const auto columnList = tableColumns(table);
+            const auto present = QSet<QString>(columnList.cbegin(), columnList.cend());
+
+            auto missing = QStringList();
+            for (const auto &column : columns) {
+                if (!present.contains(column)) {
+                    missing << column;
+                }
+            }
+
+            if (!missing.isEmpty()) {
+                return reportSchemaFailure(ErrorCode::SchemaMismatch,
+                                           QStringLiteral("The table %1 of %2 is missing the "
+                                                          "columns %3")
+                                               .arg(table,
+                                                    m_storageFileName,
+                                                    missing.join(QLatin1StringView(", "))));
+            }
         }
 
         return {};
@@ -488,6 +705,259 @@ public:
         return QStringLiteral("%1/%2").arg(path, m_applicationInfo.organization);
     }
 
+    /**
+     * Writes one row and answers with the id the database assigned to it.
+     *
+     * A key of the property map that the statement does not name is reported and
+     * skipped. bindValue would drop it without a word, which is how the balance
+     * of an account went missing.
+     */
+    Result<QVariant> insertRow(const QString &statement,
+                               const QMap<QString, QVariant> &map,
+                               const QString &type)
+    {
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            return error;
+        }
+
+        if (!query.prepare(statement)) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the insert for type %1: %2")
+                             .arg(type, query.lastError().text()));
+        }
+
+        const auto placeholders = placeholdersOf(statement);
+
+        for (const auto &[key, value] : map.asKeyValueRange()) {
+            if (!placeholders.contains(key)) {
+                qCWarning(lcStorage) << "property" << key << "of type" << type
+                                     << "has no column and is not stored";
+                continue;
+            }
+
+            query.bindValue(QLatin1Char(':') + key, value);
+        }
+
+        if (!query.exec()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not store an item of type %1: %2")
+                             .arg(type, lastErrorMessage()));
+        }
+
+        return query.lastInsertId();
+    }
+
+    /**
+     * An account spans three tables: its own row, the balance that belongs to it
+     * and the reference accounts held with it. Either all three are written or
+     * none is, so that no account ends up carrying the balance of an older write.
+     */
+    Error storeAccount(const QMap<QString, QVariant> &map)
+    {
+        auto accountMap = map;
+
+        // Both are kept in tables of their own. Left in place they would be
+        // reported as columnless properties on every single write.
+        const auto balance = accountMap.take(QStringLiteral("balance"));
+        const auto referenceAccounts = accountMap.take(QStringLiteral("refAccounts"));
+
+        if (!connection()->beginTransaction()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not begin a transaction on %1: %2")
+                             .arg(m_storageFileName, lastErrorMessage()));
+        }
+
+        const auto accountId = insertRow(accountInsertQuery(),
+                                         accountMap,
+                                         QStringLiteral("Account"));
+        if (!accountId.hasValue()) {
+            return rollback(accountId.error());
+        }
+
+        if (const auto error = storeBalance(accountId.value(), balance, accountMap);
+            error.isError()) {
+            return rollback(error);
+        }
+
+        if (const auto error = storeReferenceAccounts(accountId.value(), referenceAccounts);
+            error.isError()) {
+            return rollback(error);
+        }
+
+        if (!connection()->commitTransaction()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not commit an account to %1: %2")
+                             .arg(m_storageFileName, lastErrorMessage()));
+        }
+
+        return {};
+    }
+
+    /**
+     * The balance goes to a row of its own, keyed by the account. The day is the
+     * day of the write in UTC; AB_ACCOUNT_SPEC carries no date with the figure,
+     * and inventing a business day would be worse than recording when it was
+     * read. The type stays at zero for the same reason, the source does not say
+     * whether the figure is booked or noted.
+     */
+    Error storeBalance(const QVariant &accountId,
+                       const QVariant &balance,
+                       const QMap<QString, QVariant> &accountMap)
+    {
+        if (!balance.isValid()) {
+            return {};
+        }
+
+        const auto balanceMap = QMap<QString, QVariant>{
+            {QStringLiteral("account_id"), accountId},
+            {QStringLiteral("date"), QDate::currentDate()},
+            {QStringLiteral("value"), balance},
+            {QStringLiteral("type"), 0},
+            {QStringLiteral("currency"), accountMap.value(QStringLiteral("currency"))},
+        };
+
+        const auto result = insertRow(balanceInsertQuery(),
+                                      balanceMap,
+                                      QStringLiteral("Balance"));
+
+        return result.hasValue() ? Error() : result.error();
+    }
+
+    /**
+     * Reference accounts belong to the account that holds them. An account is
+     * written whole, so the rows of an earlier write go first.
+     *
+     * Ownership: the list travels through QVariant as raw pointers, created by
+     * Account::referenceAccounts. They are deleted here, where the list ends.
+     */
+    Error storeReferenceAccounts(const QVariant &accountId, const QVariant &referenceAccounts)
+    {
+        if (!referenceAccounts.canConvert<ReferenceAccounts>()) {
+            return {};
+        }
+
+        auto accounts = qvariant_cast<ReferenceAccounts>(referenceAccounts);
+        const auto guard = qScopeGuard([&accounts] { qDeleteAll(accounts); });
+
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            return error;
+        }
+
+        if (!query.prepare(QStringLiteral("DELETE FROM refaccounts WHERE account_id = :id;"))) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the removal of reference accounts: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        query.bindValue(QStringLiteral(":id"), accountId);
+
+        if (!query.exec()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not remove the reference accounts of %1: %2")
+                             .arg(accountId.toString(), query.lastError().text()));
+        }
+
+        for (const auto referenceAccount : std::as_const(accounts)) {
+            if (referenceAccount == nullptr || !referenceAccount->isValid()) {
+                continue;
+            }
+
+            auto map = referenceAccount->toMap();
+            map[QStringLiteral("account_id")] = accountId;
+
+            const auto result = insertRow(referenceAccountInsertQuery(),
+                                          map,
+                                          QStringLiteral("ReferenceAccount"));
+            if (!result.hasValue()) {
+                return result.error();
+            }
+        }
+
+        return {};
+    }
+
+    /**
+     * Fills in what an account carries outside its own row: the balance and the
+     * reference accounts held with it. Both live in tables of their own, keyed by
+     * the id of the account.
+     *
+     * A failure of either read costs the property, not the account. It is logged
+     * and the row is handed on without it, which is what Account::fromMap already
+     * copes with.
+     */
+    void enrichAccountRow(QMap<QString, QVariant> &row)
+    {
+        const auto accountId = row.value(QStringLiteral("id"));
+        if (!accountId.isValid()) {
+            return;
+        }
+
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            qCWarning(lcStorage) << "could not read the balance of an account:" << error.message();
+            return;
+        }
+
+        if (query.prepare(QStringLiteral("SELECT `value` FROM balances WHERE account_id = :id;"))) {
+            query.bindValue(QStringLiteral(":id"), accountId);
+
+            if (query.exec() && query.next()) {
+                row[QStringLiteral("balance")] = query.value(0);
+            }
+        }
+
+        if (!query.prepare(QStringLiteral("SELECT * FROM refaccounts WHERE account_id = :id;"))) {
+            qCWarning(lcStorage) << "could not read the reference accounts of an account:"
+                                 << query.lastError().text();
+            return;
+        }
+
+        query.bindValue(QStringLiteral(":id"), accountId);
+
+        if (!query.exec()) {
+            qCWarning(lcStorage) << "could not read the reference accounts of an account:"
+                                 << query.lastError().text();
+            return;
+        }
+
+        // Ownership passes to Account::fromMap, which deletes the list once it has
+        // copied the values into the account spec.
+        auto referenceAccounts = ReferenceAccounts();
+        const auto record = query.record();
+
+        while (query.next()) {
+            auto referenceMap = QMap<QString, QVariant>();
+            for (int column = 0; column < record.count(); ++column) {
+                referenceMap[record.fieldName(column)] = query.value(column);
+            }
+
+            if (auto *referenceAccount = ReferenceAccount::create(referenceMap)) {
+                referenceAccounts << referenceAccount;
+            }
+        }
+
+        if (!referenceAccounts.isEmpty()) {
+            row[QStringLiteral("refAccounts")] = QVariant::fromValue(referenceAccounts);
+        }
+    }
+
+    /**
+     * Undoes the open transaction and hands back the error that caused it. A
+     * failing rollback is logged; it cannot change what the caller is told, the
+     * first error is the one that matters.
+     */
+    Error rollback(const Error &error)
+    {
+        if (!connection()->rollbackTransaction()) {
+            qCWarning(lcStorage) << "could not roll back after" << error.message() << ":"
+                                 << lastErrorMessage();
+        }
+
+        return error;
+    }
+
     Error setupTables()
     {
         QFile storageFile(QStringLiteral(":/lib/olbaflinx-storage"));
@@ -518,9 +988,17 @@ public:
                 continue;
             }
 
-            connection()->beginTransaction();
+            if (!connection()->beginTransaction()) {
+                return reportSchemaFailure(ErrorCode::DatabaseFailure,
+                                           QStringLiteral("Could not begin a transaction on %1: %2")
+                                               .arg(m_storageFileName, lastErrorMessage()));
+            }
+
             if (!query.exec(sqlStatement)) {
-                connection()->rollbackTransaction();
+                if (!connection()->rollbackTransaction()) {
+                    qCWarning(lcStorage) << "could not roll back the failed schema statement:"
+                                         << lastErrorMessage();
+                }
 
                 // The statement itself stays out of the message, it goes to the
                 // log only. It carries no secret, but it is of no use to a user.
@@ -531,7 +1009,12 @@ public:
                                            QStringLiteral("Could not create the schema of %1: %2")
                                                .arg(m_storageFileName, lastErrorMessage()));
             }
-            connection()->commitTransaction();
+
+            if (!connection()->commitTransaction()) {
+                return reportSchemaFailure(ErrorCode::DatabaseFailure,
+                                           QStringLiteral("Could not commit the schema of %1: %2")
+                                               .arg(m_storageFileName, lastErrorMessage()));
+            }
         }
 
         return {};
@@ -690,53 +1173,23 @@ Error Storage::storeItem(const BankingItem *bankingItem)
                      QStringLiteral("Invalid banking item of type %1").arg(type));
     }
 
-    auto insertQuery = QLatin1StringView();
+    auto error = Error();
+
     if (type == QLatin1StringView("Account")) {
-        insertQuery = AccountInsertQuery;
+        error = d_ptr->storeAccount(bankingItem->toMap());
     } else if (type == QLatin1StringView("Transaction")) {
-        insertQuery = TransactionInsertQuery;
+        const auto result = d_ptr->insertRow(transactionInsertQuery(),
+                                             bankingItem->toMap(),
+                                             type);
+        error = result.hasValue() ? Error() : result.error();
     } else {
-        // ReferenceAccount, Category and Contact have no table of their own yet.
-        // The branch used to be empty, which sent an unprepared query on its way.
+        // Category and Contact have no table of their own yet. The branch used to
+        // be empty, which sent an unprepared query on its way.
         return Error(ErrorCode::NotImplemented,
                      QStringLiteral("Storing an item of type %1 is not implemented").arg(type));
     }
 
-    QSqlQuery query;
-    if (const auto error = d_ptr->openQuery(query); error.isError()) {
-        Q_EMIT errorOccurred(error.code(), error.message());
-        Q_EMIT finished();
-
-        return error;
-    }
-
-    if (!query.prepare(insertQuery)) {
-        return Error(ErrorCode::DatabaseFailure,
-                     QStringLiteral("Could not prepare the insert for type %1: %2")
-                         .arg(type, query.lastError().text()));
-    }
-
-    const auto map = bankingItem->toMap();
-    const auto placeholders = placeholdersOf(insertQuery);
-
-    for (const auto &[key, value] : map.asKeyValueRange()) {
-        if (!placeholders.contains(key)) {
-            // bindValue would drop the property without a word. The property is
-            // not persisted, which is a gap in the schema, not a failure of this
-            // write; the item itself is stored.
-            qCWarning(lcStorage) << "property" << key << "of type" << type
-                                 << "has no column and is not stored";
-            continue;
-        }
-
-        query.bindValue(QLatin1Char(':') + key, value);
-    }
-
-    if (!query.exec()) {
-        auto error = Error(ErrorCode::DatabaseFailure,
-                           QStringLiteral("Could not store an item of type %1: %2")
-                               .arg(type, d_ptr->lastErrorMessage()));
-
+    if (error.isError()) {
         qCCritical(lcStorage) << error.message();
 
         Q_EMIT errorOccurred(error.code(), error.message());
@@ -778,9 +1231,11 @@ void Storage::receiveItems(Type type, int offset, int limit)
         table = QStringLiteral("transactions");
         break;
     case Storage::StorageReferenceAccount:
+        table = QStringLiteral("refaccounts");
+        break;
     case Storage::StorageCategories:
     case Storage::StorageContacts:
-        // These three have no table of their own in the schema. The branches used
+        // These two have no table of their own in the schema. The branches used
         // to be empty, which ended in a message that named the previous statement
         // instead of the cause.
         reportError(ErrorCode::NotImplemented,
@@ -841,19 +1296,34 @@ void Storage::receiveItems(Type type, int offset, int limit)
     auto map = QMap<QString, QVariant>();
     int index = 0;
 
+    // The rows are collected first. An account needs a second read for its
+    // balance and its reference accounts, and that read cannot run while this
+    // query is still stepping over its own result.
+    auto rows = QList<QMap<QString, QVariant>>();
+
     while (query.next()) {
         for (const auto &[key, value] : columnList.asKeyValueRange()) {
             map[value] = query.value(key);
         }
 
+        rows << map;
+
+        // No clear on purpose. Every row sets the same keys, so the inserts of
+        // the next round turn into assignments.
+    }
+
+    for (auto &row : rows) {
         switch (type) {
         case Storage::StorageAccount:
-            bankingItems << Account::fromMap(map);
+            d_ptr->enrichAccountRow(row);
+            bankingItems << Account::fromMap(row);
             break;
         case Storage::StorageTransaction:
-            bankingItems << Transaction::fromMap(map);
+            bankingItems << Transaction::fromMap(row);
             break;
         case Storage::StorageReferenceAccount:
+            bankingItems << ReferenceAccount::fromMap(row);
+            break;
         case Storage::StorageCategories:
         case Storage::StorageContacts:
             Q_UNREACHABLE();
@@ -864,9 +1334,6 @@ void Storage::receiveItems(Type type, int offset, int limit)
         if (totalRows > 0) {
             Q_EMIT progressChanged(qMin(index * 100 / totalRows, 100));
         }
-
-        // No clear on purpose. Every row sets the same keys, so the inserts of
-        // the next round turn into assignments.
     }
 
     if (bankingItems.isEmpty()) {

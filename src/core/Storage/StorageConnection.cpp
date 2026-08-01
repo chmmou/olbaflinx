@@ -25,7 +25,14 @@ using namespace olbaflinx::core::storage;
 
 StorageConnection::StorageConnection(const QString &fileName, const QString &driver)
 {
-    if (fileName.isEmpty()) {
+    // addDatabase answers with an invalid connection when the driver is missing,
+    // and every later call then fails with a message about the connection rather
+    // than about the plugin. The question is asked first, and before the file
+    // name is looked at, so that an empty name is not reported as a missing
+    // driver.
+    m_driverAvailable = QSqlDatabase::isDriverAvailable(driver);
+
+    if (fileName.isEmpty() || !m_driverAvailable) {
         return;
     }
 
@@ -52,6 +59,11 @@ void StorageConnection::close()
 bool StorageConnection::isValid() const
 {
     return database().isValid();
+}
+
+bool StorageConnection::isDriverAvailable() const
+{
+    return m_driverAvailable;
 }
 
 bool StorageConnection::isOpen() const

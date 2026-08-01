@@ -42,6 +42,14 @@ public:
     explicit ReferenceAccount(const AB_REFERENCE_ACCOUNT *refAccount = nullptr);
     ~ReferenceAccount() override;
 
+    // The instance owns a C structure and frees it. A copy would hand the same
+    // pointer to two destructors, so the compiler generated ones are withdrawn
+    // rather than left to be called by accident.
+    ReferenceAccount(const ReferenceAccount &) = delete;
+    ReferenceAccount &operator=(const ReferenceAccount &) = delete;
+    ReferenceAccount(ReferenceAccount &&) = delete;
+    ReferenceAccount &operator=(ReferenceAccount &&) = delete;
+
     /**
      * @brief Creates a reference account from the column values of a database row.
      *
@@ -51,6 +59,18 @@ public:
      */
     [[nodiscard]] static std::shared_ptr<ReferenceAccount> fromMap(
         const QMap<QString, QVariant> &map);
+
+    /**
+     * @brief Creates a reference account from the column values of a database row.
+     *
+     * Ownership passes to the caller. Used where the account has to enter a
+     * QList of raw pointers, as Account holds them.
+     *
+     * @param map Column values of the row.
+     *
+     * @return The new reference account, or nullptr if the map is empty.
+     */
+    [[nodiscard]] static ReferenceAccount *create(const QMap<QString, QVariant> &map);
 
     [[nodiscard]] qint32 accountType() const;
     [[nodiscard]] QString ownerName() const;

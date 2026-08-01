@@ -185,10 +185,13 @@ TransactionLimitsList *Account::transactionLimits() const
 
 ReferenceAccounts Account::referenceAccounts() const
 {
-    auto refAccList = AB_AccountSpec_GetRefAccountList(d_ptr->abAccountSpec);
-    const auto totalRefAccounts = AB_ReferenceAccount_List_GetCount(refAccList);
-
-    if (totalRefAccounts == 0) {
+    // The getter hands out the list the account spec holds, not a copy of it.
+    // Releasing it here left the spec with a dangling list, and its destructor
+    // then walked into an assertion inside gwenhywfar. Ownership of the list
+    // stays with the spec; only the wrappers below belong to the caller, and
+    // each of them duplicates the entry it was built from.
+    const auto refAccList = AB_AccountSpec_GetRefAccountList(d_ptr->abAccountSpec);
+    if (refAccList == nullptr || AB_ReferenceAccount_List_GetCount(refAccList) == 0) {
         return {};
     }
 
@@ -199,8 +202,6 @@ ReferenceAccounts Account::referenceAccounts() const
         refAccounts.append(new ReferenceAccount(refAcc));
         refAcc = AB_ReferenceAccount_List_Next(refAcc);
     }
-
-    AB_ReferenceAccount_List_free(refAccList);
 
     return refAccounts;
 }

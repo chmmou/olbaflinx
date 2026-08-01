@@ -184,6 +184,26 @@ CREATE TABLE IF NOT EXISTS balances
 );
 CREATE INDEX IF NOT EXISTS balances_date_index on balances (`date` desc);
 
+CREATE TABLE IF NOT EXISTS refaccounts
+(
+    id                 integer not null
+        constraint refaccounts_id_pk primary key autoincrement,
+    account_id         integer,
+    account_type       integer,
+    owner_name         varchar,
+    owner_name2        varchar,
+    account_name       varchar,
+    iban               varchar,
+    bic                varchar,
+    country            varchar,
+    bank_code          varchar,
+    account_number     varchar,
+    sub_account_number varchar,
+    FOREIGN KEY (account_id) REFERENCES accounts (id)
+);
+CREATE INDEX IF NOT EXISTS refaccounts_account_id_index on refaccounts (account_id asc);
+CREATE INDEX IF NOT EXISTS refaccounts_iban_index on refaccounts (iban asc);
+
 CREATE TABLE IF NOT EXISTS migrations
 (
     id         integer not null
@@ -207,8 +227,5 @@ begin
 end;
 
 INSERT OR IGNORE INTO migrations (name)
-VALUES ('contacts'),
-       ('categories'),
-       ('accounts'),
-       ('transaction_categories'),
-       ('transactions');
+VALUES ('0001_initial_schema'),
+       ('0002_reference_accounts');
