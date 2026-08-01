@@ -2,179 +2,181 @@ name: Tests
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop-qt6 ]
   pull_request:
-    branches: [ develop ]
+    branches: [ develop-qt6 ]
+
+permissions:
+  contents: read
 
 env:
-  BUILD_TYPE: Debug
-  QT_QPA_PLATFORM: minimal
+  # The offscreen plugin draws, the minimal one does not. The tests of the ui
+  # layer need the drawing operations.
+  QT_QPA_PLATFORM: offscreen
+  # The minimum the project declares. Building against it is what makes the
+  # declaration worth anything.
+  QT_VERSION: 6.8.3
+  # Every version below is pinned so that a run stays reproducible and meets
+  # the minimums that src/CMakeLists.txt requires.
+  GWENHYWFAR_VERSION: 5.14.1
+  AQBANKING_VERSION: 6.9.2
+  LIBCHIPCARD_VERSION: 5.1.6
+  ADS_VERSION: 5.0.0
+  QSQLCIPHER_VERSION: v6.6-1
+  DEPS_PREFIX: /usr/local
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checking out the code
-        uses: actions/checkout@v2
-        with:
-          path: olbaflinx
-      - name: Install dependencies
-        id: vars
-        shell: bash
+      - name: Check out the code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install system packages
         run: |
-          echo ::set-output name=short_ref::${GITHUB_REF#refs/*/}
           sudo apt-get -qq update
-          sudo apt-get install -y -qq \
-            libgcrypt20-dev \
-            libgcrypt20 \
-            libgpg-error-dev \
-            libgpg-error0 \
-            libgnutls28-dev \
-            libgnutls30 \
-            libgnutls-openssl27 \
-            libxmlsec1-gnutls \
-            libxmlsec1-dev \
-            libxmlsec1-gcrypt \
-            libxmlsec1-nss \
-            libxmlsec1-openssl \
-            libxmlsec1 \
-            xmlsec1 \
-            libgl1-mesa-dev \
-            libxkbcommon-x11-0 \
-            libc6-i386 \
+          sudo apt-get install -y -qq --no-install-recommends \
             build-essential \
-            libgl1-mesa-dev \
-            mesa-common-dev \
-            libgles2-mesa-dev \
-            libxkbcommon-x11-0 \
-            libxcb-icccm4-dev \
-            libxcb-xinerama0 \
-            libxcb-image0 \
-            libxcb-keysyms1 \
-            libxcb-* \
-            fakeroot \
-            libsqlite3-0 \
-            libsqlite3-dev \
-            sqlite3 \
-            python3-all \
-            python3-all-dev \
-            python3-xlrd \
-            libpcsclite1 \
-            libpcsclite-dev \
-            doxygen \
-            git \
             cmake \
             ninja-build \
-            pkgconf
-          sudo apt-get remove -y -qq gcc g++
-          sudo apt install -y -qq gcc-9 g++-9
-          sudo ln -s /usr/bin/g++-9 /usr/bin/g++
-          sudo ln -s /usr/bin/gcc-9 /usr/bin/gcc
-      - name: Cache Qt
-        id: cache-qt
-        uses: actions/cache@v1
-        with:
-          path: ${{ github.workspace }}/.Qt6
-          key: ${{ runner.os }}-QtCache-v4
+            pkgconf \
+            libtool \
+            automake \
+            gettext \
+            git \
+            libgcrypt20-dev \
+            libgpg-error-dev \
+            libgnutls28-dev \
+            libxmlsec1-dev \
+            libpcsclite-dev \
+            libsqlite3-dev \
+            libgl1-mesa-dev \
+            mesa-common-dev \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-cursor0
+
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        uses: jurplel/install-qt-action@v4.3.1
         timeout-minutes: 10
         with:
-          version: 6.8.3
+          version: ${{ env.QT_VERSION }}
           target: desktop
           host: linux
-          dir: ${{ github.workspace }}/.Qt6
-          set-env: true
-          install-deps: true
-          modules: 'qtcharts, qtdatavis3d, qtpurchasing, qtvirtualkeyboard, qtwebengine, qtnetworkauth, qtwebglplugin, qtscript, debug_info'
-          email: ${{ secrets.QT_EMAIL }}
-          pw: ${{ secrets.QT_PW }}
-          cache: ${{ steps.cache-qt.outputs.cache-hit }}
-      - name: Install Qt SQL Cipher for Qt 5.15
-        shell: bash
-        run: |
-          rm -rf qsqlcipher-qt5
-          git clone https://github.com/sjemens/qsqlcipher-qt5.git
-          cd qsqlcipher-qt5
-          git checkout v5.15-3
-          mkdir -p build
-          cd build
-          qmake -recursive ../qsqlcipher.pro
-          make
-          make install
-          cd ../..
-          rm -rf qsqlcipher-qt5
-      - name: Cache additional dependencies
-        id: cache-additional-dependencies
-        uses: actions/cache@v2
+          arch: linux_gcc_64
+          # The project links Concurrent, Core, Gui, LinguistTools, Sql, Svg
+          # and Widgets. All of them ship with the base package.
+          modules: ''
+          cache: true
+
+      - name: Cache the dependencies built from source
+        id: cache-deps
+        uses: actions/cache@v6.1.0
         with:
-          path: ${{ github.workspace }}/.additional-dependencies
-          key: ${{ runner.os }}-additional-dependencies-cache-v4
-      - name: Installing additional dependencies
-        if: steps.cache-additional-dependencies.outputs.cache-hit != 'true'
-        shell: bash
+          path: ~/.olbaflinx-deps
+          key: >-
+            ${{ runner.os }}-deps-qt${{ env.QT_VERSION }}-gwen${{ env.GWENHYWFAR_VERSION }}-aqb${{ env.AQBANKING_VERSION }}-chip${{ env.LIBCHIPCARD_VERSION }}-ads${{ env.ADS_VERSION }}-cipher${{ env.QSQLCIPHER_VERSION }}
+
+      - name: Build the dependencies from source
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
-          export AQ_INSTALL_PREFIX="$GITHUB_WORKSPACE/.additional-dependencies"
-          rm -rf gwenhywfar
-          git clone --recursive https://github.com/aqbanking/gwenhywfar.git gwenhywfar
+          set -euxo pipefail
+          workdir="$(mktemp -d)"
+          cd "$workdir"
+
+          # gwenhywfar carries the Qt binding the project links against. Asking
+          # for the qt5 gui here is what left gwengui-qt6 unavailable before.
+          git clone --recursive https://git.aquamaniac.de/git/gwenhywfar
           cd gwenhywfar
-          git checkout 5.7.3
+          git checkout "$GWENHYWFAR_VERSION"
           make -f Makefile.cvs
-          ./configure --prefix=$AQ_INSTALL_PREFIX --with-guis="qt5"
-          make -j$(nproc) all
-          make install
-          cd ..
-          rm -rf gwenhywfar
-          export PATH="$PATH:$GITHUB_WORKSPACE/.additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib"
-          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib/pkgconfig"
-          rm -rf libchipcard
-          git clone --recursive https://github.com/aqbanking/libchipcard.git libchipcard
+          ./configure --prefix="$DEPS_PREFIX" --with-guis="cpp qt6"
+          make --jobs=$(nproc) all
+          sudo make install
+          cd "$workdir"
+
+          git clone --recursive https://git.aquamaniac.de/git/libchipcard
           cd libchipcard
-          git checkout 5.1.6
+          git checkout "$LIBCHIPCARD_VERSION"
           make -f Makefile.cvs
-          ./configure --prefix=$AQ_INSTALL_PREFIX
-          make -j$(nproc) all
-          make install
-          cd ..
-          rm -rf libchipcard
-          rm -rf aqbanking
-          git clone --recursive https://github.com/aqbanking/aqbanking.git aqbanking
+          ./configure --prefix="$DEPS_PREFIX"
+          make --jobs=$(nproc) all
+          sudo make install
+          cd "$workdir"
+
+          # libchipcard reads datadir before it defines it. pkg-config resolves
+          # pkgdatadir to an empty prefix without this.
+          sudo patch "$DEPS_PREFIX/lib/pkgconfig/libchipcard-client.pc" \
+            < "$GITHUB_WORKSPACE/res/ci/ubuntu/libchipcard-client.pc.patch"
+
+          git clone --recursive https://git.aquamaniac.de/git/aqbanking
           cd aqbanking
-          git checkout 6.3.2
+          git checkout "$AQBANKING_VERSION"
           make -f Makefile.cvs
-          ./configure --prefix=$AQ_INSTALL_PREFIX
+          ./configure --prefix="$DEPS_PREFIX"
           make typedefs
-          make types
-          make -j$(nproc) all
-          make install
-          cd ..
-          rm -rf aqbanking
-          rm -rf ktoblzcheck
-          git clone https://git.code.sf.net/p/ktoblzcheck/code ktoblzcheck
-          cd  ktoblzcheck
-          git checkout 1.53
-          mkdir cbuild
-          cd cbuild
-          cmake -DCMAKE_INSTALL_PREFIX=$AQ_INSTALL_PREFIX -DENABLE_BANKDATA_DOWNLOAD=ON -DBUILD_STATIC=OFF ..
-          make -j$(nproc) all
-          make install
-          cd ../..
-          rm -rf ktoblzcheck
-      - name: CTest running
-        env:
-          CTEST_OUTPUT_ON_FAILURE: 1
-        shell: bash
+          make typefiles
+          make --jobs=$(nproc) all
+          sudo make install
+          cd "$workdir"
+
+          git clone https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
+          cd Qt-Advanced-Docking-System
+          git checkout "$ADS_VERSION"
+          cmake -G Ninja -B cbuild \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_INSTALL_PREFIX="$DEPS_PREFIX"
+          cmake --build cbuild
+          sudo cmake --install cbuild
+          cd "$workdir"
+
+          # The plugin has to carry the driver name the project asks for, and
+          # its module version has to match the Qt it is built against.
+          git clone https://github.com/bAmpT/qsqlcipher-qt6-cmake.git
+          cd qsqlcipher-qt6-cmake
+          git checkout "$QSQLCIPHER_VERSION"
+          git submodule update --init --recursive
+          sed -i "s|^set(QT_REPO_MODULE_VERSION.*|set(QT_REPO_MODULE_VERSION \"${QT_VERSION}\")|" .cmake.conf
+          sed -i "s|OUTPUT_NAME qsqlitecipher|OUTPUT_NAME qsqlcipher|" qsqlcipher/CMakeLists.txt
+          cmake -G Ninja -B cbuild \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_GENERATE_SBOM=OFF
+          cmake --build cbuild
+          sudo cmake --install cbuild
+
+          # The sql driver installs into the Qt tree, everything else into
+          # DEPS_PREFIX. Both have to survive into the next run.
+          mkdir -p ~/.olbaflinx-deps
+          sudo tar -C "$DEPS_PREFIX" -cf ~/.olbaflinx-deps/prefix.tar \
+            bin lib include share
+          sudo tar -C "$QT_ROOT_DIR" -cf ~/.olbaflinx-deps/qt-plugins.tar \
+            plugins/sqldrivers
+          sudo chown "$USER" ~/.olbaflinx-deps/prefix.tar ~/.olbaflinx-deps/qt-plugins.tar
+
+      - name: Restore the cached dependencies
+        if: steps.cache-deps.outputs.cache-hit == 'true'
         run: |
-          export PATH="$PATH:$GITHUB_WORKSPACE/.additional-dependencies/bin"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib"
-          export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$GITHUB_WORKSPACE/.additional-dependencies/lib/pkgconfig"
-          cd $GITHUB_WORKSPACE/olbaflinx
-          mkdir cbuild
-          cd cbuild
-          cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_TESTS=ON $GITHUB_WORKSPACE/olbaflinx
-          make -j$(nproc) all
-          ctest --rerun-failed --output-on-failure
+          set -euxo pipefail
+          sudo tar -C "$DEPS_PREFIX" -xf ~/.olbaflinx-deps/prefix.tar
+          sudo tar -C "$QT_ROOT_DIR" -xf ~/.olbaflinx-deps/qt-plugins.tar
+
+      - name: Register the dependencies
+        run: |
+          sudo ldconfig "$DEPS_PREFIX/lib"
+          echo "$DEPS_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$DEPS_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$DEPS_PREFIX:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake --preset debug
+
+      - name: Build
+        run: cmake --build --preset debug
+
+      - name: Test
+        run: ctest --preset debug
