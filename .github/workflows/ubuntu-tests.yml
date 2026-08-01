@@ -185,7 +185,13 @@ jobs:
           echo "CMAKE_PREFIX_PATH=$DEPS_PREFIX:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
 
       - name: Configure
-        run: cmake --preset debug
+        # libgwengui-qt6 links against Qt Widgets, so every consumer of the
+        # core drags that in. The linker resolves such a transitive dependency
+        # at link time and does not consult rpath for it, so the Qt library
+        # directory has to be named on its own. On a developer machine Qt and
+        # gwenhywfar both sit in a default search path, which is why this only
+        # surfaces here.
+        run: cmake --preset debug -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,$QT_ROOT_DIR/lib"
 
       - name: Build
         run: cmake --build --preset debug
