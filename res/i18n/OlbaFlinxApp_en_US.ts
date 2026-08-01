@@ -372,7 +372,7 @@
 <context>
     <name>olbaflinx::core::banking::Banking</name>
     <message>
-        <location filename="../../src/core/Banking/Banking.cpp" line="172"/>
+        <location filename="../../src/core/Banking/Banking.cpp" line="173"/>
         <source>%1 Account Setup</source>
         <translation type="unfinished"></translation>
     </message>

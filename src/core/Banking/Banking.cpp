@@ -22,6 +22,7 @@
 #include <chipcard/client.h>
 
 #include <gwenhywfar/dialog.h>
+#include <gwenhywfar/error.h>
 #include <gwenhywfar/gui.h>
 #include <gwenhywfar/gwenhywfar.h>
 
@@ -279,6 +280,16 @@ void Banking::accounts()
     AB_ACCOUNT_SPEC_LIST *specList = nullptr;
 
     const int rv = AB_Banking_GetAccountSpecList(d_ptr->aqBanking, &specList);
+
+    // A backend that holds no account answers with GWEN_ERROR_NOT_FOUND, which
+    // is not a failure of the call. It used to be reported as one, which left
+    // the NotFound branch below unreachable and told a user who has not set up
+    // an account yet that their banking backend was broken.
+    if (rv == GWEN_ERROR_NOT_FOUND) {
+        reportError(ErrorCode::NotFound, QStringLiteral("No accounts were found"));
+        return;
+    }
+
     if (rv != AB_SUCCESS) {
         reportError(ErrorCode::BankingFailure,
                     QStringLiteral("AB_Banking_GetAccountSpecList failed with %1").arg(rv));

@@ -37,7 +37,6 @@ private:
     {
         QMap<QString, QVariant> map = {};
 
-        // The column names carry no prefix here, see Transaction::fromMap.
         map[QStringLiteral("type")] = 1;
         map[QStringLiteral("unique_id")] = 4711;
         map[QStringLiteral("purpose")] = purpose;

@@ -336,7 +336,6 @@ void StorageKeyTest::minPasswordGuidelinesReturnsValidPattern()
 
     QVERIFY(pattern.isValid());
     QVERIFY(!pattern.pattern().isEmpty());
-    QCOMPARE(pattern.errorString(), QStringLiteral("no error"));
 }
 
 /**

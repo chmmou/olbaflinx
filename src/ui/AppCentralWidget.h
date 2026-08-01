@@ -32,6 +32,17 @@ public:
 
     void initialize(QMainWindow *window);
 
+    /**
+     * @brief The tree of accounts in the left dock.
+     *
+     * Answers with nullptr. The dock it belongs to is not built yet; the code
+     * that would fill it is commented out in App. Kept rather than removed so
+     * that the place it is meant to take stays visible, but every caller has to
+     * expect nothing back until the dock exists. It is const while it hands out
+     * nothing; a widget meant to be worked on afterwards would not be.
+     *
+     * @return nullptr.
+     */
     [[nodiscard]] QTreeWidget *accountWidget() const;
 
 private:

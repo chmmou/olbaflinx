@@ -49,7 +49,7 @@ private Q_SLOTS:
     void bankingIsConstructibleWithoutAnyApplicationInstance();
     void accountsWithoutInitializationReportsAnError();
     void initializeOpensTheBackendUnderTheTemporaryHome();
-    void accountsWithoutAnyConfiguredAccountReportsAFailure();
+    void accountsWithoutAnyConfiguredAccountReportsNotFound();
 };
 
 /**
@@ -124,16 +124,12 @@ void BankingTest::initializeOpensTheBackendUnderTheTemporaryHome()
 }
 
 /**
- * A fresh home carries no account. AqBanking answers that with GWEN_ERROR_NOT_FOUND,
- * which is -51 and therefore not AB_SUCCESS. accounts() turns every value other
- * than AB_SUCCESS into BankingFailure, so the empty case cannot be told apart
- * from a backend that broke. The NotFound branch further down, which was written
- * for exactly this case, is unreachable.
- *
- * This test states what the class does today. It fails as soon as the empty case
- * gets its own code, which is the point at which it has to be rewritten.
+ * A fresh home carries no account. AqBanking answers that with
+ * GWEN_ERROR_NOT_FOUND, which is -51 and therefore not AB_SUCCESS. Every value
+ * other than AB_SUCCESS used to become BankingFailure, so a user who had not set
+ * up an account yet was told their banking backend was broken.
  */
-void BankingTest::accountsWithoutAnyConfiguredAccountReportsAFailure()
+void BankingTest::accountsWithoutAnyConfiguredAccountReportsNotFound()
 {
     Banking banking(applicationInfo());
 
@@ -154,8 +150,11 @@ void BankingTest::accountsWithoutAnyConfiguredAccountReportsAFailure()
     QCOMPARE(finishedSpy.count(), 1);
 
     const auto arguments = errorSpy.takeFirst();
-    QCOMPARE(arguments.at(0).value<ErrorCode>(), ErrorCode::BankingFailure);
-    QVERIFY(arguments.at(1).toString().contains(QStringLiteral("-51")));
+    QCOMPARE(arguments.at(0).value<ErrorCode>(), ErrorCode::NotFound);
+
+    // The raw return value of the backend no longer belongs in the message. The
+    // code carries what happened, and -51 tells a user nothing.
+    QVERIFY(arguments.at(1).toString().contains(QStringLiteral("No accounts")));
 
     banking.finalize();
 }
