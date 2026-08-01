@@ -26,8 +26,12 @@ using namespace olbaflinx::core::banking::account;
 class ReferenceAccount::Private
 {
 public:
+    // A duplicate is made only of what the caller handed in. The fallback used to
+    // build an account and duplicate that one as well, so the structure it had
+    // just created was never released.
     explicit Private(const AB_REFERENCE_ACCOUNT *refAccount)
-        : abRefAccount(AB_ReferenceAccount_dup(refAccount))
+        : abRefAccount(refAccount ? AB_ReferenceAccount_dup(refAccount)
+                                  : AB_ReferenceAccount_new())
     {}
 
     ~Private()
@@ -42,7 +46,7 @@ public:
 };
 
 ReferenceAccount::ReferenceAccount(const AB_REFERENCE_ACCOUNT *refAccount)
-    : d_ptr(new Private(refAccount ?: AB_ReferenceAccount_new()))
+    : d_ptr(new Private(refAccount))
 {}
 
 ReferenceAccount::~ReferenceAccount()

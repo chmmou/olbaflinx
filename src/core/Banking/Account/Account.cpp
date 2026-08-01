@@ -26,9 +26,12 @@ using namespace olbaflinx::core::banking::account;
 class Account::Private
 {
 public:
+    // A duplicate is made only of what the caller handed in. The fallback used to
+    // build a spec and duplicate that one as well, so the structure it had just
+    // created was never released.
     explicit Private(const AB_ACCOUNT_SPEC *accountSpec, double balance)
         : abBalance(balance)
-        , abAccountSpec(AB_AccountSpec_dup(accountSpec))
+        , abAccountSpec(accountSpec ? AB_AccountSpec_dup(accountSpec) : AB_AccountSpec_new())
     {}
 
     ~Private()
@@ -45,7 +48,7 @@ public:
 
 Account::Account(const AB_ACCOUNT_SPEC *accountSpec, double balance)
     : BankingItem()
-    , d_ptr(new Private(accountSpec ?: AB_AccountSpec_new(), balance))
+    , d_ptr(new Private(accountSpec, balance))
 {}
 
 Account::~Account()

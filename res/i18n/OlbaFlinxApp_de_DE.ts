@@ -4,72 +4,72 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="67"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="70"/>
         <source>Invalid</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="70"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="73"/>
         <source>Unknown</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="73"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="76"/>
         <source>Bank</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="76"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="79"/>
         <source>Credit Card</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="79"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="82"/>
         <source>Checking</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="82"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="85"/>
         <source>Savings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="85"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="88"/>
         <source>Investment</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="88"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="91"/>
         <source>Cash</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="91"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="94"/>
         <source>Money Market</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="94"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="97"/>
         <source>Credit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="97"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="100"/>
         <source>Unspecified</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/Account.cpp" line="317"/>
+        <location filename="../../src/core/Banking/Account/Account.cpp" line="320"/>
         <source>Account %1 [%2] - %3 - %4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="811"/>
+        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="814"/>
         <source>Transaction %1 - %2 %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/ReferenceAccount.cpp" line="162"/>
+        <location filename="../../src/core/Banking/Account/ReferenceAccount.cpp" line="166"/>
         <source>Reference account %1 [%2] - %3</source>
         <translation type="unfinished"></translation>
     </message>

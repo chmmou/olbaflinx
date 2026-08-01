@@ -41,8 +41,11 @@ using GwenBufferPtr = std::unique_ptr<GWEN_BUFFER, decltype(&GWEN_Buffer_free)>;
 class Transaction::Private
 {
 public:
+    // A duplicate is made only of what the caller handed in. The fallback used to
+    // build a transaction and duplicate that one as well, so the structure it had
+    // just created was never released.
     explicit Private(Transaction *transaction, const AB_TRANSACTION *abTT)
-        : abTransaction(AB_Transaction_dup(abTT ?: AB_Transaction_new()))
+        : abTransaction(abTT ? AB_Transaction_dup(abTT) : AB_Transaction_new())
         , q_ptr(transaction)
     {}
 
