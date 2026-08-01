@@ -8,6 +8,11 @@ on:
 
 permissions:
   contents: read
+  # Only to pull the image below. A package in the registry is private until it
+  # is published, and without this the token cannot read it: the pull fails with
+  # "manifest unknown", which reads like a missing tag rather than a missing
+  # right. Write access stays with deps-image.yml alone.
+  packages: read
 
 env:
   # The offscreen plugin draws, the minimal one does not. The tests of the ui
