@@ -113,7 +113,7 @@ void StorageTest::isValidReturnsFalseWithoutInitialization()
 void StorageTest::initializeRejectsEmptyStorageFile()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(QString());
 
     // Without a file there is no connection to open. The call used to report
@@ -127,22 +127,28 @@ void StorageTest::initializeRejectsEmptyStorageFile()
     storage.close();
 }
 
+/**
+ * An empty key opens a file, it just leaves it unencrypted. The core used to
+ * take it and leave the storage unusable, which only isValid then reported.
+ * setKey refuses it, so the file is never created in the first place.
+ */
 void StorageTest::initializeRejectsEmptyPassword()
 {
     const auto file = storageFile();
 
     Storage storage(applicationInfo());
-    storage.setKey(QString());
-    storage.setStorageFile(file);
 
-    // An empty key opens the file, it just leaves it unencrypted. The storage is
-    // not usable that way, which isValid reports.
-    (void) storage.initialize(true);
+    const auto error = storage.setKey(QString());
+
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::InvalidInput);
+
+    storage.setStorageFile(file);
 
     QVERIFY(!storage.isValid());
     storage.close();
 
-    QVERIFY(QFile::exists(file));
+    QVERIFY(!QFile::exists(file));
 }
 
 void StorageTest::initializeCreatesUsableStorage()
@@ -150,7 +156,7 @@ void StorageTest::initializeCreatesUsableStorage()
     const auto file = storageFile();
 
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(file);
 
     QVERIFY(!storage.initialize(true).isError());
@@ -167,7 +173,7 @@ void StorageTest::changeKeyMakesOldPasswordInvalid()
     const auto newPassword = QStringLiteral("eve3yth1ng h4$ 4n end only the s4u$a4ge h4$ 2");
 
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(file);
 
     QVERIFY(!storage.initialize(true).isError());
@@ -175,7 +181,7 @@ void StorageTest::changeKeyMakesOldPasswordInvalid()
 
     storage.close();
 
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(file);
 
     // The old key no longer opens the file. Applying the schema fails, and that
@@ -183,7 +189,7 @@ void StorageTest::changeKeyMakesOldPasswordInvalid()
     QVERIFY(storage.initialize(true).isError());
     QVERIFY(!storage.isValid());
 
-    storage.setKey(newPassword);
+    QVERIFY(!storage.setKey(newPassword).isError());
     storage.setStorageFile(file);
 
     QVERIFY(!storage.initialize(true).isError());
@@ -231,7 +237,7 @@ void StorageTest::storeItemPersistsAccountAndEmitsFinished()
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
     QSignalSpy finishedSpy(&storage, &Storage::finished);
 
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile());
 
     QVERIFY(!storage.initialize(true).isError());
@@ -277,7 +283,7 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile());
 
     QVERIFY(!storage.initialize(true).isError());
@@ -322,7 +328,7 @@ void StorageTest::initializeRejectsAFileFromANewerVersion()
 {
     {
         Storage storage(applicationInfo());
-        storage.setKey(password());
+        QVERIFY(!storage.setKey(password()).isError());
         storage.setStorageFile(storageFile());
 
         QVERIFY(!storage.initialize(true).isError());
@@ -349,7 +355,7 @@ void StorageTest::initializeRejectsAFileFromANewerVersion()
     QSqlDatabase::removeDatabase(QStringLiteral("StorageTestFuture"));
 
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile());
 
     const auto error = storage.initialize(true);

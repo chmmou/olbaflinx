@@ -67,7 +67,7 @@ private:
     void createStorage(const QString &file, const QString &key)
     {
         Storage storage(applicationInfo());
-        storage.setKey(key);
+        QVERIFY(!storage.setKey(key).isError());
         storage.setStorageFile(file);
 
         QVERIFY(!storage.initialize(true).isError());
@@ -83,7 +83,13 @@ private:
     static bool opens(const QString &file, const QString &key)
     {
         Storage storage(applicationInfo());
-        storage.setKey(key);
+
+        // A key the guidelines refuse opens nothing, which is the answer this
+        // function is asked for. QVERIFY cannot stand here, it returns void.
+        if (storage.setKey(key).isError()) {
+            return false;
+        }
+
         storage.setStorageFile(file);
 
         const bool opened = !storage.initialize(true).isError() && storage.isValid();
@@ -125,6 +131,8 @@ private Q_SLOTS:
 
     void minPasswordGuidelinesReturnsValidPattern();
     void minPasswordGuidelinesIsStable();
+    void setKeyRejectsAKeyBelowTheMinimumLength_data();
+    void setKeyRejectsAKeyBelowTheMinimumLength();
     void passwordPolicyBoundsLengthAtTheDecidedMaximum();
     void passwordPolicyAccepts_data();
     void passwordPolicyAccepts();
@@ -193,7 +201,7 @@ void StorageKeyTest::wrongPasswordIsRejected()
     createStorage(file, QStringLiteral("Paßwort-Ümlaut-2026"));
 
     Storage storage(applicationInfo());
-    storage.setKey(QStringLiteral("Something-Else-2026"));
+    QVERIFY(!storage.setKey(QStringLiteral("Something-Else-2026")).isError());
     storage.setStorageFile(file);
 
     const auto error = storage.initialize(true);
@@ -232,7 +240,7 @@ void StorageKeyTest::changeKeyPreservesData()
 
     {
         Storage storage(applicationInfo());
-        storage.setKey(oldPassword);
+        QVERIFY(!storage.setKey(oldPassword).isError());
         storage.setStorageFile(file);
 
         QVERIFY(!storage.initialize(true).isError());
@@ -245,7 +253,7 @@ void StorageKeyTest::changeKeyPreservesData()
     }
 
     Storage storage(applicationInfo());
-    storage.setKey(newPassword);
+    QVERIFY(!storage.setKey(newPassword).isError());
     storage.setStorageFile(file);
 
     QVERIFY(!storage.initialize(true).isError());
@@ -268,7 +276,7 @@ void StorageKeyTest::changeKeyLeavesOldKeyInvalid()
 
     {
         Storage storage(applicationInfo());
-        storage.setKey(oldPassword);
+        QVERIFY(!storage.setKey(oldPassword).isError());
         storage.setStorageFile(file);
 
         QVERIFY(!storage.initialize(true).isError());
@@ -300,7 +308,7 @@ void StorageKeyTest::receiveItemsRejectsInvalidWindow()
     const auto file = storageFile(QTest::currentDataTag());
 
     Storage storage(applicationInfo());
-    storage.setKey(QStringLiteral("Paßwort-Ümlaut-2026"));
+    QVERIFY(!storage.setKey(QStringLiteral("Paßwort-Ümlaut-2026")).isError());
     storage.setStorageFile(file);
 
     QVERIFY(!storage.initialize(true).isError());
@@ -404,6 +412,42 @@ void StorageKeyTest::passwordPolicyRejects()
     QFETCH(QString, password);
 
     QVERIFY(!accepts(password));
+}
+
+/**
+ * The core refuses a key it cannot make a usable vault out of. It checks the
+ * length only, not the character classes of the guideline: those end in
+ * [A-Za-z\d<special>], which no CJK character and no emoji is a member of, and
+ * enforcing them here would lock out the very keys the storage was taught to
+ * carry through to SQLCipher unmangled. The classes are checked in the dialog,
+ * where a key is chosen.
+ */
+void StorageKeyTest::setKeyRejectsAKeyBelowTheMinimumLength_data()
+{
+    QTest::addColumn<QString>("password");
+    QTest::addColumn<bool>("accepted");
+
+    QTest::newRow("empty") << QString() << false;
+    QTest::newRow("elevenCharacters") << QStringLiteral("Abcdef1!xyz") << false;
+    QTest::newRow("twelveCharacters") << QStringLiteral("Abcdef1!xyza") << true;
+    QTest::newRow("beyondMaximum") << maximumLengthPassword() + QLatin1Char('c') << false;
+
+    // Neither of these meets the character classes of the guideline, and both
+    // have to reach the vault all the same.
+    QTest::newRow("cjkOnly") << QStringLiteral("密码密码密码密码密码密码") << true;
+    QTest::newRow("emojiOnly") << QStringLiteral("\U0001F511\U0001F511\U0001F511\U0001F511\U0001F511"
+                                                 "\U0001F511")
+                               << true;
+}
+
+void StorageKeyTest::setKeyRejectsAKeyBelowTheMinimumLength()
+{
+    QFETCH(QString, password);
+    QFETCH(bool, accepted);
+
+    Storage storage(applicationInfo());
+
+    QCOMPARE(!storage.setKey(password).isError(), accepted);
 }
 
 } // namespace olbaflinx::core::storage::tests

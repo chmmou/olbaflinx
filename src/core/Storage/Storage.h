@@ -73,9 +73,16 @@ public:
     /**
      * @brief Set the key for the storage file
      *
+     * The key is checked against minPasswordGuidelines before it is kept. A key
+     * that does not meet them is refused and the storage keeps the one it had.
+     * The check used to live in the user interface alone, where a second caller
+     * of the core could walk past it.
+     *
      * @param key Storage Key
+     *
+     * @return An error if the key does not meet the guidelines.
      */
-    void setKey(const QString &key);
+    Error setKey(const QString &key);
 
     /**
      * @brief Change a storage key

@@ -184,7 +184,20 @@ void NewStorageItem::showPasswordChangeDialog()
                 }
 
                 qApp->setOverrideCursor(Qt::WaitCursor);
-                d_ptr->storage->setKey(currPassword);
+
+                // The guideline was checked above, so this can only fail if the
+                // two checks ever drift apart. It is not left unread for that.
+                if (const auto error = d_ptr->storage->setKey(currPassword); error.isError()) {
+                    qApp->restoreOverrideCursor();
+                    qCWarning(lcUiStorage) << "the key was refused:" << error.message();
+
+                    QMessageBox::critical(&pwdChangeDlg,
+                                          dlgTitle,
+                                          tr("The password you have entered does not comply with "
+                                             "the minimum guideline."));
+                    return;
+                }
+
                 d_ptr->storage->setStorageFile(filePath());
 
                 if (const auto error = d_ptr->storage->initialize(false); error.isError()) {
@@ -259,7 +272,9 @@ void NewStorageItem::backupStorage()
 
     QFile storageFile(filePath());
     if (storageFile.exists()) {
-        const QString timeStamp = QDateTime::currentDateTime().toString(
+        // UTC. A backup taken during the hour a daylight saving change repeats
+        // would otherwise sort before one taken an hour earlier.
+        const QString timeStamp = QDateTime::currentDateTimeUtc().toString(
             QStringLiteral("yyyyMMddhhmmsszzz"));
 
         QFileInfo info(filePath());

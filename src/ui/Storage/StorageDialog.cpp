@@ -24,6 +24,8 @@
 #include "core/Storage/Storage.h"
 
 #include <QtCore/QDateTime>
+#include <QtCore/QFile>
+#include <QtCore/QEvent>
 #include <QtCore/QFileInfo>
 
 #include <QtGui/QCloseEvent>
@@ -38,6 +40,7 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QScrollArea>
+#include <QtWidgets/QStyle>
 #include <QtWidgets/QWidget>
 
 using namespace olbaflinx::ui;
@@ -48,11 +51,15 @@ namespace {
 
 // The outer dimensions of the dialog, the header height and the logo size derive
 // from the font metrics, so that they hold at a different font size or scaling.
-// The spacings and margins of the layouts below are still fixed pixel values.
-// The factors approximate the previous fixed values at the default font; whether
-// they reproduce them exactly has not been measured.
-constexpr int DialogWidthInCharacters = 120;
-constexpr int DialogHeightInLines = 30;
+//
+// The factors were measured against the fixed values the dialog used to carry,
+// 930 by 646 for itself, 82 for the header and 64 for the logo. At the default
+// font of this platform, an average character width of 7 and a line height of
+// 17, they come to 132.9, 38.0, 4.8 and 3.8. The first two were guessed at 120
+// and 30 before, which made the dialog about a tenth narrower and a fifth
+// shorter than it was meant to be.
+constexpr int DialogWidthInCharacters = 133;
+constexpr int DialogHeightInLines = 38;
 constexpr int HeaderHeightInLines = 5;
 constexpr int LogoSizeInLines = 4;
 
@@ -70,53 +77,72 @@ public:
         , storageContentsLayout(nullptr)
         , btnNewStorageItem(nullptr)
         , storageInfoLabel(nullptr)
-    {
-        const QFontMetrics metrics(q_ptr->font());
-        q_ptr->setMinimumSize(metrics.averageCharWidth() * DialogWidthInCharacters,
-                              metrics.height() * DialogHeightInLines);
-    }
+    {}
 
     // The storage belongs to whoever created the dialog. When it is closed is
     // for the application to decide, not for a window.
     ~Private() = default;
 
+    /**
+     * Sizes the dialog, its header and its logo from the current font.
+     *
+     * They used to be set in two places, the constructor and initialize, each
+     * measuring for itself, and none of them ran again when the font changed.
+     * This one runs from initialize and from changeEvent.
+     */
+    void applyMetrics()
+    {
+        const QFontMetrics metrics(q_ptr->font());
+
+        q_ptr->setMinimumSize(metrics.averageCharWidth() * DialogWidthInCharacters,
+                              metrics.height() * DialogHeightInLines);
+
+        if (headerWidget) {
+            headerWidget->setMinimumSize(0, metrics.height() * HeaderHeightInLines);
+        }
+
+        if (logoLabel) {
+            const int logoSize = metrics.height() * LogoSizeInLines;
+            logoLabel->setMinimumSize(logoSize, logoSize);
+            logoLabel->setMaximumSize(logoSize, logoSize);
+        }
+    }
+
     void initialize(QMainWindow *window)
     {
         app = qobject_cast<App *>(window);
 
-        const QFontMetrics metrics(q_ptr->font());
-        const int logoSize = metrics.height() * LogoSizeInLines;
+        const auto style = q_ptr->style();
+        const int horizontalSpacing = style->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
+        const int layoutMargin = style->pixelMetric(QStyle::PM_LayoutRightMargin);
 
         auto verticalLayoutDataVaults = new QVBoxLayout(q_ptr);
         verticalLayoutDataVaults->setSpacing(0);
         verticalLayoutDataVaults->setObjectName(QStringLiteral("verticalLayoutDataVaults"));
         verticalLayoutDataVaults->setContentsMargins(0, 0, 0, 0);
 
-        auto widgetStorageHeader = new QWidget(q_ptr);
-        widgetStorageHeader->setObjectName(QStringLiteral("widgetStorageHeader"));
-        widgetStorageHeader->setMinimumSize(0, metrics.height() * HeaderHeightInLines);
+        headerWidget = new QWidget(q_ptr);
+        headerWidget->setObjectName(QStringLiteral("widgetStorageHeader"));
 
-        auto hlStorageWidgetInfo = new QHBoxLayout(widgetStorageHeader);
-        hlStorageWidgetInfo->setSpacing(12);
+        auto hlStorageWidgetInfo = new QHBoxLayout(headerWidget);
+        hlStorageWidgetInfo->setSpacing(horizontalSpacing);
         hlStorageWidgetInfo->setObjectName(QStringLiteral("hlStorageWidgetInfo"));
 
-        auto lblStorageInfoIcon = new QLabel(widgetStorageHeader);
-        lblStorageInfoIcon->setObjectName(QStringLiteral("lblStorageInfoIcon"));
-        lblStorageInfoIcon->setMinimumSize(logoSize, logoSize);
-        lblStorageInfoIcon->setMaximumSize(logoSize, logoSize);
-        lblStorageInfoIcon->setPixmap(QPixmap(QStringLiteral(":/app/olbaflinx-logo-128")));
-        lblStorageInfoIcon->setScaledContents(true);
+        logoLabel = new QLabel(headerWidget);
+        logoLabel->setObjectName(QStringLiteral("lblStorageInfoIcon"));
+        logoLabel->setPixmap(QPixmap(QStringLiteral(":/app/olbaflinx-logo-128")));
+        logoLabel->setScaledContents(true);
 
-        hlStorageWidgetInfo->addWidget(lblStorageInfoIcon);
+        hlStorageWidgetInfo->addWidget(logoLabel);
 
-        auto lblStorageInfoTitle = new QLabel(widgetStorageHeader);
+        auto lblStorageInfoTitle = new QLabel(headerWidget);
         lblStorageInfoTitle->setObjectName(QStringLiteral("lblStorageInfoTitle"));
         lblStorageInfoTitle->setAlignment(Qt::AlignCenter);
         lblStorageInfoTitle->setText(tr("OlbaFlinx - Online Banking For Linux"));
 
         hlStorageWidgetInfo->addWidget(lblStorageInfoTitle);
 
-        verticalLayoutDataVaults->addWidget(widgetStorageHeader);
+        verticalLayoutDataVaults->addWidget(headerWidget);
 
         auto scrollAreaStorage = new QScrollArea(q_ptr);
         scrollAreaStorage->setObjectName(QStringLiteral("scrollAreaStorage"));
@@ -137,9 +163,12 @@ public:
 
         auto hlStoragePage = new QHBoxLayout();
         hlStoragePage->setObjectName(QStringLiteral("hlStoragePage"));
-        hlStoragePage->setContentsMargins(-1, 5, 5, 5);
-        auto hsStoragePage = new QSpacerItem(40,
-                                             20,
+        hlStoragePage->setContentsMargins(-1, layoutMargin, layoutMargin, layoutMargin);
+
+        // An expanding spacer. Its numbers are the minimum it takes, not a
+        // measure of anything, so they come from the layout metrics too.
+        auto hsStoragePage = new QSpacerItem(horizontalSpacing,
+                                             horizontalSpacing,
                                              QSizePolicy::Policy::Expanding,
                                              QSizePolicy::Policy::Minimum);
 
@@ -166,6 +195,9 @@ public:
         scrollAreaSpacerBottom = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
 
         createStorageInfoLabel();
+
+        // Runs last, when every widget it sizes exists.
+        applyMetrics();
     }
 
     void loadStorageItems()
@@ -202,6 +234,9 @@ private:
         QString lastModifiedDateTimeString = fi.lastModified().toString(Private::dateFormat());
 
         if (lastModifiedDateTimeString.isEmpty()) {
+            // Local time, not UTC. The line above reads the modification time of
+            // the file, which QFileInfo answers in local time, and the two
+            // branches of the same label have to name the same zone.
             lastModifiedDateTimeString = QDateTime::currentDateTime().toString(
                 Private::dateFormat());
         }
@@ -215,7 +250,35 @@ private:
                 &NewStorageItem::storageOpened,
                 q_ptr,
                 [&](const QString &filePath, const QString &password) {
-                    storage->setKey(password);
+                    // Two checks, and both are needed. The character classes are
+                    // checked here, where a vault is created and the user can
+                    // still choose another phrase. The length is checked in the
+                    // core, where no caller can walk past it.
+                    const bool creating = !QFile::exists(filePath);
+
+                    if (creating
+                        && !storage->minPasswordGuidelines().match(password).hasMatch()) {
+                        QMessageBox::critical(
+                            q_ptr,
+                            tr("Error"),
+                            tr("The password does not meet the guidelines. It needs at least 12 "
+                               "characters, among them a lower case and an upper case letter, a "
+                               "digit and a special character."));
+
+                        return;
+                    }
+
+                    if (const auto error = storage->setKey(password); error.isError()) {
+                        qCWarning(lcUiStorage) << "the key was refused:" << error.message();
+
+                        QMessageBox::critical(q_ptr,
+                                              tr("Error"),
+                                              tr("The password has to be between 12 and 128 "
+                                                 "characters long."));
+
+                        return;
+                    }
+
                     storage->setStorageFile(filePath);
 
                     if (const auto error = storage->initialize(true); error.isError()) {
@@ -340,6 +403,11 @@ private:
     QVBoxLayout *storageContentsLayout;
     QPushButton *btnNewStorageItem;
     QLabel *storageInfoLabel;
+
+    // Kept so that applyMetrics can size them again after a font change. Owned by
+    // the dialog through the widget hierarchy.
+    QWidget *headerWidget = nullptr;
+    QLabel *logoLabel = nullptr;
 };
 
 StorageDialog::StorageDialog(Storage *storage, QWidget *parent)
@@ -393,4 +461,13 @@ void StorageDialog::resizeEvent(QResizeEvent *event)
                                  event->size(),
                                  QStringLiteral("StorageDialog"));
     QWidget::resizeEvent(event);
+}
+
+void StorageDialog::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+
+    if (event->type() == QEvent::FontChange) {
+        d_ptr->applyMetrics();
+    }
 }

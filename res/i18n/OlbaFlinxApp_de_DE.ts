@@ -493,38 +493,39 @@
     </message>
     <message>
         <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="181"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="196"/>
         <source>The password you have entered does not comply with the minimum guideline.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="195"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="208"/>
         <source>The storage could not be opened. Check the current password.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="205"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="218"/>
         <source>The current password is not correct!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="216"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="229"/>
         <source>The password could not be changed!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="238"/>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="275"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="251"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="290"/>
         <source>Storage</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="239"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="252"/>
         <source>Are you sure you want to delete your storage?
 This can not be undone!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="275"/>
+        <location filename="../../src/ui/Storage/NewStorageItem.cpp" line="290"/>
         <source>Not implemented yet!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -532,43 +533,55 @@ This can not be undone!</source>
 <context>
     <name>olbaflinx::ui::storage::StorageDialog</name>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="115"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="141"/>
         <source>OlbaFlinx - Online Banking For Linux</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="209"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="244"/>
         <source>Created on %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="230"/>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="241"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="263"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="275"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="293"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="304"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="231"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="264"/>
+        <source>The password does not meet the guidelines. It needs at least 12 characters, among them a lower case and an upper case letter, a digit and a special character.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="276"/>
+        <source>The password has to be between 12 and 128 characters long.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="294"/>
         <source>Your data vault could not be opened. Check the password, or restore a backup if the file is damaged.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="242"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="305"/>
         <source>Your data vault is corrupted and or not readable / writeable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="263"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="326"/>
         <source>Storage</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="264"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="327"/>
         <source>The data vault could not be removed. Check the permissions on the file.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="326"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="389"/>
         <source>&lt;h1&gt;Welcome to OlbaFlinx&lt;/h1&gt;&lt;p&gt;Click the plus sign or type Ctrl+N to create a new data storage.&lt;/p&gt;&lt;p&gt;You can create as many vaults as you like, each with its own password, e.g. for different user and or accounts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>

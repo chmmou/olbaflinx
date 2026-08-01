@@ -1059,9 +1059,31 @@ void Storage::setStorageFile(const QString &storageFileName)
     d_ptr->setStorageFile(storageFileName);
 }
 
-void Storage::setKey(const QString &key)
+Error Storage::setKey(const QString &key)
 {
+    // The length, not the full guideline. The character classes of
+    // minPasswordGuidelines end in [A-Za-z\d<special>], which no CJK character
+    // and no emoji is a member of, however many of the lookaheads a pass phrase
+    // built from them satisfies. Enforcing the whole pattern here would lock out
+    // exactly the keys the storage was taught to carry unmangled, and would shut
+    // the door on every file created under an older, weaker rule. The classes
+    // are checked where a key is chosen, in the dialog; what cannot open a file
+    // at all is checked here.
+    //
+    // The length is counted in UTF-16 units, as QString counts it. A character
+    // outside the basic multilingual plane, an emoji among them, therefore
+    // counts as two. That is the same measure the guideline pattern applies.
+    if (key.length() < MinPasswordLength || key.length() > MaxPasswordLength) {
+        // The key itself never reaches the message.
+        return Error(ErrorCode::InvalidInput,
+                     QStringLiteral("The key has to be between %1 and %2 characters long")
+                         .arg(MinPasswordLength)
+                         .arg(MaxPasswordLength));
+    }
+
     d_ptr->setKey(key);
+
+    return {};
 }
 
 Error Storage::changeKey(const QString &oldKey, const QString &newKey)

@@ -136,7 +136,7 @@ void StorageErrorTest::initTestCase()
 void StorageErrorTest::storeItemRejectsInvalidItem()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile("invalidItem"));
 
     QVERIFY(!storage.initialize(true).isError());
@@ -156,7 +156,7 @@ void StorageErrorTest::storeItemRejectsInvalidItem()
 void StorageErrorTest::storeItemRejectsNullItem()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile("nullItem"));
 
     QVERIFY(!storage.initialize(true).isError());
@@ -177,7 +177,7 @@ void StorageErrorTest::storeItemRejectsNullItem()
 void StorageErrorTest::storeItemRejectsUnsupportedType()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile("unsupportedType"));
 
     QVERIFY(!storage.initialize(true).isError());
@@ -197,7 +197,7 @@ void StorageErrorTest::storeItemRejectsUnsupportedType()
 void StorageErrorTest::initializeReportsFailureOnUnwritablePath()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(workingDirectory.filePath(QStringLiteral("no/such/directory.obfx")));
 
     const auto error = storage.initialize(true);
@@ -216,7 +216,7 @@ void StorageErrorTest::initializeReportsFailureOnUnwritablePath()
 void StorageErrorTest::errorOccurredCarriesMatchingCode()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile("matchingCode"));
 
     QVERIFY(!storage.initialize(true).isError());
@@ -249,7 +249,7 @@ void StorageErrorTest::errorOccurredCarriesMatchingCode()
 void StorageErrorTest::receiveItemsEmitsProgressWithinRange()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile("progressRange"));
 
     QVERIFY(!storage.initialize(true).isError());
@@ -286,7 +286,7 @@ void StorageErrorTest::receiveItemsEmitsProgressWithinRange()
 void StorageErrorTest::receiveItemsFillsTransactionFields()
 {
     Storage storage(applicationInfo());
-    storage.setKey(password());
+    QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile("transactionFields"));
 
     QVERIFY(!storage.initialize(true).isError());
