@@ -24,10 +24,14 @@
 #include "core/Logging.h"
 #include "core/Result.h"
 
+#include <QtConcurrent/QtConcurrentRun>
+
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QDate>
 #include <QtCore/QFile>
+#include <QtCore/QFutureWatcher>
 #include <QtCore/QMetaEnum>
+#include <QtCore/QPromise>
 #include <QtCore/QSet>
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>
@@ -336,6 +340,17 @@ inline void cleanupResource()
     Q_CLEANUP_RESOURCE(OlbaFlinxCore);
 }
 
+/**
+ * What the worker thread of receiveItems hands back. QPromise carries one type,
+ * and a read can end in either of two ways, so both travel together. Both parts
+ * are default constructible, which QFuture wants of what it stores.
+ */
+struct ReadResult
+{
+    BankingItems items;
+    Error error;
+};
+
 class Storage::Private
 {
 public:
@@ -599,13 +614,33 @@ public:
     }
 
     /**
-     * Puts a query on the connection and applies the decryption key to it.
+     * Puts a query on the given database and applies the decryption key to it.
      * Whoever gets no error back holds a query on a readable database; whoever
      * gets one must not carry on, every statement would then fail with a message
      * that does not name the cause.
      *
      * QSqlQuery cannot be copied, so the query is handed in rather than returned.
+     *
+     * Static and taking the database, because the worker thread of receiveItems
+     * has one of its own and must not touch the connection of this object. A
+     * QSqlDatabase belongs to the thread that created it.
      */
+    [[nodiscard]] static Error openQueryOn(const QSqlDatabase &database,
+                                           const QString &key,
+                                           const QString &fileName,
+                                           QSqlQuery &query)
+    {
+        query = QSqlQuery(database);
+        if (!query.exec(QStringLiteral("PRAGMA key=") + keyLiteral(key) + QLatin1Char(';'))) {
+            // The message of the driver can carry the key on this statement.
+            // Only the file is named, never the reason verbatim.
+            return Error(ErrorCode::PermissionDenied,
+                         QStringLiteral("Could not apply the key to %1").arg(fileName));
+        }
+
+        return {};
+    }
+
     [[nodiscard]] Error openQuery(QSqlQuery &query)
     {
         if (m_connection == nullptr) {
@@ -613,15 +648,7 @@ public:
                          QStringLiteral("No storage connection for %1").arg(m_storageFileName));
         }
 
-        query = QSqlQuery(m_connection->database());
-        if (!query.exec(QStringLiteral("PRAGMA key=") + keyLiteral(m_key) + QLatin1Char(';'))) {
-            // The message of the driver can carry the key on this statement.
-            // Only the file is named, never the reason verbatim.
-            return Error(ErrorCode::PermissionDenied,
-                         QStringLiteral("Could not apply the key to %1").arg(m_storageFileName));
-        }
-
-        return {};
+        return openQueryOn(m_connection->database(), m_key, m_storageFileName, query);
     }
 
     /**
@@ -672,14 +699,19 @@ public:
      * unavailable for SQLite and numRowsAffected() is undefined for a SELECT, so
      * the count comes from a query of its own.
      */
-    Result<int> windowedRowCount(const QString &table, int offset, int limit)
+    static Result<int> windowedRowCountOn(const QSqlDatabase &database,
+                                          const QString &key,
+                                          const QString &fileName,
+                                          const QString &table,
+                                          int offset,
+                                          int limit)
     {
         if (!isKnownTable(table)) {
             return Error(ErrorCode::InvalidInput, QStringLiteral("Unknown table %1").arg(table));
         }
 
         QSqlQuery query;
-        if (const auto error = openQuery(query); error.isError()) {
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
             return error;
         }
 
@@ -705,6 +737,152 @@ public:
         }
 
         return query.value(0).toInt();
+    }
+
+    /**
+     * Reads a window of one table, in a thread of its own.
+     *
+     * The connection is cloned rather than shared. A QSqlDatabase may only be
+     * used by the thread that created it, and cloneDatabase taking the name
+     * instead of the object is the way Qt offers for exactly this case: it
+     * copies the settings without the caller touching the other thread's handle.
+     *
+     * Everything it needs is passed by value. Nothing here reads a member, so
+     * there is no object left to outlive the run.
+     */
+    static void readItems(QPromise<ReadResult> &promise,
+                          const QString &sourceConnectionName,
+                          const QString &key,
+                          const QString &fileName,
+                          const QString &table,
+                          QMap<int, QString> columnList,
+                          Storage::Type type,
+                          int offset,
+                          int limit)
+    {
+        const auto fail = [&promise](ErrorCode code, const QString &message) {
+            promise.addResult(ReadResult{{}, Error(code, message)});
+        };
+
+        // A name of its own, so that the two connections never collide. The one
+        // of StorageConnection already carries a random number.
+        const auto workerConnectionName = sourceConnectionName + QStringLiteral("_reader");
+
+        // Scoped, because removeDatabase below must not run while a QSqlQuery or
+        // a QSqlDatabase still refers to the connection. Qt warns and leaks it.
+        {
+            QSqlDatabase database = QSqlDatabase::cloneDatabase(sourceConnectionName,
+                                                                workerConnectionName);
+            if (!database.isValid() || !database.open()) {
+                fail(ErrorCode::DatabaseFailure,
+                     QStringLiteral("Could not open a second connection to %1").arg(fileName));
+                QSqlDatabase::removeDatabase(workerConnectionName);
+                return;
+            }
+
+            QSqlQuery query;
+            if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
+                fail(error.code(), error.message());
+                database.close();
+                QSqlDatabase::removeDatabase(workerConnectionName);
+                return;
+            }
+
+            // The table name is interpolated because SQL knows no binding for an
+            // identifier. It comes from the switch in receiveItems and has passed
+            // the list in tableColumns, which answers empty for a name it does
+            // not know. The window is bound.
+            const auto statement = QStringLiteral("SELECT * FROM %1 LIMIT :limit OFFSET :offset;")
+                                       .arg(table);
+
+            if (!query.prepare(statement)) {
+                fail(ErrorCode::DatabaseFailure,
+                     QStringLiteral("Could not prepare the read of %1: %2")
+                         .arg(table, query.lastError().text()));
+                database.close();
+                QSqlDatabase::removeDatabase(workerConnectionName);
+                return;
+            }
+
+            query.bindValue(QStringLiteral(":limit"), limit);
+            query.bindValue(QStringLiteral(":offset"), offset);
+
+            if (!query.exec()) {
+                fail(ErrorCode::DatabaseFailure,
+                     QStringLiteral("Could not read the table %1: %2")
+                         .arg(table, query.lastError().text()));
+                database.close();
+                QSqlDatabase::removeDatabase(workerConnectionName);
+                return;
+            }
+
+            // numRowsAffected() is undefined for a SELECT and SQLite answers -1,
+            // which turned the progress negative. The count comes from a query of
+            // its own. A failure there costs the progress reporting, not the read.
+            const auto rowCount = windowedRowCountOn(database, key, fileName, table, offset, limit);
+            if (!rowCount.hasValue()) {
+                qCWarning(lcStorage) << "no progress reporting:" << rowCount.error().message();
+            }
+
+            const int totalRows = rowCount.hasValue() ? rowCount.value() : 0;
+            promise.setProgressRange(0, 100);
+
+            // The rows are collected first. An account needs a second read for
+            // its balance and its reference accounts, and that read cannot run
+            // while this query is still stepping over its own result.
+            auto rows = QList<QMap<QString, QVariant>>();
+            auto map = QMap<QString, QVariant>();
+
+            while (query.next()) {
+                for (const auto &[key_, value] : columnList.asKeyValueRange()) {
+                    map[value] = query.value(key_);
+                }
+
+                rows << map;
+
+                // No clear on purpose. Every row sets the same keys, so the
+                // inserts of the next round turn into assignments.
+            }
+
+            auto bankingItems = BankingItems();
+            int index = 0;
+
+            for (auto &row : rows) {
+                switch (type) {
+                case Storage::StorageAccount:
+                    enrichAccountRowOn(database, key, fileName, row);
+                    bankingItems << Account::fromMap(row);
+                    break;
+                case Storage::StorageTransaction:
+                    bankingItems << Transaction::fromMap(row);
+                    break;
+                case Storage::StorageReferenceAccount:
+                    bankingItems << ReferenceAccount::fromMap(row);
+                    break;
+                case Storage::StorageCategories:
+                case Storage::StorageContacts:
+                    Q_UNREACHABLE();
+                }
+
+                ++index;
+
+                if (totalRows > 0) {
+                    promise.setProgressValue(qMin(index * 100 / totalRows, 100));
+                }
+            }
+
+            if (bankingItems.isEmpty()) {
+                fail(ErrorCode::NotFound,
+                     QStringLiteral("No items found in the table %1").arg(table));
+            } else {
+                qCDebug(lcStorage) << "read" << bankingItems.size() << "items from" << table;
+                promise.addResult(ReadResult{bankingItems, Error()});
+            }
+
+            database.close();
+        }
+
+        QSqlDatabase::removeDatabase(workerConnectionName);
     }
 
     QSettings *settings()
@@ -904,7 +1082,10 @@ public:
      * and the row is handed on without it, which is what Account::fromMap already
      * copes with.
      */
-    void enrichAccountRow(QMap<QString, QVariant> &row)
+    static void enrichAccountRowOn(const QSqlDatabase &database,
+                                   const QString &key,
+                                   const QString &fileName,
+                                   QMap<QString, QVariant> &row)
     {
         const auto accountId = row.value(QStringLiteral("id"));
         if (!accountId.isValid()) {
@@ -912,7 +1093,7 @@ public:
         }
 
         QSqlQuery query;
-        if (const auto error = openQuery(query); error.isError()) {
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
             qCWarning(lcStorage) << "could not read the balance of an account:" << error.message();
             return;
         }
@@ -1054,6 +1235,16 @@ private:
 
     std::unique_ptr<QSettings> m_settings;
     StorageConnection *m_connection;
+
+    /**
+     * Watches the run started by receiveItems. It lives in the thread of the
+     * Storage that owns it, which is what turns the progress and the completion
+     * of the worker back into signals of that thread.
+     *
+     * A member rather than a local, because a watcher destroyed while its future
+     * is still running waits for it, which would make the call blocking again.
+     */
+    QFutureWatcher<ReadResult> m_readWatcher;
 
     friend class Storage;
     Storage *q_ptr;
@@ -1286,98 +1477,71 @@ void Storage::receiveItems(Type type, int offset, int limit)
         return;
     }
 
-    QSqlQuery query;
-    if (const auto error = d_ptr->openQuery(query); error.isError()) {
-        reportError(error.code(), error.message());
-        return;
-    }
-
-    // The table name is interpolated because SQL knows no binding for an
-    // identifier. It comes from the switch above and has passed the list in
-    // tableColumns, which answers empty for a name it does not know. The window
-    // is bound.
-    const auto statement = QStringLiteral("SELECT * FROM %1 LIMIT :limit OFFSET :offset;").arg(table);
-
-    if (!query.prepare(statement)) {
+    if (d_ptr->connection() == nullptr || !d_ptr->connection()->isOpen()) {
         reportError(ErrorCode::DatabaseFailure,
-                    QStringLiteral("Could not prepare the read of %1: %2")
-                        .arg(table, query.lastError().text()));
+                    QStringLiteral("No open storage connection for %1")
+                        .arg(d_ptr->storageFileName()));
         return;
     }
 
-    query.bindValue(QStringLiteral(":limit"), limit);
-    query.bindValue(QStringLiteral(":offset"), offset);
-
-    if (!query.exec()) {
-        reportError(ErrorCode::DatabaseFailure,
-                    QStringLiteral("Could not read the table %1: %2")
-                        .arg(table, query.lastError().text()));
+    // A second run while one is still going would open a second reader and lose
+    // the watcher of the first. Nothing in the application does it, and this
+    // says so instead of leaving it to chance.
+    if (d_ptr->m_readWatcher.isRunning()) {
+        reportError(ErrorCode::InvalidInput,
+                    QStringLiteral("A read of the storage is already running"));
         return;
     }
 
-    // numRowsAffected() is undefined for a SELECT and SQLite answers -1, which
-    // turned the progress negative. The count comes from a query of its own. A
-    // failure there costs the progress reporting, not the read itself.
-    const auto rowCount = d_ptr->windowedRowCount(table, offset, limit);
-    if (!rowCount.hasValue()) {
-        qCWarning(lcStorage) << "no progress reporting:" << rowCount.error().message();
-    }
+    // Everything above is cheap and answers a programming error at once. What
+    // follows is the part that reads the file, and it is what must not sit in
+    // the calling thread: a window of a thousand accounts costs a second query
+    // per account for its balance and its reference accounts.
+    const auto sourceConnectionName = d_ptr->connection()->database().connectionName();
 
-    const int totalRows = rowCount.hasValue() ? rowCount.value() : 0;
+    // The connections are made before the run is started. A short read could
+    // otherwise finish before anyone is listening.
+    QObject::disconnect(&d_ptr->m_readWatcher, nullptr, this, nullptr);
 
-    auto bankingItems = BankingItems();
-    auto map = QMap<QString, QVariant>();
-    int index = 0;
+    connect(&d_ptr->m_readWatcher,
+            &QFutureWatcher<ReadResult>::progressValueChanged,
+            this,
+            [this](int progress) { Q_EMIT progressChanged(progress); });
 
-    // The rows are collected first. An account needs a second read for its
-    // balance and its reference accounts, and that read cannot run while this
-    // query is still stepping over its own result.
-    auto rows = QList<QMap<QString, QVariant>>();
+    connect(&d_ptr->m_readWatcher, &QFutureWatcher<ReadResult>::finished, this, [this]() {
+        const auto future = d_ptr->m_readWatcher.future();
+        if (future.resultCount() == 0) {
+            // Cannot happen through readItems, which reports on every path. A
+            // cancelled future can end here, and a silent return would leave the
+            // caller waiting for a signal that never comes.
+            qCCritical(lcStorage) << "the storage read ended without a result";
 
-    while (query.next()) {
-        for (const auto &[key, value] : columnList.asKeyValueRange()) {
-            map[value] = query.value(key);
+            Q_EMIT errorOccurred(ErrorCode::DatabaseFailure,
+                                 QStringLiteral("The storage read ended without a result"));
+            Q_EMIT finished();
+            return;
         }
 
-        rows << map;
+        const auto result = future.result();
+        if (result.error.isError()) {
+            qCCritical(lcStorage) << result.error.message();
 
-        // No clear on purpose. Every row sets the same keys, so the inserts of
-        // the next round turn into assignments.
-    }
-
-    for (auto &row : rows) {
-        switch (type) {
-        case Storage::StorageAccount:
-            d_ptr->enrichAccountRow(row);
-            bankingItems << Account::fromMap(row);
-            break;
-        case Storage::StorageTransaction:
-            bankingItems << Transaction::fromMap(row);
-            break;
-        case Storage::StorageReferenceAccount:
-            bankingItems << ReferenceAccount::fromMap(row);
-            break;
-        case Storage::StorageCategories:
-        case Storage::StorageContacts:
-            Q_UNREACHABLE();
+            Q_EMIT errorOccurred(result.error.code(), result.error.message());
+            Q_EMIT finished();
+            return;
         }
 
-        ++index;
+        Q_EMIT itemsReceived(result.items);
+        Q_EMIT finished();
+    });
 
-        if (totalRows > 0) {
-            Q_EMIT progressChanged(qMin(index * 100 / totalRows, 100));
-        }
-    }
-
-    if (bankingItems.isEmpty()) {
-        reportError(ErrorCode::NotFound,
-                    QStringLiteral("No items found in the table %1").arg(table));
-        return;
-    }
-
-    qCDebug(lcStorage) << "read" << bankingItems.size() << "items from" << table;
-
-    Q_EMIT itemsReceived(bankingItems);
-
-    Q_EMIT finished();
+    d_ptr->m_readWatcher.setFuture(QtConcurrent::run(&Private::readItems,
+                                                     sourceConnectionName,
+                                                     d_ptr->m_key,
+                                                     d_ptr->storageFileName(),
+                                                     table,
+                                                     columnList,
+                                                     type,
+                                                     offset,
+                                                     limit));
 }

@@ -261,6 +261,7 @@ void StorageKeyTest::changeKeyPreservesData()
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
     storage.receiveItems(Storage::StorageAccount);
 
+    QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
     QCOMPARE(qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0)).size(), 1);
 

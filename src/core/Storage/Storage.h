@@ -169,6 +169,19 @@ public:
     /**
      * @brief Retrieves a list of items from a database based on the specified type, offset, and limit.
      *
+     * The call returns at once and the reading happens in a thread of its own,
+     * on a second connection to the same file. The calling thread stays
+     * responsive; a window of a thousand accounts used to hold it for as long as
+     * the read took, and each account costs a second query for its balance and
+     * its reference accounts.
+     *
+     * Every signal reaches the caller in the thread it called from. Nothing is
+     * emitted from the worker.
+     *
+     * Wrong arguments are still answered before anything is started, in the
+     * calling thread, because they are a programming error and not worth a
+     * detour. A second call while a read is running is refused the same way.
+     *
      * @param type The type of storage item to retrieve, corresponding to a specific database table.
      * @param offset The starting point of the records to retrieve in the query.
      * @param limit The maximum number of records to retrieve in the query.
