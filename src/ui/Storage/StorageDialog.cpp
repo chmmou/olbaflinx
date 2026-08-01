@@ -24,8 +24,8 @@
 #include "core/Storage/Storage.h"
 
 #include <QtCore/QDateTime>
-#include <QtCore/QFile>
 #include <QtCore/QEvent>
+#include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 
 #include <QtGui/QCloseEvent>
@@ -256,8 +256,7 @@ private:
                     // core, where no caller can walk past it.
                     const bool creating = !QFile::exists(filePath);
 
-                    if (creating
-                        && !storage->minPasswordGuidelines().match(password).hasMatch()) {
+                    if (creating && !storage->minPasswordGuidelines().match(password).hasMatch()) {
                         QMessageBox::critical(
                             q_ptr,
                             tr("Error"),

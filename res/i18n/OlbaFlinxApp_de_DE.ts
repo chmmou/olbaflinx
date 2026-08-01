@@ -64,12 +64,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="814"/>
+        <location filename="../../src/core/Banking/Transaction/Transaction.cpp" line="819"/>
         <source>Transaction %1 - %2 %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/core/Banking/Account/ReferenceAccount.cpp" line="166"/>
+        <location filename="../../src/core/Banking/Account/ReferenceAccount.cpp" line="163"/>
         <source>Reference account %1 [%2] - %3</source>
         <translation type="unfinished"></translation>
     </message>
@@ -543,45 +543,45 @@ This can not be undone!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="263"/>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="275"/>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="293"/>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="304"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="262"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="274"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="292"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="303"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="264"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="263"/>
         <source>The password does not meet the guidelines. It needs at least 12 characters, among them a lower case and an upper case letter, a digit and a special character.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="276"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="275"/>
         <source>The password has to be between 12 and 128 characters long.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="294"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="293"/>
         <source>Your data vault could not be opened. Check the password, or restore a backup if the file is damaged.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="305"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="304"/>
         <source>Your data vault is corrupted and or not readable / writeable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="326"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="325"/>
         <source>Storage</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="327"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="326"/>
         <source>The data vault could not be removed. Check the permissions on the file.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="389"/>
+        <location filename="../../src/ui/Storage/StorageDialog.cpp" line="388"/>
         <source>&lt;h1&gt;Welcome to OlbaFlinx&lt;/h1&gt;&lt;p&gt;Click the plus sign or type Ctrl+N to create a new data storage.&lt;/p&gt;&lt;p&gt;You can create as many vaults as you like, each with its own password, e.g. for different user and or accounts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>

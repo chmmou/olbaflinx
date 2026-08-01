@@ -222,9 +222,7 @@ void StorageTest::storeSettingPersistsValueUnderGroup()
     storage.storeSetting(QStringLiteral("Paths"), written, QStringLiteral("Vaults"));
 
     const auto read = storage
-                          .setting(QStringLiteral("Paths"),
-                                   QStringLiteral("Vaults"),
-                                   QStringList())
+                          .setting(QStringLiteral("Paths"), QStringLiteral("Vaults"), QStringList())
                           .toStringList();
 
     QCOMPARE(read, written);
@@ -288,8 +286,7 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
 
     QVERIFY(!storage.initialize(true).isError());
 
-    const auto account = Account::fromMap(
-        TestHelpers::createFakeAccountMapWithReferenceAccount());
+    const auto account = Account::fromMap(TestHelpers::createFakeAccountMapWithReferenceAccount());
     QVERIFY(account->isValid());
 
     const auto balance = account->balance();
@@ -347,8 +344,8 @@ void StorageTest::initializeRejectsAFileFromANewerVersion()
 
         QSqlQuery query(database);
         QVERIFY(query.exec(QStringLiteral("PRAGMA key='%1';").arg(key)));
-        QVERIFY(query.exec(QStringLiteral(
-            "INSERT INTO migrations (name) VALUES ('0099_from_the_future');")));
+        QVERIFY(query.exec(
+            QStringLiteral("INSERT INTO migrations (name) VALUES ('0099_from_the_future');")));
 
         database.close();
     }

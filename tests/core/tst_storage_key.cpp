@@ -112,8 +112,7 @@ private:
 
     static QString maximumLengthPassword()
     {
-        return QStringLiteral("Ab1!")
-               + QString(MaximumPasswordLength - 4, QLatin1Char('c'));
+        return QStringLiteral("Ab1!") + QString(MaximumPasswordLength - 4, QLatin1Char('c'));
     }
 
 private Q_SLOTS:
@@ -434,9 +433,9 @@ void StorageKeyTest::setKeyRejectsAKeyBelowTheMinimumLength_data()
     // Neither of these meets the character classes of the guideline, and both
     // have to reach the vault all the same.
     QTest::newRow("cjkOnly") << QStringLiteral("密码密码密码密码密码密码") << true;
-    QTest::newRow("emojiOnly") << QStringLiteral("\U0001F511\U0001F511\U0001F511\U0001F511\U0001F511"
-                                                 "\U0001F511")
-                               << true;
+    QTest::newRow("emojiOnly") << QStringLiteral(
+        "\U0001F511\U0001F511\U0001F511\U0001F511\U0001F511"
+        "\U0001F511") << true;
 }
 
 void StorageKeyTest::setKeyRejectsAKeyBelowTheMinimumLength()

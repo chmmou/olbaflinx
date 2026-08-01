@@ -198,8 +198,7 @@ void TransactionTest::toMapKeepsNonAsciiNames()
 void TransactionTest::toMapOfAnEmptyTransactionCarriesTheSameKeys()
 {
     const Transaction empty;
-    const QScopedPointer<Transaction> filled(
-        createTypedTransaction(AB_Transaction_TypeTransaction));
+    const QScopedPointer<Transaction> filled(createTypedTransaction(AB_Transaction_TypeTransaction));
 
     QCOMPARE(empty.toMap().keys(), filled->toMap().keys());
 }

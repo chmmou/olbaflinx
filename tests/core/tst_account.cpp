@@ -140,8 +140,7 @@ void AccountTest::toMapAndBackYieldsTheSameAccount()
  */
 void AccountTest::toMapAndBackKeepsTheReferenceAccounts()
 {
-    const auto account = Account::fromMap(
-        TestHelpers::createFakeAccountMapWithReferenceAccount());
+    const auto account = Account::fromMap(TestHelpers::createFakeAccountMapWithReferenceAccount());
     QVERIFY(account != nullptr);
 
     const auto referenceAccounts = account->referenceAccounts();

@@ -633,8 +633,8 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
     AB_Transaction_SetDate(abTransaction,
                            Private::fromDate(map.value(QStringLiteral("date")).toDate()).get());
     AB_Transaction_SetValutaDate(abTransaction,
-                                 Private::fromDate(
-                                     map.value(QStringLiteral("valuta_date")).toDate()).get());
+                                 Private::fromDate(map.value(QStringLiteral("valuta_date")).toDate())
+                                     .get());
 
     auto value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("value")).toDouble());
@@ -698,7 +698,8 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
         abTransaction, map.value(QStringLiteral("mandate_id")).toString().toLocal8Bit().constData());
     AB_Transaction_SetMandateDate(abTransaction,
                                   Private::fromDate(
-                                      map.value(QStringLiteral("mandate_date")).toDate()).get());
+                                      map.value(QStringLiteral("mandate_date")).toDate())
+                                      .get());
     AB_Transaction_SetMandateDebitorName(abTransaction,
                                          map.value(QStringLiteral("mandate_debitor_name"))
                                              .toString()
@@ -750,11 +751,14 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
     AB_Transaction_SetExecutionDay(abTransaction,
                                    map.value(QStringLiteral("execution_day")).toUInt());
     AB_Transaction_SetFirstDate(abTransaction,
-                                Private::fromDate(map.value(QStringLiteral("first_date")).toDate()).get());
+                                Private::fromDate(map.value(QStringLiteral("first_date")).toDate())
+                                    .get());
     AB_Transaction_SetLastDate(abTransaction,
-                               Private::fromDate(map.value(QStringLiteral("last_date")).toDate()).get());
+                               Private::fromDate(map.value(QStringLiteral("last_date")).toDate())
+                                   .get());
     AB_Transaction_SetNextDate(abTransaction,
-                               Private::fromDate(map.value(QStringLiteral("next_date")).toDate()).get());
+                               Private::fromDate(map.value(QStringLiteral("next_date")).toDate())
+                                   .get());
     AB_Transaction_SetUnitId(
         abTransaction, map.value(QStringLiteral("unit_id")).toString().toLocal8Bit().constData());
     AB_Transaction_SetUnitIdNameSpace(abTransaction,
@@ -782,7 +786,8 @@ std::shared_ptr<Transaction> Transaction::fromMap(const QMap<QString, QVariant> 
 
     AB_Transaction_SetUnitPriceDate(abTransaction,
                                     Private::fromDate(
-                                        map.value(QStringLiteral("unit_price_date")).toDate()).get());
+                                        map.value(QStringLiteral("unit_price_date")).toDate())
+                                        .get());
 
     value = AB_Value_new();
     AB_Value_SetValueFromDouble(value, map.value(QStringLiteral("commission_value")).toDouble());

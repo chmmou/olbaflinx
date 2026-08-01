@@ -30,8 +30,7 @@ public:
     // build an account and duplicate that one as well, so the structure it had
     // just created was never released.
     explicit Private(const AB_REFERENCE_ACCOUNT *refAccount)
-        : abRefAccount(refAccount ? AB_ReferenceAccount_dup(refAccount)
-                                  : AB_ReferenceAccount_new())
+        : abRefAccount(refAccount ? AB_ReferenceAccount_dup(refAccount) : AB_ReferenceAccount_new())
     {}
 
     ~Private()
@@ -127,9 +126,7 @@ ReferenceAccount *ReferenceAccount::create(const QMap<QString, QVariant> &map)
     const auto country = map.value(QStringLiteral("country")).toString().toUtf8();
     const auto bankCode = map.value(QStringLiteral("bank_code")).toString().toUtf8();
     const auto accountNumber = map.value(QStringLiteral("account_number")).toString().toUtf8();
-    const auto subAccountNumber = map.value(QStringLiteral("sub_account_number"))
-                                      .toString()
-                                      .toUtf8();
+    const auto subAccountNumber = map.value(QStringLiteral("sub_account_number")).toString().toUtf8();
 
     AB_ReferenceAccount_SetAccountType(abRefAccount,
                                        static_cast<uint8_t>(

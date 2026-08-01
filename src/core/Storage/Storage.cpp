@@ -92,8 +92,8 @@ const QRegularExpression &minPasswordPattern()
     //
     // The class is interpolated into both places of the pattern rather than
     // written out twice, so that the two cannot drift apart.
-    static const QString specialCharacters
-        = QStringLiteral("!\"§$%&/()=?´`{}\\[\\]\\\\ß@€~’*'+#_.:,;µöäüÖÄÜ<|>-");
+    static const QString specialCharacters = QStringLiteral(
+        "!\"§$%&/()=?´`{}\\[\\]\\\\ß@€~’*'+#_.:,;µöäüÖÄÜ<|>-");
 
     static const QRegularExpression pattern(
         QStringLiteral("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[%1])[A-Za-z\\d%1]{%2,%3}$")
@@ -279,24 +279,47 @@ const QMap<QString, QStringList> &expectedColumns()
 {
     static const QMap<QString, QStringList> columns = {
         {QStringLiteral("accounts"),
-         {QStringLiteral("id"), QStringLiteral("type"), QStringLiteral("unique_id"),
-          QStringLiteral("backend_name"), QStringLiteral("owner_name"),
-          QStringLiteral("account_name"), QStringLiteral("currency"), QStringLiteral("memo"),
-          QStringLiteral("iban"), QStringLiteral("bic"), QStringLiteral("country"),
-          QStringLiteral("bank_code"), QStringLiteral("bank_name"), QStringLiteral("branch_id"),
-          QStringLiteral("account_number"), QStringLiteral("sub_account_number"),
+         {QStringLiteral("id"),
+          QStringLiteral("type"),
+          QStringLiteral("unique_id"),
+          QStringLiteral("backend_name"),
+          QStringLiteral("owner_name"),
+          QStringLiteral("account_name"),
+          QStringLiteral("currency"),
+          QStringLiteral("memo"),
+          QStringLiteral("iban"),
+          QStringLiteral("bic"),
+          QStringLiteral("country"),
+          QStringLiteral("bank_code"),
+          QStringLiteral("bank_name"),
+          QStringLiteral("branch_id"),
+          QStringLiteral("account_number"),
+          QStringLiteral("sub_account_number"),
           QStringLiteral("balance")}},
         {QStringLiteral("balances"),
-         {QStringLiteral("id"), QStringLiteral("account_id"), QStringLiteral("date"),
-          QStringLiteral("value"), QStringLiteral("type"), QStringLiteral("currency")}},
+         {QStringLiteral("id"),
+          QStringLiteral("account_id"),
+          QStringLiteral("date"),
+          QStringLiteral("value"),
+          QStringLiteral("type"),
+          QStringLiteral("currency")}},
         {QStringLiteral("refaccounts"),
-         {QStringLiteral("id"), QStringLiteral("account_id"), QStringLiteral("account_type"),
-          QStringLiteral("owner_name"), QStringLiteral("owner_name2"),
-          QStringLiteral("account_name"), QStringLiteral("iban"), QStringLiteral("bic"),
-          QStringLiteral("country"), QStringLiteral("bank_code"),
-          QStringLiteral("account_number"), QStringLiteral("sub_account_number")}},
+         {QStringLiteral("id"),
+          QStringLiteral("account_id"),
+          QStringLiteral("account_type"),
+          QStringLiteral("owner_name"),
+          QStringLiteral("owner_name2"),
+          QStringLiteral("account_name"),
+          QStringLiteral("iban"),
+          QStringLiteral("bic"),
+          QStringLiteral("country"),
+          QStringLiteral("bank_code"),
+          QStringLiteral("account_number"),
+          QStringLiteral("sub_account_number")}},
         {QStringLiteral("migrations"),
-         {QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("migrated"),
+         {QStringLiteral("id"),
+          QStringLiteral("name"),
+          QStringLiteral("migrated"),
           QStringLiteral("created_at")}},
     };
 
@@ -653,8 +676,7 @@ public:
     Result<int> windowedRowCount(const QString &table, int offset, int limit)
     {
         if (!isKnownTable(table)) {
-            return Error(ErrorCode::InvalidInput,
-                         QStringLiteral("Unknown table %1").arg(table));
+            return Error(ErrorCode::InvalidInput, QStringLiteral("Unknown table %1").arg(table));
         }
 
         QSqlQuery query;
@@ -665,8 +687,7 @@ public:
         // The table name is interpolated because SQL knows no binding for an
         // identifier. It passed the list above. The window is bound.
         const auto statement
-            = QStringLiteral(
-                  "SELECT COUNT(*) FROM (SELECT 1 FROM %1 LIMIT :limit OFFSET :offset);")
+            = QStringLiteral("SELECT COUNT(*) FROM (SELECT 1 FROM %1 LIMIT :limit OFFSET :offset);")
                   .arg(table);
 
         if (!query.prepare(statement)) {
@@ -731,8 +752,8 @@ public:
 
         for (const auto &[key, value] : map.asKeyValueRange()) {
             if (!placeholders.contains(key)) {
-                qCWarning(lcStorage) << "property" << key << "of type" << type
-                                     << "has no column and is not stored";
+                qCWarning(lcStorage)
+                    << "property" << key << "of type" << type << "has no column and is not stored";
                 continue;
             }
 
@@ -817,9 +838,7 @@ public:
             {QStringLiteral("currency"), accountMap.value(QStringLiteral("currency"))},
         };
 
-        const auto result = insertRow(balanceInsertQuery(),
-                                      balanceMap,
-                                      QStringLiteral("Balance"));
+        const auto result = insertRow(balanceInsertQuery(), balanceMap, QStringLiteral("Balance"));
 
         return result.hasValue() ? Error() : result.error();
     }
@@ -973,9 +992,7 @@ public:
         // The replacement works on a copy. It used to mutate sqlStatements as a
         // side effect of building the second list.
         for (const auto &statement : sqlStatements) {
-            queries << QString(statement)
-                           .replace(QStringLiteral("#"), QStringLiteral(";"))
-                           .trimmed();
+            queries << QString(statement).replace(QStringLiteral("#"), QStringLiteral(";")).trimmed();
         }
 
         QSqlQuery query;
@@ -996,14 +1013,14 @@ public:
 
             if (!query.exec(sqlStatement)) {
                 if (!connection()->rollbackTransaction()) {
-                    qCWarning(lcStorage) << "could not roll back the failed schema statement:"
-                                         << lastErrorMessage();
+                    qCWarning(lcStorage)
+                        << "could not roll back the failed schema statement:" << lastErrorMessage();
                 }
 
                 // The statement itself stays out of the message, it goes to the
                 // log only. It carries no secret, but it is of no use to a user.
-                qCCritical(lcStorage) << "schema statement failed:" << sqlStatement
-                                      << query.lastError().text();
+                qCCritical(lcStorage)
+                    << "schema statement failed:" << sqlStatement << query.lastError().text();
 
                 return reportSchemaFailure(ErrorCode::DatabaseFailure,
                                            QStringLiteral("Could not create the schema of %1: %2")
@@ -1109,8 +1126,7 @@ Error Storage::changeKey(const QString &oldKey, const QString &newKey)
         d_ptr->setKey(oldKey);
 
         return Error(ErrorCode::DatabaseFailure,
-                     QStringLiteral("Could not change the key of %1")
-                         .arg(d_ptr->storageFileName()));
+                     QStringLiteral("Could not change the key of %1").arg(d_ptr->storageFileName()));
     }
 
     if (!d_ptr->isConnectionValid()) {
@@ -1200,9 +1216,7 @@ Error Storage::storeItem(const BankingItem *bankingItem)
     if (type == QLatin1StringView("Account")) {
         error = d_ptr->storeAccount(bankingItem->toMap());
     } else if (type == QLatin1StringView("Transaction")) {
-        const auto result = d_ptr->insertRow(transactionInsertQuery(),
-                                             bankingItem->toMap(),
-                                             type);
+        const auto result = d_ptr->insertRow(transactionInsertQuery(), bankingItem->toMap(), type);
         error = result.hasValue() ? Error() : result.error();
     } else {
         // Category and Contact have no table of their own yet. The branch used to
@@ -1284,8 +1298,7 @@ void Storage::receiveItems(Type type, int offset, int limit)
     // identifier. It comes from the switch above and has passed the list in
     // tableColumns, which answers empty for a name it does not know. The window
     // is bound.
-    const auto statement = QStringLiteral("SELECT * FROM %1 LIMIT :limit OFFSET :offset;")
-                               .arg(table);
+    const auto statement = QStringLiteral("SELECT * FROM %1 LIMIT :limit OFFSET :offset;").arg(table);
 
     if (!query.prepare(statement)) {
         reportError(ErrorCode::DatabaseFailure,
