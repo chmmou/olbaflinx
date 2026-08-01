@@ -11,213 +11,54 @@ permissions:
 
 env:
   # The offscreen plugin draws, the minimal one does not. The tests of the ui
-  # layer need the drawing operations.
+  # layer need the drawing operations. The image sets it too; named here as well
+  # so that a reader of this file knows what the run assumes.
   QT_QPA_PLATFORM: offscreen
   # The minimum the project declares. Building against it is what makes the
-  # declaration worth anything.
+  # declaration worth anything, and it is what picks the image below.
   QT_VERSION: 6.8.3
-  # Every version below is pinned so that a run stays reproducible and meets
-  # the minimums that src/CMakeLists.txt requires.
-  GWENHYWFAR_VERSION: 5.14.1
-  AQBANKING_VERSION: 6.9.2
-  LIBCHIPCARD_VERSION: 5.1.6
-  ADS_VERSION: 5.0.0
-  QSQLCIPHER_VERSION: v6.6-1
-  DEPS_PREFIX: /usr/local
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Everything the build needs comes from the image: Qt, gwenhywfar with its
+    # qt6 binding, aqbanking, libchipcard, the docking system and the SQLCipher
+    # sql driver. It is built by deps-image.yml, which is the only workflow with
+    # write access to the registry.
+    #
+    # This used to be nine steps that cloned five foreign repositories and
+    # cached the result. A run without a cache hit depended on three foreign
+    # servers being up, and every clone fetched a tag, which can be moved.
+    container:
+      image: ghcr.io/${{ github.repository }}/ci-ubuntu:qt6.8.3
+
     steps:
       - name: Check out the code
         uses: actions/checkout@v7.0.1
 
-      - name: Install system packages
-        run: |
-          sudo apt-get -qq update
-          sudo apt-get install -y -qq --no-install-recommends \
-            build-essential \
-            cmake \
-            ninja-build \
-            pkgconf \
-            libtool \
-            automake \
-            gettext \
-            git \
-            libgcrypt20-dev \
-            libgpg-error-dev \
-            libgnutls28-dev \
-            libxmlsec1-dev \
-            libpcsclite-dev \
-            libsqlite3-dev \
-            libgl1-mesa-dev \
-            mesa-common-dev \
-            libxkbcommon-x11-0 \
-            libxcb-icccm4 \
-            libxcb-image0 \
-            libxcb-keysyms1 \
-            libxcb-render-util0 \
-            libxcb-xinerama0 \
-            libxcb-cursor0
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4.3.1
-        timeout-minutes: 10
-        with:
-          version: ${{ env.QT_VERSION }}
-          target: desktop
-          host: linux
-          arch: linux_gcc_64
-          # The project links Concurrent, Core, Gui, LinguistTools, Sql, Svg
-          # and Widgets. All of them ship with the base package.
-          modules: ''
-          cache: true
-
-      - name: Cache the dependencies built from source
-        id: cache-deps
-        uses: actions/cache@v6.1.0
-        with:
-          path: ~/.olbaflinx-deps
-          key: >-
-            ${{ runner.os }}-deps-qt${{ env.QT_VERSION }}-gwen${{ env.GWENHYWFAR_VERSION }}-aqb${{ env.AQBANKING_VERSION }}-chip${{ env.LIBCHIPCARD_VERSION }}-ads${{ env.ADS_VERSION }}-cipher${{ env.QSQLCIPHER_VERSION }}
-
-      - name: Build the dependencies from source
-        if: steps.cache-deps.outputs.cache-hit != 'true'
+      - name: Check what the image brought
         run: |
           set -euxo pipefail
-          workdir="$(mktemp -d)"
-          cd "$workdir"
 
-          # Every ldconfig below is load bearing, not housekeeping. aqbanking
-          # generates its type sources with typemaker2, a program that ships
-          # with gwenhywfar and links against it. Without a refreshed cache the
-          # freshly installed library is invisible to it and the generation
-          # fails with "cannot open shared object file".
-          printf '%s\n%s\n' "$DEPS_PREFIX/lib" "$QT_ROOT_DIR/lib" \
-            | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
-          sudo ldconfig
+          # Asked here rather than left for the build. A Qt other than the one
+          # this run means to test would pass silently, and a missing sql driver
+          # would show up as fourteen failing targets with no hint at the cause.
+          test "$(qmake6 -query QT_VERSION)" = "$QT_VERSION"
+          test -f "$(qmake6 -query QT_INSTALL_PLUGINS)/sqldrivers/libqsqlcipher.so"
 
-          # gwenhywfar carries the Qt binding the project links against. Asking
-          # for the qt5 gui here is what left gwengui-qt6 unavailable before.
-          git clone --recursive https://git.aquamaniac.de/git/gwenhywfar
-          cd gwenhywfar
-          git checkout "$GWENHYWFAR_VERSION"
-          make -f Makefile.cvs
-          ./configure --prefix="$DEPS_PREFIX" --with-guis="cpp qt6"
+          pkg-config --modversion gwenhywfar gwengui-qt6 aqbanking libchipcard-client
 
-          # configure writes QT_LIBS as a list of absolute .so paths, and
-          # libtool silently discards every one of them whose directory it does
-          # not hold for a system path. The library then ends up with no Qt
-          # entry in its DT_NEEDED at all. Handing it the same libraries as
-          # -L and -l makes libtool keep them. Reproduced and verified in a
-          # container: three entries afterwards, Widgets, Gui and Core, which
-          # are the ones actually used.
-          qt_libs="$(grep -m1 '^QT_LIBS = ' gui/qt5/Makefile | sed 's/^QT_LIBS = //')"
-          qt_libs="-L$QT_ROOT_DIR/lib $(printf '%s' "$qt_libs" \
-            | sed -E 's#[^ ]*/lib([A-Za-z0-9_]+)\.so#-l\1#g')"
-
-          make --jobs=$(nproc) all QT_LIBS="$qt_libs"
-          # libtool relinks on install, so it needs the same value there.
-          sudo make install QT_LIBS="$qt_libs"
-          sudo ldconfig
-
-          # Fail here rather than fifteen minutes later at the link of the
-          # tests, where the same cause shows up as a pile of undefined
-          # references to QComboBox and friends.
-          if ! objdump -p "$DEPS_PREFIX/lib/libgwengui-qt6.so" | grep -q "NEEDED.*libQt6Widgets"; then
-            echo "::error::libgwengui-qt6 was linked without Qt Widgets."
-            echo "libtool discarded the Qt libraries. The rewrite of QT_LIBS"
-            echo "into -L and -l form did not take."
-            objdump -p "$DEPS_PREFIX/lib/libgwengui-qt6.so" | grep NEEDED
-            exit 1
-          fi
-          cd "$workdir"
-
-          git clone --recursive https://git.aquamaniac.de/git/libchipcard
-          cd libchipcard
-          git checkout "$LIBCHIPCARD_VERSION"
-          make -f Makefile.cvs
-          ./configure --prefix="$DEPS_PREFIX"
-          make --jobs=$(nproc) all
-          sudo make install
-          sudo ldconfig
-          cd "$workdir"
-
-          # libchipcard reads datadir before it defines it. pkg-config resolves
-          # pkgdatadir to an empty prefix without this.
-          sudo patch "$DEPS_PREFIX/lib/pkgconfig/libchipcard-client.pc" \
-            < "$GITHUB_WORKSPACE/res/ci/ubuntu/libchipcard-client.pc.patch"
-
-          git clone --recursive https://git.aquamaniac.de/git/aqbanking
-          cd aqbanking
-          git checkout "$AQBANKING_VERSION"
-          make -f Makefile.cvs
-          ./configure --prefix="$DEPS_PREFIX"
-          make typedefs
-          make typefiles
-          make --jobs=$(nproc) all
-          sudo make install
-          sudo ldconfig
-          cd "$workdir"
-
-          git clone https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
-          cd Qt-Advanced-Docking-System
-          git checkout "$ADS_VERSION"
-          cmake -G Ninja -B cbuild \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_INSTALL_PREFIX="$DEPS_PREFIX"
-          cmake --build cbuild
-          sudo cmake --install cbuild
-          sudo ldconfig
-          cd "$workdir"
-
-          # The plugin has to carry the driver name the project asks for, and
-          # its module version has to match the Qt it is built against.
-          git clone https://github.com/bAmpT/qsqlcipher-qt6-cmake.git
-          cd qsqlcipher-qt6-cmake
-          git checkout "$QSQLCIPHER_VERSION"
-          git submodule update --init --recursive
-          sed -i "s|^set(QT_REPO_MODULE_VERSION.*|set(QT_REPO_MODULE_VERSION \"${QT_VERSION}\")|" .cmake.conf
-          sed -i "s|OUTPUT_NAME qsqlitecipher|OUTPUT_NAME qsqlcipher|" qsqlcipher/CMakeLists.txt
-          cmake -G Ninja -B cbuild \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DQT_GENERATE_SBOM=OFF
-          cmake --build cbuild
-          sudo cmake --install cbuild
-
-          # The sql driver installs into the Qt tree, everything else into
-          # DEPS_PREFIX. Both have to survive into the next run.
-          mkdir -p ~/.olbaflinx-deps
-          sudo tar -C "$DEPS_PREFIX" -cf ~/.olbaflinx-deps/prefix.tar \
-            bin lib include share
-          sudo tar -C "$QT_ROOT_DIR" -cf ~/.olbaflinx-deps/qt-plugins.tar \
-            plugins/sqldrivers
-          sudo chown "$USER" ~/.olbaflinx-deps/prefix.tar ~/.olbaflinx-deps/qt-plugins.tar
-
-      - name: Restore the cached dependencies
-        if: steps.cache-deps.outputs.cache-hit == 'true'
-        run: |
-          set -euxo pipefail
-          sudo tar -C "$DEPS_PREFIX" -xf ~/.olbaflinx-deps/prefix.tar
-          sudo tar -C "$QT_ROOT_DIR" -xf ~/.olbaflinx-deps/qt-plugins.tar
-
-      - name: Register the dependencies
-        run: |
-          printf '%s\n%s\n' "$DEPS_PREFIX/lib" "$QT_ROOT_DIR/lib" \
-            | sudo tee /etc/ld.so.conf.d/olbaflinx-deps.conf
-          sudo ldconfig
-          echo "$DEPS_PREFIX/bin" >> "$GITHUB_PATH"
-          echo "PKG_CONFIG_PATH=$DEPS_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=$DEPS_PREFIX:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
+          # Passed to the configure step below. install-qt-action used to set it.
+          echo "QT_ROOT_DIR=$(qmake6 -query QT_INSTALL_PREFIX)" >> "$GITHUB_ENV"
 
       - name: Configure
-        # libgwengui-qt6 links against Qt Widgets, so every consumer of the
-        # core drags that in. The linker resolves such a transitive dependency
-        # at link time and does not consult rpath for it, so the Qt library
-        # directory has to be named on its own. On a developer machine Qt and
-        # gwenhywfar both sit in a default search path, which is why this only
-        # surfaces here.
+        # The ui layer links libgwengui-qt6, which carries Qt Widgets in its own
+        # DT_NEEDED. The linker resolves such a transitive dependency at link
+        # time and does not consult rpath for it, so the Qt library directory has
+        # to be named on its own. The core no longer needs this; it stopped
+        # linking that library. Whether the ui tests still do is what a run
+        # without the flag would answer.
         run: cmake --preset debug -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,$QT_ROOT_DIR/lib"
 
       - name: Build

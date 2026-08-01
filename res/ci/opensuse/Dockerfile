@@ -59,10 +59,15 @@ ENV LC_TIME=en_US.UTF-8
 
 ENV QT_QPA_PLATFORM="offscreen"
 
+# The Qt this image carries. Tumbleweed ships it, so the value follows the
+# package rather than choosing it, and requirements.sh needs it to build the sql
+# driver against the same module version.
+ARG QT_VERSION=6.9.1
+ENV QT_VERSION=${QT_VERSION}
+
 WORKDIR /workspace
 
 COPY ./libchipcard-client.pc.patch .
-COPY ./qsqlcipher.patch .
 COPY ./requirements.sh .
 
 RUN ./requirements.sh
@@ -70,7 +75,6 @@ RUN ./requirements.sh
 RUN patch -p1 /usr/local/lib/pkgconfig/libchipcard-client.pc < ./libchipcard-client.pc.patch
 
 RUN rm -rf ./libchipcard-client.pc.patch
-RUN rm -rf ./qsqlcipher.patch
 RUN rm -rf ./requirements.sh
 
 CMD ["/bin/bash"]
