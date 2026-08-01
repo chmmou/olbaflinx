@@ -100,7 +100,9 @@ private:
         auto value = AB_Value_new();
         AB_Value_SetValueFromDouble(value, 42.5);
         AB_Value_SetCurrency(value, "EUR");
-        AB_Transaction_SetValue(abTransaction, AB_Value_dup(value));
+        // The setter duplicates what it is given, so the extra dup this used to
+        // pass was never released.
+        AB_Transaction_SetValue(abTransaction, value);
         AB_Value_free(value);
 
         auto transaction = std::make_shared<Transaction>(abTransaction);
