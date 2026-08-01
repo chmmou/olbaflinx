@@ -65,6 +65,7 @@ private Q_SLOTS:
     void toStringNamesTheAccount();
     void toMapCarriesEveryFieldOfTheAccount();
     void itemTypeIsTheNameOfTheClass();
+    void twoHoldersReleaseTheEntryOnce();
 };
 
 void ReferenceAccountTest::everyFieldSurvivesTheConstructor()
@@ -178,6 +179,27 @@ void ReferenceAccountTest::itemTypeIsTheNameOfTheClass()
     const ReferenceAccount referenceAccount;
 
     QCOMPARE(referenceAccount.itemType(), QStringLiteral("ReferenceAccount"));
+}
+
+/**
+ * An entry is handed to more than one holder: an Account keeps it, a property map
+ * carries it, the storage writes it. Whoever goes last releases it, and the count
+ * is what says who that is. With raw pointers the answer depended on which caller
+ * remembered to delete.
+ */
+void ReferenceAccountTest::twoHoldersReleaseTheEntryOnce()
+{
+    const auto first = createFilledReferenceAccount();
+    QCOMPARE(first.use_count(), 1);
+
+    {
+        const auto second = first;
+        QCOMPARE(first.use_count(), 2);
+        QCOMPARE(second->iban(), QStringLiteral("DE02120300000000202051"));
+    }
+
+    QCOMPARE(first.use_count(), 1);
+    QCOMPARE(first->iban(), QStringLiteral("DE02120300000000202051"));
 }
 
 } // namespace olbaflinx::core::banking::account::tests

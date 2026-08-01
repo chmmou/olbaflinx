@@ -191,18 +191,18 @@ ReferenceAccounts Account::referenceAccounts() const
     // The getter hands out the list the account spec holds, not a copy of it.
     // Releasing it here left the spec with a dangling list, and its destructor
     // then walked into an assertion inside gwenhywfar. Ownership of the list
-    // stays with the spec; only the wrappers below belong to the caller, and
+    // stays with the spec; the wrappers below are shared with the caller, and
     // each of them duplicates the entry it was built from.
     const auto refAccList = AB_AccountSpec_GetRefAccountList(d_ptr->abAccountSpec);
     if (refAccList == nullptr || AB_ReferenceAccount_List_GetCount(refAccList) == 0) {
         return {};
     }
 
-    auto refAccounts = QList<ReferenceAccount *>();
+    auto refAccounts = ReferenceAccounts();
     auto refAcc = AB_ReferenceAccount_List_First(refAccList);
 
     while (refAcc) {
-        refAccounts.append(new ReferenceAccount(refAcc));
+        refAccounts.append(std::make_shared<ReferenceAccount>(refAcc));
         refAcc = AB_ReferenceAccount_List_Next(refAcc);
     }
 
@@ -262,7 +262,7 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
     AB_AccountSpec_SetAccountNumber(accountSpec, accountNumber.toLocal8Bit().constData());
     AB_AccountSpec_SetSubAccountNumber(accountSpec, subAccountNumber.toLocal8Bit().constData());
 
-    for (const auto refAccount : std::as_const(refAccounts)) {
+    for (const auto &refAccount : std::as_const(refAccounts)) {
         auto refAccMap = refAccount->toMap();
 
         const auto refAccIban = refAccMap[QStringLiteral("iban")].toString();
@@ -299,9 +299,6 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
         abRefAccount = nullptr;
         refAccMap.clear();
     }
-
-    qDeleteAll(refAccounts);
-    refAccounts.clear();
 
     auto account = std::make_shared<Account>(accountSpec, balance);
 

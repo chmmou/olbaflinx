@@ -62,12 +62,12 @@ public:
     }
 
     /**
-     * A reference account with every field set. Ownership passes to the caller,
-     * which for a property map means to Account::fromMap.
+     * A reference account with every field set. The entry is shared; nobody has
+     * to release it.
      */
-    static ReferenceAccount *createFakeReferenceAccount()
+    static std::shared_ptr<ReferenceAccount> createFakeReferenceAccount()
     {
-        return ReferenceAccount::create({
+        return ReferenceAccount::fromMap({
             {QStringLiteral("account_type"), 1},
             {QStringLiteral("owner_name"), QStringLiteral("Erika Müller-Groß")},
             {QStringLiteral("owner_name2"), QStringLiteral("Max Mustermann")},

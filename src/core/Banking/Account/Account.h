@@ -28,11 +28,19 @@
 #include <QtCore/QMetaType>
 #include <QtCore/QtGlobal>
 
+#include <memory>
+
 using namespace olbaflinx::core::banking;
 
 namespace olbaflinx::core::banking::account {
 
-typedef QList<ReferenceAccount *> ReferenceAccounts;
+/**
+ * The entries are shared, not owned by whoever asked for the list. A raw pointer
+ * put the release on the caller, and there was no way to see that from the
+ * signature: the same list also travelled through QVariant, where nobody was
+ * left to do it.
+ */
+using ReferenceAccounts = QList<std::shared_ptr<ReferenceAccount>>;
 
 typedef AB_TRANSACTION_LIMITS TransactionLimits;
 typedef AB_TRANSACTION_LIMITS_LIST TransactionLimitsList;
@@ -42,7 +50,8 @@ typedef AB_TRANSACTION_COMMAND TransactionCommand;
  * @brief An account reported by AqBanking.
  *
  * Ownership: the creator owns the instance. Accounts read from the database are
- * created through fromMap and handed on as a BankingItemPtr.
+ * created through fromMap and handed on as a BankingItemPtr. The reference
+ * accounts reported by referenceAccounts are shared with the caller.
  */
 class OLBAFLINX_CORE_EXPORT Account : public BankingItem
 {
@@ -93,3 +102,8 @@ private:
 } // namespace olbaflinx::core::banking::account
 
 Q_DECLARE_METATYPE(olbaflinx::core::banking::account::Account *)
+
+// The list travels through QVariant, in Account::toMap and out again in
+// Account::fromMap. Without the declaration canConvert answers false and the
+// reference accounts of an account are silently dropped on the way.
+Q_DECLARE_METATYPE(olbaflinx::core::banking::account::ReferenceAccounts)
