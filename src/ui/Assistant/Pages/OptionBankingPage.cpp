@@ -21,6 +21,12 @@
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
 
+// The Qt implementation of the gwenhywfar user interface. The header keeps its
+// qt5 name across the version change; the library built from it for Qt 6 is
+// libgwengui-qt6. It belongs here and not in the core, which must stay usable
+// without a display.
+#include <gwen-gui-qt5/qt5_gui.hpp>
+
 #include "ui_OptionBankingPage.h"
 
 using namespace olbaflinx::core;
@@ -48,6 +54,7 @@ class OptionBankingPage::Private
 public:
     explicit Private(OptionBankingPage *bankingPage)
         : isComplete(false)
+        , qtGui(nullptr)
         , banking(nullptr)
         , q_ptr(bankingPage)
         , ui(new Ui::UiSetupAssistantOptionBankingPage)
@@ -55,7 +62,20 @@ public:
         ui->setupUi(q_ptr);
     }
 
-    ~Private() { delete ui; }
+    ~Private()
+    {
+        // The order matters and is the reason the backend carries no Qt parent.
+        // Banking still reaches into the interface while it shuts down, in
+        // AB_Gui_Unextend. Left to the parent it would be destroyed after this
+        // function, and the interface would already be gone by then.
+        delete banking;
+        banking = nullptr;
+
+        delete qtGui;
+        qtGui = nullptr;
+
+        delete ui;
+    }
 
     void createBanking(const ApplicationInfo &applicationInfo)
     {
@@ -63,12 +83,15 @@ public:
             return;
         }
 
-        // The page is the parent so that it releases the backend.
-        banking = new Banking(applicationInfo, q_ptr);
+        // The interface is built here and stays here. The core is handed the C
+        // side of it and neither frees it nor outlives it.
+        qtGui = new QT5_Gui();
+        banking = new Banking(applicationInfo);
 
         if (const auto error = banking->initialize(applicationInfo.name,
                                                    applicationInfo.version,
-                                                   FinTsRegistrationKey);
+                                                   FinTsRegistrationKey,
+                                                   qtGui->getCInterface());
             error.isError()) {
             qCWarning(lcUi) << "could not initialize the banking backend:" << error.message();
         }
@@ -91,6 +114,7 @@ public:
     }
 
     bool isComplete;
+    QT5_Gui *qtGui;
     Banking *banking;
     OptionBankingPage *q_ptr;
     Ui::UiSetupAssistantOptionBankingPage *ui;
