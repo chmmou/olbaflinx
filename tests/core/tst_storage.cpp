@@ -79,6 +79,9 @@ private Q_SLOTS:
     void storeItemPersistsAccountAndEmitsFinished();
     void storeItemKeepsBalanceAndReferenceAccounts();
     void initializeRejectsAFileFromANewerVersion();
+    void receiveItemsReturnsBeforeTheItemsArrive();
+    void receiveItemsSignalsArriveInOrderAndInTheCallingThread();
+    void receiveItemsRefusesASecondRunWhileOneIsGoing();
 };
 
 void StorageTest::initTestCase()
@@ -256,6 +259,7 @@ void StorageTest::storeItemPersistsAccountAndEmitsFinished()
 
     storage.receiveItems(Storage::StorageAccount);
 
+    QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
     QCOMPARE(finishedSpy.count(), 3);
 
@@ -296,6 +300,7 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
 
     storage.receiveItems(Storage::StorageAccount);
 
+    QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
 
     const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
@@ -357,6 +362,140 @@ void StorageTest::initializeRejectsAFileFromANewerVersion()
 
     QVERIFY(error.isError());
     QCOMPARE(error.code(), ErrorCode::SchemaMismatch);
+
+    storage.close();
+}
+
+/**
+ * The read used to hold the calling thread for as long as it took. A window of a
+ * thousand accounts costs a second query per account for its balance and its
+ * reference accounts, and the interface was frozen for all of it.
+ *
+ * The call now returns before the result is there. Nothing has arrived at the
+ * moment it comes back; that is the whole point, and it is what this function
+ * pins down.
+ */
+void StorageTest::receiveItemsReturnsBeforeTheItemsArrive()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    for (int i = 0; i < 5; ++i) {
+        const auto account = TestHelpers::createFakeAccount();
+        QVERIFY(!storage.storeItem(account.get()).isError());
+    }
+
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    const int finishedBefore = finishedSpy.count();
+
+    storage.receiveItems(Storage::StorageAccount);
+
+    // Straight after the call. No event has been processed yet, so nothing can
+    // have been delivered even if the worker were already done.
+    QCOMPARE(itemsSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), finishedBefore);
+
+    QVERIFY(itemsSpy.wait());
+    QCOMPARE(itemsSpy.count(), 1);
+
+    storage.close();
+}
+
+/**
+ * The signals belong to the thread that called, not to the one that read. A
+ * receiver connected to them may touch the interface, which is only allowed
+ * there. The order matters too: whoever waits for finished has to be able to
+ * assume that the items have already been handed over.
+ */
+void StorageTest::receiveItemsSignalsArriveInOrderAndInTheCallingThread()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    for (int i = 0; i < 3; ++i) {
+        const auto account = TestHelpers::createFakeAccount();
+        QVERIFY(!storage.storeItem(account.get()).isError());
+    }
+
+    QThread *const callingThread = QThread::currentThread();
+    QStringList order;
+    QList<QThread *> threads;
+
+    connect(&storage, &Storage::progressChanged, &storage, [&](int) {
+        if (order.isEmpty() || order.last() != QStringLiteral("progress")) {
+            order << QStringLiteral("progress");
+        }
+        threads << QThread::currentThread();
+    });
+
+    connect(&storage, &Storage::itemsReceived, &storage, [&](const BankingItems &) {
+        order << QStringLiteral("items");
+        threads << QThread::currentThread();
+    });
+
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    connect(&storage, &Storage::finished, &storage, [&]() {
+        order << QStringLiteral("finished");
+        threads << QThread::currentThread();
+    });
+
+    storage.receiveItems(Storage::StorageAccount);
+
+    QVERIFY(finishedSpy.wait());
+
+    QCOMPARE(order,
+             QStringList{} << QStringLiteral("progress") << QStringLiteral("items")
+                           << QStringLiteral("finished"));
+
+    QVERIFY(!threads.isEmpty());
+    for (QThread *const thread : std::as_const(threads)) {
+        QCOMPARE(thread, callingThread);
+    }
+
+    storage.close();
+}
+
+/**
+ * The failure case for the second run. Two readers on one storage are not
+ * provided for, and the watcher of the first would be lost. Refused with an
+ * error rather than left to chance.
+ */
+void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    for (int i = 0; i < 5; ++i) {
+        const auto account = TestHelpers::createFakeAccount();
+        QVERIFY(!storage.storeItem(account.get()).isError());
+    }
+
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+
+    storage.receiveItems(Storage::StorageAccount);
+
+    // The first run is still going, this thread has not processed an event since
+    // it started. The refusal comes back in this thread, before any waiting.
+    storage.receiveItems(Storage::StorageAccount);
+
+    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+
+    // The first run is unaffected and still delivers.
+    QVERIFY(itemsSpy.wait());
+    QCOMPARE(itemsSpy.count(), 1);
 
     storage.close();
 }

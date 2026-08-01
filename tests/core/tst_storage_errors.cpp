@@ -226,6 +226,8 @@ void StorageErrorTest::errorOccurredCarriesMatchingCode()
     QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
     QSignalSpy finishedSpy(&storage, &Storage::finished);
 
+    // A type without a table of its own is answered before anything is started,
+    // in this thread, so there is nothing to wait for here.
     storage.receiveItems(Storage::StorageContacts);
 
     QCOMPARE(errorSpy.count(), 1);
@@ -235,9 +237,11 @@ void StorageErrorTest::errorOccurredCarriesMatchingCode()
     QCOMPARE(arguments.at(0).value<ErrorCode>(), ErrorCode::NotImplemented);
     QVERIFY(!arguments.at(1).toString().isEmpty());
 
-    // An empty table is not the same cause and has to carry its own code.
+    // An empty table is not the same cause and has to carry its own code. This
+    // one is found by the reading thread, so the signal is waited for.
     storage.receiveItems(Storage::StorageAccount);
 
+    QVERIFY(errorSpy.wait());
     QCOMPARE(errorSpy.count(), 1);
     QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::NotFound);
 
@@ -266,6 +270,7 @@ void StorageErrorTest::receiveItemsEmitsProgressWithinRange()
 
     storage.receiveItems(Storage::StorageAccount);
 
+    QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
     QCOMPARE(progressSpy.count(), 3);
 
@@ -301,6 +306,7 @@ void StorageErrorTest::receiveItemsFillsTransactionFields()
 
     storage.receiveItems(Storage::StorageTransaction);
 
+    QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
 
     const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
