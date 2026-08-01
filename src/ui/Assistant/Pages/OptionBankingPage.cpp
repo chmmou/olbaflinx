@@ -33,12 +33,11 @@ namespace {
  * bank servers; it authenticates no user and grants access to no account, so it
  * is not a secret and losing it costs nothing but the identification.
  *
- * Deviation from QT-SEC-040, recorded here per QT-MAINT-012: that rule forbids
- * keys in the source without qualification. It is kept in the source on purpose,
- * because moving a value that identifies the build into a build time variable
- * would hide it without protecting anything. The value has been public in this
- * repository since it was first committed; taking it out would not make it
- * secret again.
+ * A key in the source is normally forbidden without qualification. This one is
+ * kept there on purpose, because moving a value that identifies the build into
+ * a build time variable would hide it without protecting anything. The value
+ * has been public in this repository since it was first committed; taking it
+ * out would not make it secret again.
  */
 constexpr auto FinTsRegistrationKey = QLatin1StringView("3E1B97FF72A24783EC2215B12");
 

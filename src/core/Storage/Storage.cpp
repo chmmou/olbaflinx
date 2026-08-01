@@ -56,14 +56,14 @@ namespace {
  * The store is attacked offline, its file can be copied away. The pass phrase is
  * the only thing left in the way of whoever holds the copy, so the lower bound
  * sits above what a password prompt usually asks for. The upper bound exists
- * because an unbounded length is an unchecked size, see QT-SEC-004.
+ * because an unbounded length is an unchecked size.
  */
 constexpr int MinPasswordLength = 12;
 constexpr int MaxPasswordLength = 128;
 
 /**
  * The widest window a single read may open. Without a bound a caller could ask
- * for INT_MAX rows and hold a whole table in memory at once. QT-SEC-004.
+ * for INT_MAX rows and hold a whole table in memory at once.
  */
 constexpr int MaxItemsPerQuery = 1000;
 
@@ -109,11 +109,11 @@ const QRegularExpression &minPasswordPattern()
  * knows exactly one special character, the single quote, and it is escaped by
  * doubling it. Everything else passes through as UTF-8, umlauts included.
  *
- * Deviation from QT-SEC-050, recorded here per QT-MAINT-012: SQLite accepts no
- * bound parameter in a PRAGMA. Verified against Qt 6.11.1 with SQLCipher 4.5.2,
- * where prepare("PRAGMA key = :key") fails with `near ":key": syntax error`. The
- * rule is met in substance, because the one character that could end the literal
- * early is escaped here and no other can.
+ * Interpolating into a statement is normally forbidden. It is unavoidable here:
+ * SQLite accepts no bound parameter in a PRAGMA. Verified against Qt 6.11.1 with
+ * SQLCipher 4.5.2, where prepare("PRAGMA key = :key") fails with
+ * `near ":key": syntax error`. The intent behind the ban is met, because the one
+ * character that could end the literal early is escaped here and no other can.
  *
  * This replaces a hand written escape routine that read every character through
  * QChar::toLatin1. That call answers with a signed char on this platform, so its
@@ -131,7 +131,7 @@ QString keyLiteral(const QString &key)
 
 /**
  * The tables the storage reads from. A table name cannot be bound, so a name is
- * checked against this list before it reaches a statement. QT-SEC-051.
+ * checked against this list before it reaches a statement.
  */
 bool isKnownTable(const QString &table)
 {
@@ -168,7 +168,7 @@ constexpr auto SchemaVersionQuery = QLatin1StringView(
 /**
  * prepare takes a QString, so a view would be converted at every call. These
  * statements run once per stored item and the one for a transaction is about
- * 2400 characters long. QT-CPP-051.
+ * 2400 characters long.
  */
 const QString &accountInsertQuery()
 {
@@ -1251,7 +1251,7 @@ void Storage::receiveItems(Type type, int offset, int limit)
     };
 
     // The window used to travel into the statement unchecked. A negative offset
-    // or a limit of INT_MAX is not a query anyone meant to run. QT-SEC-004.
+    // or a limit of INT_MAX is not a query anyone meant to run.
     if (limit < 1 || limit > MaxItemsPerQuery || offset < 0) {
         reportError(ErrorCode::InvalidInput,
                     QStringLiteral("Invalid window: limit=%1 offset=%2").arg(limit).arg(offset));

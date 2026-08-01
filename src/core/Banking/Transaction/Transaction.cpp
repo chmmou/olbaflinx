@@ -31,7 +31,7 @@ namespace {
 
 /**
  * The C structures of the backend, held so that every path out of a function
- * releases them. QT-CPP-071.
+ * releases them.
  */
 using GwenDatePtr = std::unique_ptr<GWEN_DATE, decltype(&GWEN_Date_free)>;
 using GwenBufferPtr = std::unique_ptr<GWEN_BUFFER, decltype(&GWEN_Buffer_free)>;

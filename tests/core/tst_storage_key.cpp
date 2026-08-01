@@ -393,8 +393,8 @@ void StorageKeyTest::passwordPolicyAccepts()
  * every capital letter, so the lookahead for a special character matched on those
  * alone and asked for nothing beyond the two lookaheads before it.
  *
- * An unbounded length is an unchecked size, see QT-SEC-004. There used to be no
- * upper bound at all.
+ * An unbounded length is an unchecked size. There used to be no upper bound at
+ * all.
  */
 void StorageKeyTest::passwordPolicyRejects_data()
 {
