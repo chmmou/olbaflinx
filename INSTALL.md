@@ -10,9 +10,9 @@
 - [Qt SQLite Plugin für SQLCipher](https://github.com/bAmpT/qsqlcipher-qt6-cmake/tree/6.6-cmake) >= 6.6-cmake branch
 - [Qt Advanced Docking System](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System) >= 5.0.0
 ---
-- [gwenhywfar](https://www.aquamaniac.de/rdm/projects/gwenhywfar/files) >= 5.12.0, gebaut mit `--with-guis="cpp qt6"`
-- [aqbanking](https://www.aquamaniac.de/rdm/projects/aqbanking/files) >= 6.6.0 (für neue FinTS URLs und vor allem wegen behobene Fehler)
-- [libchipcard](https://www.aquamaniac.de/rdm/projects/libchipcard/files) >= 5.1 (für Kartenleser-Unterstützung)
+- [gwenhywfar](https://www.aquamaniac.de/rdm/projects/gwenhywfar/files) >= 5.14.1, gebaut mit `--with-guis="cpp qt6"`
+- [aqbanking](https://www.aquamaniac.de/rdm/projects/aqbanking/files) >= 6.9.2 (für neue FinTS URLs und vor allem wegen behobene Fehler)
+- [libchipcard](https://www.aquamaniac.de/rdm/projects/libchipcard/files) >= 5.1.6 (für Kartenleser-Unterstützung)
 ---
 
 Ein C++20-fähiger Compiler wird vorausgesetzt. Die Konfiguration bricht ab, wenn ein installiertes Qt unterhalb von 6.8 gefunden wird.

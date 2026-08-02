@@ -9,10 +9,10 @@ Sie ist keine Rechtsberatung. Die SPDX-Bezeichner geben wieder, was die Lizenzda
 | Komponente | Mindestversion im Build | Verwendete Version | SPDX | Bezugsquelle |
 |---|---|---|---|---|
 | Qt 6 | 6.8 | 6.11.1 | `LGPL-3.0-only` | https://www.qt.io/ |
-| aqbanking | 6.6 | 6.9.2 | `GPL-2.0-only OR GPL-3.0-only` | https://www.aquamaniac.de/rdm/projects/aqbanking |
-| gwenhywfar | 5.12 | 5.14.1 | `LGPL-2.1-or-later` | https://www.aquamaniac.de/rdm/projects/gwenhywfar |
-| gwengui-qt6 | 5.12 | 5.14.1 | `LGPL-2.1-or-later` | Teil von gwenhywfar |
-| libchipcard | 5.1 | 5.1.6 | `LGPL-2.1-only` | https://www.aquamaniac.de/rdm/projects/libchipcard |
+| aqbanking | 6.9.2 | 6.9.2 | `GPL-2.0-only OR GPL-3.0-only` | https://www.aquamaniac.de/rdm/projects/aqbanking |
+| gwenhywfar | 5.14.1 | 5.14.1 | `LGPL-2.1-or-later` | https://www.aquamaniac.de/rdm/projects/gwenhywfar |
+| gwengui-qt6 | 5.14.1 | 5.14.1 | `LGPL-2.1-or-later` | Teil von gwenhywfar |
+| libchipcard | 5.1.6 | 5.1.6 | `LGPL-2.1-only` | https://www.aquamaniac.de/rdm/projects/libchipcard |
 | qsqlcipher-qt6-cmake | keine | nicht feststellbar | `LGPL-3.0-only` | https://github.com/bAmpT/qsqlcipher-qt6-cmake |
 | Qt Advanced Docking System | keine | 5.0.0 | `LGPL-2.1-or-later` | https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System |
 
