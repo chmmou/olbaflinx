@@ -158,7 +158,7 @@ bool isKnownTable(const QString &table)
  * newer build and is refused; a file below it is brought up by setupTables,
  * whose statements all create what is missing rather than what is new.
  */
-constexpr int CurrentSchemaVersion = 2;
+constexpr int CurrentSchemaVersion = 3;
 
 /**
  * The number a migration name carries in its first four characters. Names
@@ -284,6 +284,12 @@ const QMap<QString, QStringList> &expectedColumns()
         {QStringLiteral("accounts"),
          {QStringLiteral("id"),
           QStringLiteral("type"),
+          // Version 3 added both. They only come into being with the table
+          // itself, so a file written before that carries neither, and naming
+          // them here is what turns that into a message the user can act on
+          // instead of a failing query later.
+          QStringLiteral("active"),
+          QStringLiteral("changed_at"),
           QStringLiteral("unique_id"),
           QStringLiteral("backend_name"),
           QStringLiteral("owner_name"),

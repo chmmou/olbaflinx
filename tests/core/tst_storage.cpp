@@ -64,6 +64,40 @@ private:
         return workingDirectory->filePath(QStringLiteral("storage.obfx"));
     }
 
+    /**
+     * The schema version a file carries, read the way Storage reads it: the
+     * number in the first four characters of the highest applied migration.
+     * Returns -1 when the file cannot be opened or holds no migrations.
+     */
+    static int schemaVersionOf(const QString &file)
+    {
+        int version = -1;
+
+        {
+            auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
+                                                      QStringLiteral("StorageTestVersion"));
+            database.setDatabaseName(file);
+
+            if (database.open()) {
+                auto key = password();
+                key.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+                QSqlQuery query(database);
+                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(key))
+                    && query.exec(QStringLiteral("SELECT COALESCE(MAX(CAST(substr(name, 1, 4) AS "
+                                                 "INTEGER)), 0) FROM migrations WHERE migrated = 1;"))
+                    && query.next()) {
+                    version = query.value(0).toInt();
+                }
+
+                database.close();
+            }
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("StorageTestVersion"));
+
+        return version;
+    }
+
 private Q_SLOTS:
     void initTestCase();
     void init();
@@ -73,6 +107,7 @@ private Q_SLOTS:
     void initializeRejectsEmptyStorageFile();
     void initializeRejectsEmptyPassword();
     void initializeCreatesUsableStorage();
+    void initializeRunsTwiceAndLeavesTheSchemaAtItsVersion();
     void changeKeyMakesOldPasswordInvalid();
     void settingReturnsTheDefaultForAnUnknownKey();
     void storeSettingPersistsValueUnderGroup();
@@ -168,6 +203,33 @@ void StorageTest::initializeCreatesUsableStorage()
     storage.close();
 
     QVERIFY(QFile::exists(file));
+}
+
+/**
+ * setupTables runs the whole schema resource again on every version step, so
+ * every statement in it has to do nothing the second time round. Opening the
+ * same file twice is what puts that to the test: the second open replays the
+ * statements against a file that already carries what they create.
+ *
+ * The version is read afterwards because a statement that fails silently would
+ * leave the file behind at its old number.
+ */
+void StorageTest::initializeRunsTwiceAndLeavesTheSchemaAtItsVersion()
+{
+    const auto file = storageFile();
+
+    for (int run = 0; run < 2; ++run) {
+        Storage storage(applicationInfo());
+        QVERIFY(!storage.setKey(password()).isError());
+        storage.setStorageFile(file);
+
+        QVERIFY(!storage.initialize(true).isError());
+        QVERIFY(storage.isValid());
+
+        storage.close();
+    }
+
+    QCOMPARE(schemaVersionOf(file), 3);
 }
 
 void StorageTest::changeKeyMakesOldPasswordInvalid()
