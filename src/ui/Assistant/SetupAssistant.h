@@ -17,6 +17,7 @@
 #pragma once
 
 #include "core/ApplicationInfo.h"
+#include "core/Banking/BankingItem.h"
 
 #include <QtWidgets/QWizard>
 
@@ -42,6 +43,30 @@ public:
                             QWidget *parent = nullptr,
                             Qt::WindowFlags flags = Qt::WindowFlags());
     ~SetupAssistant() override;
+
+    /**
+     * @brief The accounts the user chose, as objects.
+     *
+     * Empty when the wizard was cancelled. Ownership is shared with the caller,
+     * the same way itemsReceived hands over what it reports.
+     *
+     * OptionBankingPage::selectedAccountIds stays where it is. It answers the
+     * question the wizard pages ask; this one answers the question the caller
+     * asks.
+     */
+    [[nodiscard]] olbaflinx::core::banking::BankingItems selectedAccounts() const;
+
+    /**
+     * @brief Every account the wizard put up for choice.
+     *
+     * Whoever stores the result needs both lists. An account in this one and not
+     * in the chosen one was turned down; one in neither was never on offer, and
+     * nothing about it may change.
+     *
+     * Empty when the wizard was cancelled, so that a cancelled run changes
+     * nothing at all.
+     */
+    [[nodiscard]] olbaflinx::core::banking::BankingItems offeredAccounts() const;
 
 private:
     class Private;
