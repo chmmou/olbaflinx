@@ -65,17 +65,20 @@ private:
     }
 
     /**
-     * The schema version a file carries, read the way Storage reads it: the
-     * number in the first four characters of the highest applied migration.
-     * Returns -1 when the file cannot be opened or holds no migrations.
+     * Runs one statement against the store, past Storage, and hands back the
+     * first value of the first row. An invalid QVariant means the file would not
+     * open, the statement failed, or it returned no row.
+     *
+     * The tests use it for what Storage offers no way to ask: what a column
+     * actually holds after a write, and how many rows a table carries.
      */
-    static int schemaVersionOf(const QString &file)
+    static QVariant scalarOf(const QString &file, const QString &statement)
     {
-        int version = -1;
+        auto value = QVariant();
 
         {
             auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
-                                                      QStringLiteral("StorageTestVersion"));
+                                                      QStringLiteral("StorageTestDirect"));
             database.setDatabaseName(file);
 
             if (database.open()) {
@@ -83,19 +86,29 @@ private:
                 key.replace(QLatin1Char('\''), QLatin1StringView("''"));
 
                 QSqlQuery query(database);
-                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(key))
-                    && query.exec(QStringLiteral("SELECT COALESCE(MAX(CAST(substr(name, 1, 4) AS "
-                                                 "INTEGER)), 0) FROM migrations WHERE migrated = 1;"))
+                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(key)) && query.exec(statement)
                     && query.next()) {
-                    version = query.value(0).toInt();
+                    value = query.value(0);
                 }
 
                 database.close();
             }
         }
-        QSqlDatabase::removeDatabase(QStringLiteral("StorageTestVersion"));
+        QSqlDatabase::removeDatabase(QStringLiteral("StorageTestDirect"));
 
-        return version;
+        return value;
+    }
+
+    /**
+     * The schema version a file carries, read the way Storage reads it: the
+     * number in the first four characters of the highest applied migration.
+     */
+    static int schemaVersionOf(const QString &file)
+    {
+        return scalarOf(file,
+                        QStringLiteral("SELECT COALESCE(MAX(CAST(substr(name, 1, 4) AS INTEGER)), "
+                                       "0) FROM migrations WHERE migrated = 1;"))
+            .toInt();
     }
 
 private Q_SLOTS:
@@ -113,6 +126,10 @@ private Q_SLOTS:
     void storeSettingPersistsValueUnderGroup();
     void storeItemPersistsAccountAndEmitsFinished();
     void storeItemKeepsBalanceAndReferenceAccounts();
+    void anAccountSurvivesAReopenWithEveryVisibleProperty();
+    void storingTheSameAccountTwiceLeavesOneRow();
+    void anUpdateOfTheBankDetailsLeavesTheStateAlone();
+    void deselectingKeepsTheRowAndItsTransactions();
     void initializeRejectsAFileFromANewerVersion();
     void receiveItemsReturnsBeforeTheItemsArrive();
     void receiveItemsSignalsArriveInOrderAndInTheCallingThread();
@@ -379,6 +396,203 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
     QCOMPARE(referenceAccounts.at(0)->ownerName(), QStringLiteral("Erika Müller-Groß"));
 
     storage.close();
+}
+
+/**
+ * What US1 promises the user: the accounts chosen in the wizard are there again
+ * on the next start, with everything the interface shows of them.
+ */
+void StorageTest::anAccountSurvivesAReopenWithEveryVisibleProperty()
+{
+    const auto file = storageFile();
+
+    const auto written = Account::fromMap(TestHelpers::createFakeAccountMap());
+    QVERIFY(written != nullptr);
+    QVERIFY(written->isValid());
+
+    {
+        Storage storage(applicationInfo());
+        QVERIFY(!storage.setKey(password()).isError());
+        storage.setStorageFile(file);
+        QVERIFY(!storage.initialize(true).isError());
+
+        QVERIFY(!storage.storeItem(written.get()).isError());
+        storage.close();
+    }
+
+    Storage storage(applicationInfo());
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    storage.receiveItems(Storage::StorageAccount);
+    QVERIFY(itemsSpy.wait());
+
+    const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
+    QCOMPARE(items.size(), 1);
+
+    const auto readBack = std::dynamic_pointer_cast<Account>(items.at(0));
+    QVERIFY(readBack != nullptr);
+
+    QCOMPARE(readBack->accountName(), written->accountName());
+    QCOMPARE(readBack->ownerName(), written->ownerName());
+    QCOMPARE(readBack->bankName(), written->bankName());
+    QCOMPARE(readBack->iban(), written->iban());
+    QCOMPARE(readBack->bic(), written->bic());
+    QCOMPARE(readBack->accountNumber(), written->accountNumber());
+    QCOMPARE(readBack->currency(), written->currency());
+    QCOMPARE(readBack->balance(), written->balance());
+
+    storage.close();
+}
+
+/**
+ * A second run of the wizard hands over the same accounts again. Each of them
+ * has to end up in the row it already has, which is what the unique index on
+ * unique_id and the upsert built on it are for.
+ */
+void StorageTest::storingTheSameAccountTwiceLeavesOneRow()
+{
+    const auto file = storageFile();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto account = Account::fromMap(TestHelpers::createFakeAccountMap());
+    QVERIFY(account != nullptr);
+
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    storage.close();
+
+    QCOMPARE(scalarOf(file, QStringLiteral("SELECT COUNT(*) FROM accounts;")).toInt(), 1);
+}
+
+/**
+ * The update carries what the bank reports and nothing else. An account the user
+ * deselected must not become visible again merely because the wizard offered it
+ * once more, so the state stays out of the statement that writes the rest.
+ */
+void StorageTest::anUpdateOfTheBankDetailsLeavesTheStateAlone()
+{
+    const auto file = storageFile();
+    const auto map = TestHelpers::createFakeAccountMap();
+    const auto uniqueId = map.value(QStringLiteral("unique_id")).toUInt();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    {
+        const auto deselected = Account::fromMap(map);
+        QVERIFY(deselected != nullptr);
+        deselected->setActive(false);
+
+        QVERIFY(!storage.storeItem(deselected.get()).isError());
+    }
+
+    const auto stateAfterDeselect = scalarOf(file,
+                                             QStringLiteral("SELECT active FROM accounts WHERE "
+                                                            "unique_id = %1;")
+                                                 .arg(uniqueId));
+    QCOMPARE(stateAfterDeselect.toInt(), 0);
+
+    // The same account as the bank now reports it. Nobody decided about its
+    // state this time round, so nothing about the state is handed over.
+    auto updated = map;
+    updated[QStringLiteral("account_name")] = QStringLiteral("Girokonto neu");
+    updated[QStringLiteral("owner_name")] = QStringLiteral("Erika Müller-Groß");
+
+    const auto offeredAgain = Account::fromMap(updated);
+    QVERIFY(offeredAgain != nullptr);
+
+    QVERIFY(!storage.storeItem(offeredAgain.get()).isError());
+    storage.close();
+
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT account_name FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toString(),
+             QStringLiteral("Girokonto neu"));
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT owner_name FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toString(),
+             QStringLiteral("Erika Müller-Groß"));
+
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT active FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toInt(),
+             0);
+}
+
+/**
+ * Deselecting an account keeps it. Its transactions hang on the id of its row,
+ * and that id is what an INSERT OR REPLACE would have thrown away. Choosing the
+ * account again therefore finds the same transactions.
+ */
+void StorageTest::deselectingKeepsTheRowAndItsTransactions()
+{
+    const auto file = storageFile();
+    const auto map = TestHelpers::createFakeAccountMap();
+    const auto uniqueId = map.value(QStringLiteral("unique_id")).toUInt();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto account = Account::fromMap(map);
+    QVERIFY(account != nullptr);
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    const auto accountId
+        = scalarOf(file,
+                   QStringLiteral("SELECT id FROM accounts WHERE unique_id = %1;").arg(uniqueId))
+              .toInt();
+    QVERIFY(accountId > 0);
+
+    // Transactions of their own, hung on the account the way the storage hangs
+    // them. Epic 1 has no way to fetch any, so the test puts them there.
+    QVERIFY(scalarOf(file,
+                     QStringLiteral("INSERT INTO transactions (account_id, purpose) VALUES (%1, "
+                                    "'Miete'), (%1, 'Gehalt') RETURNING account_id;")
+                         .arg(accountId))
+                .isValid());
+
+    const auto transactionsOfTheAccount = QStringLiteral("SELECT COUNT(*) FROM transactions WHERE "
+                                                         "account_id = %1;")
+                                              .arg(accountId);
+    QCOMPARE(scalarOf(file, transactionsOfTheAccount).toInt(), 2);
+
+    account->setActive(false);
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    QCOMPARE(scalarOf(file, QStringLiteral("SELECT COUNT(*) FROM accounts;")).toInt(), 1);
+    QCOMPARE(scalarOf(file, transactionsOfTheAccount).toInt(), 2);
+
+    account->setActive(true);
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    storage.close();
+
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT id FROM accounts WHERE unique_id = %1;").arg(uniqueId))
+                 .toInt(),
+             accountId);
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT active FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toInt(),
+             1);
+    QCOMPARE(scalarOf(file, transactionsOfTheAccount).toInt(), 2);
 }
 
 /**

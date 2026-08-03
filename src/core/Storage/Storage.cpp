@@ -181,7 +181,34 @@ const QString &accountInsertQuery()
         "branch_id, account_number, sub_account_number) "
         "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, "
         ":currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, "
-        ":branch_id, :account_number, :sub_account_number);");
+        ":branch_id, :account_number, :sub_account_number) "
+        "ON CONFLICT (unique_id) DO UPDATE SET "
+        "account_name = excluded.account_name, owner_name = excluded.owner_name, "
+        "bank_name = excluded.bank_name, iban = excluded.iban, bic = excluded.bic, "
+        "account_number = excluded.account_number, currency = excluded.currency;");
+
+    return statement;
+}
+
+/**
+ * The state of an account is written on its own, not by the statement above.
+ * That statement carries what the bank reports, and the state is not among it:
+ * an account the user deselected must not become visible again merely because
+ * the wizard offered it once more. Whoever wants it changed says so, which
+ * main.cpp does once it has the result of the wizard.
+ *
+ * changed_at only moves when the value actually differs, so it records the last
+ * switch rather than the last write. The comparison reads the old row; SQLite
+ * evaluates every expression of an UPDATE against the values before it.
+ */
+const QString &accountStateUpdateQuery()
+{
+    static const QString statement = QStringLiteral(
+        "UPDATE accounts SET "
+        "changed_at = CASE WHEN active <> :state THEN datetime('now', 'localtime') "
+        "ELSE changed_at END, "
+        "active = :active "
+        "WHERE unique_id = :unique_id;");
 
     return statement;
 }
@@ -961,10 +988,13 @@ public:
     {
         auto accountMap = map;
 
-        // Both are kept in tables of their own. Left in place they would be
-        // reported as columnless properties on every single write.
+        // The first two are kept in tables of their own, the state is written by
+        // a statement of its own. Left in place they would be reported as
+        // columnless properties on every single write.
         const auto balance = accountMap.take(QStringLiteral("balance"));
         const auto referenceAccounts = accountMap.take(QStringLiteral("refAccounts"));
+        const auto active = accountMap.take(QStringLiteral("active"));
+        const auto uniqueId = accountMap.value(QStringLiteral("unique_id"));
 
         if (!connection()->beginTransaction()) {
             return Error(ErrorCode::DatabaseFailure,
@@ -972,11 +1002,24 @@ public:
                              .arg(m_storageFileName, lastErrorMessage()));
         }
 
-        const auto accountId = insertRow(accountInsertQuery(),
-                                         accountMap,
-                                         QStringLiteral("Account"));
+        if (const auto written = insertRow(accountInsertQuery(),
+                                           accountMap,
+                                           QStringLiteral("Account"));
+            !written.hasValue()) {
+            return rollback(written.error());
+        }
+
+        // The upsert may have taken its update branch, and SQLite leaves
+        // sqlite3_last_insert_rowid() where it was for that. The id insertRow
+        // hands back would then belong to whichever account was inserted last,
+        // and the balance and the reference accounts would hang on that one.
+        const auto accountId = accountIdOf(uniqueId);
         if (!accountId.hasValue()) {
             return rollback(accountId.error());
+        }
+
+        if (const auto error = storeAccountState(uniqueId, active); error.isError()) {
+            return rollback(error);
         }
 
         if (const auto error = storeBalance(accountId.value(), balance, accountMap);
@@ -992,6 +1035,74 @@ public:
         if (!connection()->commitTransaction()) {
             return Error(ErrorCode::DatabaseFailure,
                          QStringLiteral("Could not commit an account to %1: %2")
+                             .arg(m_storageFileName, lastErrorMessage()));
+        }
+
+        return {};
+    }
+
+    /**
+     * The id of the row that carries this unique id. Read rather than taken from
+     * the write, because an upsert that updated an existing account reports no
+     * new row id.
+     */
+    Result<QVariant> accountIdOf(const QVariant &uniqueId)
+    {
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            return error;
+        }
+
+        if (!query.prepare(
+                QStringLiteral("SELECT id FROM accounts WHERE unique_id = :unique_id;"))) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the lookup of an account: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        query.bindValue(QStringLiteral(":unique_id"), uniqueId);
+
+        if (!query.exec() || !query.next()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not find the account just written to %1: %2")
+                             .arg(m_storageFileName, query.lastError().text()));
+        }
+
+        return query.value(0);
+    }
+
+    /**
+     * Sets whether the user keeps the account. An account handed in without the
+     * property keeps the state the row already carries, which is what the
+     * default of the column gives a row that was never touched.
+     */
+    Error storeAccountState(const QVariant &uniqueId, const QVariant &active)
+    {
+        if (!active.isValid()) {
+            return {};
+        }
+
+        QSqlQuery query;
+        if (const auto error = openQuery(query); error.isError()) {
+            return error;
+        }
+
+        if (!query.prepare(accountStateUpdateQuery())) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the state of an account: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        // The statement names the value twice, once to compare against the old
+        // row and once to write. Two placeholders rather than one repeated,
+        // because a driver is free to bind a repeated name only once.
+        query.bindValue(QStringLiteral(":state"), active);
+        query.bindValue(QStringLiteral(":active"), active);
+        query.bindValue(QStringLiteral(":unique_id"), uniqueId);
+
+        if (!query.exec()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not store the state of an account in %1: %2")
                              .arg(m_storageFileName, lastErrorMessage()));
         }
 

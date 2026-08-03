@@ -38,6 +38,8 @@ private Q_SLOTS:
     void fromMapCarriesEveryColumnOfTheRow();
     void fromMapKeepsIdsBeyondTheSignedRange();
     void fromMapKeepsNonAsciiNames();
+    void fromMapCountsAnAccountWithoutAStateAsKept();
+    void toMapAndBackCarriesTheState();
     void toMapAndBackYieldsTheSameAccount();
     void toMapAndBackKeepsTheReferenceAccounts();
     void toMapKeepsTheReferenceAccountsAfterTheAccountIsGone();
@@ -108,6 +110,55 @@ void AccountTest::fromMapKeepsNonAsciiNames()
     QVERIFY(account != nullptr);
     QCOMPARE(account->ownerName(), QStringLiteral("Erika Müller-Groß"));
     QCOMPARE(account->bankName(), QStringLiteral("Sparkasse Köln/Bonn"));
+}
+
+/**
+ * A row from a store written before the column existed carries no state, and
+ * neither does an account the wizard has not decided about. Such an account is
+ * kept, the same answer the default of the column gives.
+ *
+ * It does not hand that answer on, though: toMap leaves the property out, so
+ * that writing this account cannot overwrite the state a stored one already has.
+ */
+void AccountTest::fromMapCountsAnAccountWithoutAStateAsKept()
+{
+    auto map = TestHelpers::createFakeAccountMap(AB_AccountType_Bank);
+    QVERIFY(!map.contains(QStringLiteral("active")));
+
+    const auto account = Account::fromMap(map);
+
+    QVERIFY(account != nullptr);
+    QVERIFY(account->isActive());
+    QVERIFY(!account->toMap().contains(QStringLiteral("active")));
+}
+
+/**
+ * The state travels the same way as the rest, through toMap into the row and
+ * back out through fromMap. It is the one property the bank does not report,
+ * which is why it is easy to lose on the way.
+ */
+void AccountTest::toMapAndBackCarriesTheState()
+{
+    const auto account = TestHelpers::createFakeAccount(AB_AccountType_Bank);
+    QVERIFY(account != nullptr);
+    QVERIFY(account->isActive());
+
+    account->setActive(false);
+
+    const auto map = account->toMap();
+    QCOMPARE(map.value(QStringLiteral("active")).toBool(), false);
+
+    const auto readBack = Account::fromMap(map);
+    QVERIFY(readBack != nullptr);
+    QVERIFY(!readBack->isActive());
+
+    // The database answers with the integer the column holds, not with a bool.
+    auto fromColumn = map;
+    fromColumn[QStringLiteral("active")] = 1;
+
+    const auto reactivated = Account::fromMap(fromColumn);
+    QVERIFY(reactivated != nullptr);
+    QVERIFY(reactivated->isActive());
 }
 
 /**
