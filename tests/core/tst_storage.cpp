@@ -134,6 +134,9 @@ private Q_SLOTS:
     void receiveItemsReturnsBeforeTheItemsArrive();
     void receiveItemsSignalsArriveInOrderAndInTheCallingThread();
     void receiveItemsRefusesASecondRunWhileOneIsGoing();
+    void storeItemsReturnsBeforeTheAccountsAreWritten();
+    void storeItemsSignalsArriveInOrderAndInTheCallingThread();
+    void storeItemsRefusesASecondRunWhileOneIsGoing();
 };
 
 void StorageTest::initTestCase()
@@ -772,6 +775,137 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
     // The first run is unaffected and still delivers.
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
+
+    storage.close();
+}
+
+/**
+ * What FR-007 asks of the write: the thread that called it goes on. The wizard
+ * hands over the accounts of a whole institution at once, and each of them costs
+ * three tables and a transaction.
+ */
+void StorageTest::storeItemsReturnsBeforeTheAccountsAreWritten()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto accounts = BankingItems();
+    for (int i = 0; i < 5; ++i) {
+        accounts << TestHelpers::createFakeAccount();
+    }
+
+    QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    storage.storeItems(accounts);
+
+    // Straight after the call. No event has been processed yet, so nothing can
+    // have been delivered even if the worker were already done.
+    QCOMPARE(storedSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
+
+    QVERIFY(storedSpy.wait());
+    QCOMPARE(storedSpy.count(), 1);
+    QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
+
+    QCOMPARE(scalarOf(storageFile(), QStringLiteral("SELECT COUNT(*) FROM accounts;")).toInt(), 5);
+
+    storage.close();
+}
+
+/**
+ * The signals belong to the thread that called, not to the one that wrote. A
+ * receiver connected to them puts a message on the screen, which is only allowed
+ * there. Whoever waits for finished has to be able to assume that the count has
+ * already arrived.
+ */
+void StorageTest::storeItemsSignalsArriveInOrderAndInTheCallingThread()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto accounts = BankingItems();
+    for (int i = 0; i < 3; ++i) {
+        accounts << TestHelpers::createFakeAccount();
+    }
+
+    QThread *const callingThread = QThread::currentThread();
+    QStringList order;
+    QList<QThread *> threads;
+
+    connect(&storage, &Storage::progressChanged, &storage, [&](int) {
+        if (order.isEmpty() || order.last() != QStringLiteral("progress")) {
+            order << QStringLiteral("progress");
+        }
+        threads << QThread::currentThread();
+    });
+
+    connect(&storage, &Storage::itemsStored, &storage, [&](int) {
+        order << QStringLiteral("stored");
+        threads << QThread::currentThread();
+    });
+
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    connect(&storage, &Storage::finished, &storage, [&]() {
+        order << QStringLiteral("finished");
+        threads << QThread::currentThread();
+    });
+
+    storage.storeItems(accounts);
+
+    QVERIFY(finishedSpy.wait());
+
+    QCOMPARE(order,
+             QStringList{} << QStringLiteral("progress") << QStringLiteral("stored")
+                           << QStringLiteral("finished"));
+
+    QVERIFY(!threads.isEmpty());
+    for (QThread *const thread : std::as_const(threads)) {
+        QCOMPARE(thread, callingThread);
+    }
+
+    storage.close();
+}
+
+/**
+ * Two writers on one storage would be two transactions on one file, and the
+ * watcher of the first would be lost. Refused with an error, the way a second
+ * read is.
+ */
+void StorageTest::storeItemsRefusesASecondRunWhileOneIsGoing()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto accounts = BankingItems();
+    for (int i = 0; i < 5; ++i) {
+        accounts << TestHelpers::createFakeAccount();
+    }
+
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+
+    storage.storeItems(accounts);
+
+    // The first run is still going, this thread has not processed an event since
+    // it started. The refusal comes back in this thread, before any waiting.
+    storage.storeItems(accounts);
+
+    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+
+    // The first run is unaffected and still delivers.
+    QVERIFY(storedSpy.wait());
+    QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
 
     storage.close();
 }

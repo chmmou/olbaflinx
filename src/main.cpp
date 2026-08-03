@@ -54,8 +54,11 @@ namespace {
  *   out of sight.
  *
  * A cancelled wizard hands over two empty lists and nothing is written.
+ *
+ * The writing itself happens in a thread of its own. This function returns while
+ * it runs, and the outcome arrives through the signals of the storage.
  */
-void storeTheResultOfTheWizard(Storage &storage, const assistant::SetupAssistant &wizard)
+void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::SetupAssistant &wizard)
 {
     const auto offered = wizard.offeredAccounts();
     if (offered.isEmpty()) {
@@ -77,6 +80,7 @@ void storeTheResultOfTheWizard(Storage &storage, const assistant::SetupAssistant
         }
     }
 
+    auto accounts = BankingItems();
     for (const auto &item : offered) {
         const auto account = std::dynamic_pointer_cast<Account>(item);
         if (account == nullptr) {
@@ -84,15 +88,43 @@ void storeTheResultOfTheWizard(Storage &storage, const assistant::SetupAssistant
         }
 
         account->setActive(chosenIds.contains(account->uniqueId()));
-
-        if (const auto error = storage.storeItem(account.get()); error.isError()) {
-            // The bracket sits around the single account: what went in before is
-            // in, this one is not, and the run ends here rather than carrying on
-            // over an account that may be the reason.
-            qCCritical(lcUi) << "storing the accounts of the wizard stopped:" << error.message();
-            return;
-        }
+        accounts << item;
     }
+
+    if (accounts.isEmpty()) {
+        return;
+    }
+
+    const int total = static_cast<int>(accounts.size());
+
+    // Single shot, because this run is the only one this connection is for. The
+    // storage outlives the window and would otherwise report every later run
+    // into a message about the wizard.
+    //
+    // The count carries the whole outcome: a run that ends early leaves fewer
+    // accounts than it was given. The technical cause is already in the log, put
+    // there by the storage, and none of it belongs on the screen (FR-036a).
+    QObject::connect(
+        &storage,
+        &Storage::itemsStored,
+        &app,
+        [&app, total](int stored) {
+            if (stored == total) {
+                app.showMessage(
+                    QCoreApplication::translate("main", "%n account(s) set up.", nullptr, stored));
+                return;
+            }
+
+            app.showMessage(QCoreApplication::translate(
+                                "main",
+                                "The setup was not completed. %n of %1 accounts stored.",
+                                nullptr,
+                                stored)
+                                .arg(total));
+        },
+        Qt::SingleShotConnection);
+
+    storage.storeItems(accounts);
 }
 
 } // namespace
@@ -144,7 +176,7 @@ int main(int argc, char *argv[])
 
     // The wizard used to end here and its result was dropped. No account had
     // ever reached the store because of it.
-    storeTheResultOfTheWizard(storage, setup);
+    storeTheResultOfTheWizard(app, storage, setup);
 
     const int result = QApplication::exec();
 

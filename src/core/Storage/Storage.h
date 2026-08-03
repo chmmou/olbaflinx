@@ -188,6 +188,27 @@ public:
      */
     void receiveItems(Type type, int offset = 0, int limit = 50);
 
+    /**
+     * @brief Stores a run of records without holding the calling thread.
+     *
+     * The call returns at once and the writing happens in a thread of its own,
+     * on a second connection to the same file, the same way receiveItems reads.
+     * storeItem stays what it is and keeps its immediate Error; a run of records
+     * cannot report that way, which is why this is a second entry point rather
+     * than a change to the first.
+     *
+     * The bracket sits around the single record, not around the run. What went
+     * in before a failure stays in, the failing one does not, and the run ends
+     * there rather than carrying on over a record that may be the cause.
+     *
+     * itemsStored reports how many records were written, on every path.
+     * errorOccurred names the failure, finished ends the run either way. All of
+     * them reach the caller in the thread it called from.
+     *
+     * @param items The records to store. An empty run is not an error.
+     */
+    void storeItems(const BankingItems &items);
+
 Q_SIGNALS:
     /**
      * @brief This signal is emitted if an error occurred on an asynchronous path.
@@ -208,9 +229,21 @@ Q_SIGNALS:
     void itemsReceived(const BankingItems &items);
 
     /**
+     * @brief This signal is emitted when a run of storeItems has ended.
+     *
+     * It arrives on every path, after a failure as well. Whoever tells the user
+     * what happened needs the count in both cases, and progressChanged cannot
+     * carry it: QFutureWatcher limits the rate of its progress reports, so a
+     * receiver is not told every value.
+     *
+     * @param count The number of records that reached the storage.
+     */
+    void itemsStored(int count);
+
+    /**
      * @brief The signal that is emitted if any progress changed
      *
-     * @param progress Progress value
+     * @param progress Progress value in percent, from 0 to 100.
      */
     void progressChanged(int progress);
 

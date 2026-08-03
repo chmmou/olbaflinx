@@ -72,6 +72,18 @@ public:
      */
     void showError(core::ErrorCode code, const QString &reason);
 
+    /**
+     * @brief Puts a message the caller has already worded into the status bar.
+     *
+     * showError turns a code into a fixed sentence. This one carries what only
+     * the caller knows, such as how many accounts of a run reached the storage.
+     * Nothing here is modal.
+     *
+     * @param message What the user gets to see. It must name no account of
+     *  anyone, see FR-036a.
+     */
+    void showMessage(const QString &message);
+
 protected:
     bool event(QEvent *event) override;
     void moveEvent(QMoveEvent *event) override;

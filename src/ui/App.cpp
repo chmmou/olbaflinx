@@ -215,6 +215,11 @@ void App::showError(ErrorCode code, const QString &reason)
     statusBar()->showMessage(message);
 }
 
+void App::showMessage(const QString &message)
+{
+    statusBar()->showMessage(message);
+}
+
 bool App::event(QEvent *event)
 {
     return QMainWindow::event(event);
