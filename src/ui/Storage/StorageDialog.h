@@ -51,9 +51,6 @@ public:
     void reload();
 
 protected:
-    void moveEvent(QMoveEvent *event) override;
-    void resizeEvent(QResizeEvent *event) override;
-
     /**
      * Sizes that derive from the font are computed again when the font changes.
      * They used to be set once at construction and never revisited.

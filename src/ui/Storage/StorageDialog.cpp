@@ -31,8 +31,6 @@
 #include <QtGui/QCloseEvent>
 #include <QtGui/QFontMetrics>
 #include <QtGui/QKeySequence>
-#include <QtGui/QMoveEvent>
-#include <QtGui/QResizeEvent>
 
 #include <QtWidgets/QBoxLayout>
 #include <QtWidgets/QLabel>
@@ -421,22 +419,9 @@ StorageDialog::~StorageDialog()
 
 void StorageDialog::initialize(QMainWindow *window)
 {
-    const auto pos = d_ptr->storage
-                         ->setting(QStringLiteral("Position"),
-                                   QStringLiteral("StorageDialog"),
-                                   QPoint())
-                         .toPoint();
-    if (!pos.isNull()) {
-        move(pos);
-    }
-
-    const auto size = d_ptr->storage
-                          ->setting(QStringLiteral("Size"), QStringLiteral("StorageDialog"), QSize())
-                          .toSize();
-    if (!size.isNull() && size.isValid()) {
-        resize(size);
-    }
-
+    // Position and size used to be read here and written back in moveEvent and
+    // resizeEvent. The overview is a page of the window now, and a page gets
+    // neither event in any useful way. The window keeps its own geometry.
     d_ptr->initialize(window);
     d_ptr->loadStorageItems();
 }
@@ -444,22 +429,6 @@ void StorageDialog::initialize(QMainWindow *window)
 void StorageDialog::reload()
 {
     d_ptr->loadStorageItems();
-}
-
-void StorageDialog::moveEvent(QMoveEvent *event)
-{
-    d_ptr->storage->storeSetting(QStringLiteral("Position"),
-                                 event->pos(),
-                                 QStringLiteral("StorageDialog"));
-    QWidget::moveEvent(event);
-}
-
-void StorageDialog::resizeEvent(QResizeEvent *event)
-{
-    d_ptr->storage->storeSetting(QStringLiteral("Size"),
-                                 event->size(),
-                                 QStringLiteral("StorageDialog"));
-    QWidget::resizeEvent(event);
 }
 
 void StorageDialog::changeEvent(QEvent *event)

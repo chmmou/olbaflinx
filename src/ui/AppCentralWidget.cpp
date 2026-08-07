@@ -22,7 +22,9 @@
 
 #include "ui_AppCentralWidget.h"
 
+#include <QtWidgets/QBoxLayout>
 #include <QtWidgets/QLabel>
+#include <QtWidgets/QStackedWidget>
 
 using namespace olbaflinx::ui;
 using namespace olbaflinx::ui::themes;
@@ -38,7 +40,10 @@ public:
         ui->setupUi(q_ptr);
     }
 
-    ~Private() = default;
+    // The generated form is created with new above and belongs to nobody else.
+    // Without this it leaked, which is what an AddressSanitizer run reported
+    // against tst_apperrorhandling.
+    ~Private() { delete ui; }
 
     void initialize(QMainWindow *window)
     {
@@ -72,4 +77,19 @@ void AppCentralWidget::initialize(QMainWindow *window)
 QTreeWidget *AppCentralWidget::accountWidget() const
 {
     return nullptr;
+}
+
+void AppCentralWidget::setPage(Page page)
+{
+    d_ptr->ui->stackedWidgetPages->setCurrentIndex(static_cast<int>(page));
+}
+
+AppCentralWidget::Page AppCentralWidget::page() const
+{
+    return static_cast<Page>(d_ptr->ui->stackedWidgetPages->currentIndex());
+}
+
+void AppCentralWidget::setStorageOverview(QWidget *overview)
+{
+    d_ptr->ui->storagesLayout->addWidget(overview);
 }
