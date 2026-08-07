@@ -22,6 +22,7 @@
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
 #include "ui/Models/AccountListModel.h"
+#include "ui/Storage/StorageDialog.h"
 
 #include "ui_App.h"
 
@@ -44,6 +45,7 @@ using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::logger;
 using namespace olbaflinx::ui::models;
+using namespace olbaflinx::ui::storage;
 
 using namespace ads;
 
@@ -102,6 +104,14 @@ public:
     void initialize()
     {
         ui->appCentralWidget->initialize(q_ptr);
+
+        // The overview used to be a window of its own, put up next to this one by
+        // main. It is the first page of the central area now (FR-041). It needs
+        // the storage, which is why it is built here and not in the central
+        // widget.
+        auto *overview = new StorageDialog(storage, q_ptr);
+        ui->appCentralWidget->setStorageOverview(overview);
+        overview->initialize(q_ptr);
 
         // Kept on purpose as the reference for the pending docking rework, and
         // not activated: accountWidget() returns nullptr, so every call on aw

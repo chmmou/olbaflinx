@@ -71,4 +71,6 @@ olbaflinx_add_test(tst_thememanager ui/tst_thememanager.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_setupassistant ui/tst_setupassistant.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_appcentralwidget ui/tst_appcentralwidget.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 ### Adding tests here

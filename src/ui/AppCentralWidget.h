@@ -33,10 +33,40 @@ class AppCentralWidget : public QWidget
     Q_OBJECT
 
 public:
+    /**
+     * @brief The two pages the central area carries.
+     *
+     * Storages is what stands there before a storage is open, Banking what comes
+     * after it. The numbers are the ones the QStackedWidget counts by.
+     */
+    enum class Page { Storages = 0, Banking = 1 };
+    Q_ENUM(Page)
+
     explicit AppCentralWidget(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
     ~AppCentralWidget() override;
 
     void initialize(QMainWindow *window);
+
+    /**
+     * @brief Shows one of the two pages. The other one stays built.
+     *
+     * Closing a storage drops the records of the models, not the widgets of the
+     * page that is left.
+     */
+    void setPage(Page page);
+
+    [[nodiscard]] Page page() const;
+
+    /**
+     * @brief Puts the overview of the storages onto the first page.
+     *
+     * The overview needs the storage of the application and is therefore built
+     * by the window, not here. It becomes a child of this widget through the
+     * layout of the page.
+     *
+     * @param overview The widget to show. It is taken over.
+     */
+    void setStorageOverview(QWidget *overview);
 
     /**
      * @brief The tree of accounts in the left dock.

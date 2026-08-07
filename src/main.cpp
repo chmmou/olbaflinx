@@ -23,7 +23,6 @@
 #include "core/Storage/Storage.h"
 #include "ui/Assistant/SetupAssistant.h"
 #include "ui/Logging.h"
-#include "ui/Storage/StorageDialog.h"
 
 #include <QtCore/QLocale>
 #include <QtCore/QSet>
@@ -39,7 +38,6 @@ using namespace olbaflinx::core::logger;
 using namespace olbaflinx::core::storage;
 
 using namespace olbaflinx::ui;
-using namespace olbaflinx::ui::storage;
 
 namespace {
 
@@ -66,8 +64,9 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
     }
 
     if (!storage.isValid()) {
-        // The store is opened through a dialog of its own, which the user may
-        // not have got to yet. Nothing can be written until then.
+        // The store is opened from the overview on the first page of the window,
+        // which the user may not have got to yet. Nothing can be written until
+        // then.
         qCWarning(lcUi) << "the wizard chose accounts while no storage was open, nothing stored";
         return;
     }
@@ -166,10 +165,6 @@ int main(int argc, char *argv[])
     App app(&logger, &storage);
     app.initialize();
     app.show();
-
-    StorageDialog storageDialog(&storage);
-    storageDialog.initialize(&app);
-    storageDialog.show();
 
     assistant::SetupAssistant setup(applicationInfo, &app);
     setup.exec();
