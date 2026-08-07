@@ -27,6 +27,7 @@
 #include <QtSql/QSqlQuery>
 #include <QtTest/QtTest>
 
+#include <chrono>
 #include <memory>
 
 using namespace olbaflinx::core;
@@ -58,6 +59,17 @@ private:
     }
 
     static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+
+    /**
+     * How long a spy waits for a signal a worker thread has to produce first.
+     *
+     * QSignalSpy::wait defaults to five seconds. Writing five accounts costs
+     * three tables and a transaction each and takes a little over five seconds
+     * on a development machine, so the default held there and ran out on a
+     * slower runner. The number is an upper bound and not a wait: the call
+     * returns the moment the signal arrives, which is what QT-TEST-025 asks for.
+     */
+    static constexpr auto workerTimeout = std::chrono::seconds{30};
 
     QString storageFile() const
     {
@@ -341,7 +353,7 @@ void StorageTest::storeItemPersistsAccountAndEmitsFinished()
 
     storage.receiveItems(Storage::StorageAccount);
 
-    QVERIFY(itemsSpy.wait());
+    QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
     QCOMPARE(finishedSpy.count(), 3);
 
@@ -382,7 +394,7 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
 
     storage.receiveItems(Storage::StorageAccount);
 
-    QVERIFY(itemsSpy.wait());
+    QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
 
     const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
@@ -431,7 +443,7 @@ void StorageTest::anAccountSurvivesAReopenWithEveryVisibleProperty()
     QVERIFY(!storage.initialize(true).isError());
 
     storage.receiveItems(Storage::StorageAccount);
-    QVERIFY(itemsSpy.wait());
+    QVERIFY(itemsSpy.wait(workerTimeout));
 
     const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
     QCOMPARE(items.size(), 1);
@@ -679,7 +691,7 @@ void StorageTest::receiveItemsReturnsBeforeTheItemsArrive()
     QCOMPARE(itemsSpy.count(), 0);
     QCOMPARE(finishedSpy.count(), finishedBefore);
 
-    QVERIFY(itemsSpy.wait());
+    QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
 
     storage.close();
@@ -728,7 +740,7 @@ void StorageTest::receiveItemsSignalsArriveInOrderAndInTheCallingThread()
 
     storage.receiveItems(Storage::StorageAccount);
 
-    QVERIFY(finishedSpy.wait());
+    QVERIFY(finishedSpy.wait(workerTimeout));
 
     QCOMPARE(order,
              QStringList{} << QStringLiteral("progress") << QStringLiteral("items")
@@ -773,7 +785,7 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
     QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
 
     // The first run is unaffected and still delivers.
-    QVERIFY(itemsSpy.wait());
+    QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
 
     storage.close();
@@ -807,7 +819,7 @@ void StorageTest::storeItemsReturnsBeforeTheAccountsAreWritten()
     QCOMPARE(storedSpy.count(), 0);
     QCOMPARE(finishedSpy.count(), 0);
 
-    QVERIFY(storedSpy.wait());
+    QVERIFY(storedSpy.wait(workerTimeout));
     QCOMPARE(storedSpy.count(), 1);
     QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
 
@@ -859,7 +871,7 @@ void StorageTest::storeItemsSignalsArriveInOrderAndInTheCallingThread()
 
     storage.storeItems(accounts);
 
-    QVERIFY(finishedSpy.wait());
+    QVERIFY(finishedSpy.wait(workerTimeout));
 
     QCOMPARE(order,
              QStringList{} << QStringLiteral("progress") << QStringLiteral("stored")
@@ -904,7 +916,7 @@ void StorageTest::storeItemsRefusesASecondRunWhileOneIsGoing()
     QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
 
     // The first run is unaffected and still delivers.
-    QVERIFY(storedSpy.wait());
+    QVERIFY(storedSpy.wait(workerTimeout));
     QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
 
     storage.close();
