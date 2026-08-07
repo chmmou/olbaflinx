@@ -18,21 +18,116 @@
 #include "ui/App.h"
 
 #include "core/ApplicationInfo.h"
+#include "core/Banking/Account/Account.h"
 #include "core/Logger/Logger.h"
 #include "core/Storage/Storage.h"
 #include "ui/Assistant/SetupAssistant.h"
+#include "ui/Logging.h"
 #include "ui/Storage/StorageDialog.h"
 
 #include <QtCore/QLocale>
+#include <QtCore/QSet>
 #include <QtCore/QTranslator>
 #include <QtWidgets/QApplication>
 
+#include <memory>
+
 using namespace olbaflinx::core;
+using namespace olbaflinx::core::banking;
+using namespace olbaflinx::core::banking::account;
 using namespace olbaflinx::core::logger;
 using namespace olbaflinx::core::storage;
 
 using namespace olbaflinx::ui;
 using namespace olbaflinx::ui::storage;
+
+namespace {
+
+/**
+ * Puts the result of the wizard into the store. Three groups come out of it and
+ * each is treated differently:
+ *
+ * - offered and chosen goes in as kept,
+ * - offered and turned down goes in as dropped, without losing its transactions,
+ * - never offered is not touched at all. The wizard cannot offer the accounts of
+ *   an institution it failed to reach, and that must not take a user's accounts
+ *   out of sight.
+ *
+ * A cancelled wizard hands over two empty lists and nothing is written.
+ *
+ * The writing itself happens in a thread of its own. This function returns while
+ * it runs, and the outcome arrives through the signals of the storage.
+ */
+void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::SetupAssistant &wizard)
+{
+    const auto offered = wizard.offeredAccounts();
+    if (offered.isEmpty()) {
+        return;
+    }
+
+    if (!storage.isValid()) {
+        // The store is opened through a dialog of its own, which the user may
+        // not have got to yet. Nothing can be written until then.
+        qCWarning(lcUi) << "the wizard chose accounts while no storage was open, nothing stored";
+        return;
+    }
+
+    auto chosenIds = QSet<quint32>();
+    const auto chosen = wizard.selectedAccounts();
+    for (const auto &item : chosen) {
+        if (const auto account = std::dynamic_pointer_cast<Account>(item)) {
+            chosenIds.insert(account->uniqueId());
+        }
+    }
+
+    auto accounts = BankingItems();
+    for (const auto &item : offered) {
+        const auto account = std::dynamic_pointer_cast<Account>(item);
+        if (account == nullptr) {
+            continue;
+        }
+
+        account->setActive(chosenIds.contains(account->uniqueId()));
+        accounts << item;
+    }
+
+    if (accounts.isEmpty()) {
+        return;
+    }
+
+    const int total = static_cast<int>(accounts.size());
+
+    // Single shot, because this run is the only one this connection is for. The
+    // storage outlives the window and would otherwise report every later run
+    // into a message about the wizard.
+    //
+    // The count carries the whole outcome: a run that ends early leaves fewer
+    // accounts than it was given. The technical cause is already in the log, put
+    // there by the storage, and none of it belongs on the screen (FR-036a).
+    QObject::connect(
+        &storage,
+        &Storage::itemsStored,
+        &app,
+        [&app, total](int stored) {
+            if (stored == total) {
+                app.showMessage(
+                    QCoreApplication::translate("main", "%n account(s) set up.", nullptr, stored));
+                return;
+            }
+
+            app.showMessage(QCoreApplication::translate(
+                                "main",
+                                "The setup was not completed. %n of %1 accounts stored.",
+                                nullptr,
+                                stored)
+                                .arg(total));
+        },
+        Qt::SingleShotConnection);
+
+    storage.storeItems(accounts);
+}
+
+} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -78,6 +173,10 @@ int main(int argc, char *argv[])
 
     assistant::SetupAssistant setup(applicationInfo, &app);
     setup.exec();
+
+    // The wizard used to end here and its result was dropped. No account had
+    // ever reached the store because of it.
+    storeTheResultOfTheWizard(app, storage, setup);
 
     const int result = QApplication::exec();
 

@@ -46,6 +46,7 @@ create table IF NOT EXISTS accounts
     id                 integer not null
         constraint accounts_id_pk primary key autoincrement,
     `type`             integer,
+    active             tinyint not null default 1,
     unique_id          integer,
     backend_name       varchar,
     owner_name         varchar,
@@ -60,9 +61,11 @@ create table IF NOT EXISTS accounts
     branch_id          varchar,
     account_number     varchar,
     sub_account_number varchar,
-    balance            double
+    balance            double,
+    changed_at         datetime         default null
 );
-CREATE INDEX IF NOT EXISTS accounts_unique_id_index on accounts (unique_id asc);
+DROP INDEX IF EXISTS accounts_unique_id_index;
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_unique_id_unique_index on accounts (unique_id asc);
 CREATE INDEX IF NOT EXISTS accounts_iban_index on accounts (iban asc);
 CREATE INDEX IF NOT EXISTS accounts_balance_index on accounts (iban asc);
 
@@ -228,4 +231,5 @@ end;
 
 INSERT OR IGNORE INTO migrations (name)
 VALUES ('0001_initial_schema'),
-       ('0002_reference_accounts');
+       ('0002_reference_accounts'),
+       ('0003_account_active');

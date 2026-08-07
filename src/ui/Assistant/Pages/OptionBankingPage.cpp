@@ -100,6 +100,8 @@ public:
     void addItems(const BankingItems &items)
     {
         ui->treeWidgetAccounts->clear();
+        offered.clear();
+
         for (const auto &item : items) {
             const auto account = std::dynamic_pointer_cast<Account>(item);
             if (account && account->isValid()) {
@@ -107,6 +109,8 @@ public:
                 treeItem->setText(0, account->toString());
                 treeItem->setData(0, Qt::UserRole, account->uniqueId());
                 ui->treeWidgetAccounts->addTopLevelItem(treeItem);
+
+                offered << item;
             }
         }
 
@@ -118,6 +122,11 @@ public:
     Banking *banking;
     OptionBankingPage *q_ptr;
     Ui::UiSetupAssistantOptionBankingPage *ui;
+
+    // The entries the tree shows carry the unique id of their account, no more.
+    // Whoever stores the result of the wizard needs the accounts themselves, and
+    // the page is the only place that still has them.
+    BankingItems offered;
 };
 
 OptionBankingPage::OptionBankingPage(QWidget *parent)
@@ -144,8 +153,8 @@ void OptionBankingPage::initialize(const ApplicationInfo &applicationInfo)
         Q_EMIT completeChanged();
     });
 
-    connect(d_ptr->banking, &Banking::itemsReceived, this, [&](const BankingItems &items) {
-        d_ptr->addItems(items);
+    connect(d_ptr->banking, &Banking::itemsReceived, this, [this](const BankingItems &items) {
+        setAccounts(items);
     });
 
     // Without this the errors of the backend had no receiver. The page says what
@@ -167,6 +176,11 @@ bool OptionBankingPage::isComplete() const
     return d_ptr->isComplete && d_ptr->ui->treeWidgetAccounts->topLevelItemCount() > 0;
 }
 
+void OptionBankingPage::setAccounts(const BankingItems &accounts)
+{
+    d_ptr->addItems(accounts);
+}
+
 QList<quint32> OptionBankingPage::selectedAccountIds() const
 {
     auto accountIds = QList<quint32>();
@@ -177,6 +191,29 @@ QList<quint32> OptionBankingPage::selectedAccountIds() const
     }
 
     return accountIds;
+}
+
+BankingItems OptionBankingPage::selectedAccounts() const
+{
+    // One list, held while the set is built from it. Two calls would hand the
+    // set the begin of one temporary and the end of another.
+    const auto ids = selectedAccountIds();
+    const auto selectedIds = QSet<quint32>(ids.cbegin(), ids.cend());
+
+    auto accounts = BankingItems();
+    for (const auto &item : std::as_const(d_ptr->offered)) {
+        const auto account = std::dynamic_pointer_cast<Account>(item);
+        if (account && selectedIds.contains(account->uniqueId())) {
+            accounts << item;
+        }
+    }
+
+    return accounts;
+}
+
+BankingItems OptionBankingPage::offeredAccounts() const
+{
+    return d_ptr->offered;
 }
 
 void OptionBankingPage::showSetupDialog()

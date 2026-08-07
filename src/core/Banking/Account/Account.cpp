@@ -21,6 +21,8 @@
 
 #include <QtCore/QObject>
 
+#include <optional>
+
 using namespace olbaflinx::core::banking::account;
 
 class Account::Private
@@ -44,6 +46,17 @@ public:
 
     double abBalance;
     AB_ACCOUNT_SPEC *abAccountSpec;
+
+    // Not part of the account spec. The bank does not report it, the user
+    // decides it in the wizard, and an account nobody has decided about counts
+    // as kept.
+    //
+    // Empty is not the same as true. It says that this account carries no
+    // statement about its state, and toMap leaves the property out for it, so
+    // that writing such an account cannot overwrite the state a stored one
+    // already has. That is what keeps a deselected account out of sight when
+    // the wizard merely offers it again.
+    std::optional<bool> active;
 };
 
 Account::Account(const AB_ACCOUNT_SPEC *accountSpec, double balance)
@@ -181,6 +194,16 @@ double Account::balance() const
     return d_ptr->abBalance;
 }
 
+bool Account::isActive() const
+{
+    return d_ptr->active.value_or(true);
+}
+
+void Account::setActive(const bool active)
+{
+    d_ptr->active = active;
+}
+
 TransactionLimitsList *Account::transactionLimits() const
 {
     return AB_AccountSpec_GetTransactionLimitsList(d_ptr->abAccountSpec);
@@ -302,6 +325,13 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
 
     auto account = std::make_shared<Account>(accountSpec, balance);
 
+    // A row from a store written before the column existed carries no value, and
+    // neither does an account the wizard has not decided about. It stays without
+    // a statement rather than being given one it never had.
+    if (map.contains(QStringLiteral("active"))) {
+        account->setActive(map.value(QStringLiteral("active")).toBool());
+    }
+
     AB_AccountSpec_free(accountSpec);
 
     return account;
@@ -339,6 +369,10 @@ QMap<QString, QVariant> Account::toMap() const
     map[QStringLiteral("sub_account_number")] = subAccountNumber();
     map[QStringLiteral("refAccounts")] = QVariant::fromValue(referenceAccounts());
     map[QStringLiteral("balance")] = balance();
+
+    if (d_ptr->active.has_value()) {
+        map[QStringLiteral("active")] = *d_ptr->active;
+    }
 
     return map;
 }

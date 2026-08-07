@@ -24,6 +24,8 @@
 
 #include "TestHelpers.h"
 
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlQuery>
 #include <QtTest/QtTest>
 
 using namespace olbaflinx::core;
@@ -111,6 +113,38 @@ private:
         return transaction;
     }
 
+    /**
+     * The number of rows a table of a store holds, read past Storage. What a
+     * failed run left behind is exactly what Storage offers no way to ask.
+     */
+    static int rowsIn(const QString &file, const QString &table)
+    {
+        int count = -1;
+
+        {
+            auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
+                                                      QStringLiteral("StorageErrorTestCount"));
+            database.setDatabaseName(file);
+
+            if (database.open()) {
+                auto key = password();
+                key.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+                QSqlQuery query(database);
+                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(key))
+                    && query.exec(QStringLiteral("SELECT COUNT(*) FROM %1;").arg(table))
+                    && query.next()) {
+                    count = query.value(0).toInt();
+                }
+
+                database.close();
+            }
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("StorageErrorTestCount"));
+
+        return count;
+    }
+
 private Q_SLOTS:
     void initTestCase();
 
@@ -118,9 +152,11 @@ private Q_SLOTS:
     void storeItemRejectsNullItem();
     void storeItemRejectsUnsupportedType();
     void initializeReportsFailureOnUnwritablePath();
+    void initializeNamesTheColumnsAnOlderStoreDoesNotHave();
     void errorOccurredCarriesMatchingCode();
     void receiveItemsEmitsProgressWithinRange();
     void receiveItemsFillsTransactionFields();
+    void storeItemsEndsAtTheFailingAccountAndKeepsWhatWentIn();
 };
 
 void StorageErrorTest::initTestCase()
@@ -207,6 +243,60 @@ void StorageErrorTest::initializeReportsFailureOnUnwritablePath()
     QVERIFY(error.isError());
     QCOMPARE(error.code(), ErrorCode::DatabaseFailure);
     QVERIFY(!storage.isValid());
+
+    storage.close();
+}
+
+/**
+ * Version 3 gave accounts two columns of their own. They come into being with
+ * the table, so a store written before that carries neither, and the schema run
+ * cannot add them: setupTables replays the whole resource on every version step,
+ * and an ALTER TABLE would fail the second time round.
+ *
+ * Such a store is therefore refused, and the message names what is missing. The
+ * alternative is a query failing somewhere later on a column nobody mentioned.
+ */
+void StorageErrorTest::initializeNamesTheColumnsAnOlderStoreDoesNotHave()
+{
+    const auto file = storageFile("olderStore");
+
+    {
+        auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
+                                                  QStringLiteral("StorageErrorTestOlder"));
+        database.setDatabaseName(file);
+
+        QVERIFY(database.open());
+
+        auto key = password();
+        key.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+        QSqlQuery query(database);
+        QVERIFY(query.exec(QStringLiteral("PRAGMA key='%1';").arg(key)));
+
+        // The table as version 2 left it: no active, no changed_at.
+        QVERIFY(query.exec(QStringLiteral("CREATE TABLE accounts (id integer not null constraint "
+                                          "accounts_id_pk primary key autoincrement, `type` "
+                                          "integer, unique_id integer, backend_name varchar, "
+                                          "owner_name varchar, account_name varchar, currency "
+                                          "varchar, memo varchar, iban varchar, bic varchar, "
+                                          "country varchar, bank_code varchar, bank_name varchar, "
+                                          "branch_id varchar, account_number varchar, "
+                                          "sub_account_number varchar, balance double);")));
+
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(QStringLiteral("StorageErrorTestOlder"));
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+
+    const auto error = storage.initialize(true);
+
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::SchemaMismatch);
+    QVERIFY(error.message().contains(QStringLiteral("active")));
+    QVERIFY(error.message().contains(QStringLiteral("changed_at")));
 
     storage.close();
 }
@@ -328,6 +418,58 @@ void StorageErrorTest::receiveItemsFillsTransactionFields()
     QCOMPARE(read->currency(), written->currency());
 
     storage.close();
+}
+
+/**
+ * FR-006a: the bracket sits around the single account, not around the run. Three
+ * accounts go in, the second one cannot be stored. The first stays, the second
+ * does not, and the third was never attempted, because an account that fails may
+ * be the reason the ones behind it would fail too.
+ *
+ * A second run of the wizard picks the rest up, which is what the upsert of
+ * FR-002 is for.
+ */
+void StorageErrorTest::storeItemsEndsAtTheFailingAccountAndKeepsWhatWentIn()
+{
+    const auto file = storageFile("runWithAFailure");
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto first = TestHelpers::createFakeAccount();
+    // AB_AccountType_Invalid is -1, and it is one of the two types isValid()
+    // rejects. The store answers such an account with InvalidInput.
+    const auto second = TestHelpers::createFakeAccount(AB_AccountType_Invalid);
+    const auto third = TestHelpers::createFakeAccount();
+
+    QVERIFY(first->isValid());
+    QVERIFY(!second->isValid());
+    QVERIFY(third->isValid());
+
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    storage.storeItems(BankingItems{first, second, third});
+
+    QVERIFY(finishedSpy.wait());
+
+    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+
+    QCOMPARE(storedSpy.count(), 1);
+    QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 1);
+
+    storage.close();
+
+    // One row, and it belongs to the first account. The third was not attempted.
+    QCOMPARE(rowsIn(file, QStringLiteral("accounts")), 1);
+
+    // The first account went in whole. Its balance belongs to the same bracket,
+    // so a row there is what tells a complete write from a half one.
+    QCOMPARE(rowsIn(file, QStringLiteral("balances")), 1);
 }
 
 } // namespace olbaflinx::core::storage::tests

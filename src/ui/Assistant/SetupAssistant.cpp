@@ -17,9 +17,12 @@
 
 #include "ui/Assistant/SetupAssistant.h"
 
+#include "ui/Assistant/Pages/OptionBankingPage.h"
+
 #include "ui_SetupAssistant.h"
 
 using namespace olbaflinx::core;
+using namespace olbaflinx::core::banking;
 using namespace olbaflinx::ui::assistant;
 
 class SetupAssistant::Private
@@ -47,4 +50,27 @@ SetupAssistant::SetupAssistant(const ApplicationInfo &applicationInfo,
 SetupAssistant::~SetupAssistant()
 {
     delete d_ptr;
+}
+
+/**
+ * A cancelled wizard hands over nothing, which is what keeps it from writing
+ * anything at all. QWizard leaves its result at Rejected until the last page is
+ * accepted, so the check covers a run that is still going too.
+ */
+BankingItems SetupAssistant::selectedAccounts() const
+{
+    if (result() != QDialog::Accepted) {
+        return {};
+    }
+
+    return d_ptr->ui->bankingPage->selectedAccounts();
+}
+
+BankingItems SetupAssistant::offeredAccounts() const
+{
+    if (result() != QDialog::Accepted) {
+        return {};
+    }
+
+    return d_ptr->ui->bankingPage->offeredAccounts();
 }

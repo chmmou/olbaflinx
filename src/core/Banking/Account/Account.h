@@ -85,6 +85,18 @@ public:
     [[nodiscard]] QString accountNumber() const;
     [[nodiscard]] QString subAccountNumber() const;
     [[nodiscard]] double balance() const;
+
+    /**
+     * @brief Whether the user keeps this account.
+     *
+     * Set by the wizard, not reported by the bank. An account nobody has decided
+     * about counts as kept, and storing such an account leaves the state of an
+     * already stored one where it is. That is what keeps a deselected account
+     * out of sight when the wizard merely offers it again.
+     */
+    [[nodiscard]] bool isActive() const;
+    void setActive(bool active);
+
     [[nodiscard]] TransactionLimitsList *transactionLimits() const;
     [[nodiscard]] ReferenceAccounts referenceAccounts() const;
     [[nodiscard]] TransactionLimits *transactionLimitsForCommand(const TransactionCommand &cmd) const;

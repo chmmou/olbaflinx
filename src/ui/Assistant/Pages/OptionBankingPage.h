@@ -17,6 +17,7 @@
 #pragma once
 
 #include "core/ApplicationInfo.h"
+#include "core/Banking/BankingItem.h"
 
 #include <QtCore/QList>
 
@@ -50,7 +51,32 @@ public:
     void initialize(const olbaflinx::core::ApplicationInfo &applicationInfo);
     [[nodiscard]] bool isComplete() const override;
 
+    /**
+     * @brief Takes the accounts the page puts up for choice.
+     *
+     * Where they come from is not the concern of the page. initialize connects
+     * the backend to this; a test hands them over directly.
+     */
+    void setAccounts(const olbaflinx::core::banking::BankingItems &accounts);
+
     [[nodiscard]] QList<quint32> selectedAccountIds() const;
+
+    /**
+     * @brief The accounts the user chose, as objects.
+     *
+     * Ownership is shared with whoever asked, the same way itemsReceived hands
+     * over what it reports.
+     */
+    [[nodiscard]] olbaflinx::core::banking::BankingItems selectedAccounts() const;
+
+    /**
+     * @brief Every account the page put up for choice.
+     *
+     * Whoever stores the result needs both lists. An account in this one and not
+     * in the chosen one was turned down; one in neither was never on offer, and
+     * nothing about it may change.
+     */
+    [[nodiscard]] olbaflinx::core::banking::BankingItems offeredAccounts() const;
 
 public Q_SLOTS:
     void showSetupDialog();

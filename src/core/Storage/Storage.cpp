@@ -158,7 +158,7 @@ bool isKnownTable(const QString &table)
  * newer build and is refused; a file below it is brought up by setupTables,
  * whose statements all create what is missing rather than what is new.
  */
-constexpr int CurrentSchemaVersion = 2;
+constexpr int CurrentSchemaVersion = 3;
 
 /**
  * The number a migration name carries in its first four characters. Names
@@ -181,7 +181,34 @@ const QString &accountInsertQuery()
         "branch_id, account_number, sub_account_number) "
         "VALUES (:type, :unique_id, :backend_name, :owner_name, :account_name, "
         ":currency, :memo, :iban, :bic, :country, :bank_code, :bank_name, "
-        ":branch_id, :account_number, :sub_account_number);");
+        ":branch_id, :account_number, :sub_account_number) "
+        "ON CONFLICT (unique_id) DO UPDATE SET "
+        "account_name = excluded.account_name, owner_name = excluded.owner_name, "
+        "bank_name = excluded.bank_name, iban = excluded.iban, bic = excluded.bic, "
+        "account_number = excluded.account_number, currency = excluded.currency;");
+
+    return statement;
+}
+
+/**
+ * The state of an account is written on its own, not by the statement above.
+ * That statement carries what the bank reports, and the state is not among it:
+ * an account the user deselected must not become visible again merely because
+ * the wizard offered it once more. Whoever wants it changed says so, which
+ * main.cpp does once it has the result of the wizard.
+ *
+ * changed_at only moves when the value actually differs, so it records the last
+ * switch rather than the last write. The comparison reads the old row; SQLite
+ * evaluates every expression of an UPDATE against the values before it.
+ */
+const QString &accountStateUpdateQuery()
+{
+    static const QString statement = QStringLiteral(
+        "UPDATE accounts SET "
+        "changed_at = CASE WHEN active <> :state THEN datetime('now', 'localtime') "
+        "ELSE changed_at END, "
+        "active = :active "
+        "WHERE unique_id = :unique_id;");
 
     return statement;
 }
@@ -284,6 +311,12 @@ const QMap<QString, QStringList> &expectedColumns()
         {QStringLiteral("accounts"),
          {QStringLiteral("id"),
           QStringLiteral("type"),
+          // Version 3 added both. They only come into being with the table
+          // itself, so a file written before that carries neither, and naming
+          // them here is what turns that into a message the user can act on
+          // instead of a failing query later.
+          QStringLiteral("active"),
+          QStringLiteral("changed_at"),
           QStringLiteral("unique_id"),
           QStringLiteral("backend_name"),
           QStringLiteral("owner_name"),
@@ -348,6 +381,17 @@ inline void cleanupResource()
 struct ReadResult
 {
     BankingItems items;
+    Error error;
+};
+
+/**
+ * What the worker thread of storeItems hands back. The count travels with the
+ * error because it is needed on both paths: whoever tells the user that the
+ * setup did not finish has to say how many accounts did go in.
+ */
+struct WriteResult
+{
+    int stored = 0;
     Error error;
 };
 
@@ -910,12 +954,15 @@ public:
      * skipped. bindValue would drop it without a word, which is how the balance
      * of an account went missing.
      */
-    Result<QVariant> insertRow(const QString &statement,
-                               const QMap<QString, QVariant> &map,
-                               const QString &type)
+    static Result<QVariant> insertRowOn(const QSqlDatabase &database,
+                                        const QString &key,
+                                        const QString &fileName,
+                                        const QString &statement,
+                                        const QMap<QString, QVariant> &map,
+                                        const QString &type)
     {
         QSqlQuery query;
-        if (const auto error = openQuery(query); error.isError()) {
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
             return error;
         }
 
@@ -940,10 +987,114 @@ public:
         if (!query.exec()) {
             return Error(ErrorCode::DatabaseFailure,
                          QStringLiteral("Could not store an item of type %1: %2")
-                             .arg(type, lastErrorMessage()));
+                             .arg(type, database.lastError().text()));
         }
 
         return query.lastInsertId();
+    }
+
+    /**
+     * Writes one record, whatever its type. The whole write path is static and
+     * takes the database, because storeItems runs it in a thread of its own on a
+     * connection of its own; a QSqlDatabase belongs to the thread that created
+     * it. Storage::storeItem hands in the connection of this object and adds the
+     * signals, this function emits none.
+     */
+    static Error storeItemOn(const QSqlDatabase &database,
+                             const QString &key,
+                             const QString &fileName,
+                             const BankingItem *bankingItem)
+    {
+        if (bankingItem == nullptr) {
+            return Error(ErrorCode::InvalidInput, QStringLiteral("No banking item to store"));
+        }
+
+        const auto type = bankingItem->itemType();
+
+        if (!bankingItem->isValid()) {
+            // Used to return success without having written anything.
+            return Error(ErrorCode::InvalidInput,
+                         QStringLiteral("Invalid banking item of type %1").arg(type));
+        }
+
+        if (type == QLatin1StringView("Account")) {
+            return storeAccountOn(database, key, fileName, bankingItem->toMap());
+        }
+
+        if (type == QLatin1StringView("Transaction")) {
+            const auto result = insertRowOn(database,
+                                            key,
+                                            fileName,
+                                            transactionInsertQuery(),
+                                            bankingItem->toMap(),
+                                            type);
+            return result.hasValue() ? Error() : result.error();
+        }
+
+        // Category and Contact have no table of their own yet. The branch used to
+        // be empty, which sent an unprepared query on its way.
+        return Error(ErrorCode::NotImplemented,
+                     QStringLiteral("Storing an item of type %1 is not implemented").arg(type));
+    }
+
+    /**
+     * Writes a run of records, in a thread of its own.
+     *
+     * The connection is cloned rather than shared, for the same reason readItems
+     * clones it. Everything the run needs is passed by value, the records
+     * included: they are shared pointers, so the run holds them alive on its own.
+     *
+     * The bracket sits around the single record. What went in stays in, and the
+     * run ends at the first failure rather than carrying on over a record that
+     * may be the cause.
+     */
+    static void writeItems(QPromise<WriteResult> &promise,
+                           const QString &sourceConnectionName,
+                           const QString &key,
+                           const QString &fileName,
+                           BankingItems items)
+    {
+        // A name of its own, so that the two connections never collide. The one
+        // of StorageConnection already carries a random number.
+        const auto workerConnectionName = sourceConnectionName + QStringLiteral("_writer");
+
+        int stored = 0;
+
+        // Scoped, because removeDatabase below must not run while a QSqlQuery or
+        // a QSqlDatabase still refers to the connection. Qt warns and leaks it.
+        {
+            QSqlDatabase database = QSqlDatabase::cloneDatabase(sourceConnectionName,
+                                                                workerConnectionName);
+            if (!database.isValid() || !database.open()) {
+                promise.addResult(
+                    WriteResult{0,
+                                Error(ErrorCode::DatabaseFailure,
+                                      QStringLiteral("Could not open a second connection to %1")
+                                          .arg(fileName))});
+                QSqlDatabase::removeDatabase(workerConnectionName);
+                return;
+            }
+
+            promise.setProgressRange(0, 100);
+
+            auto error = Error();
+
+            for (const auto &item : std::as_const(items)) {
+                error = storeItemOn(database, key, fileName, item.get());
+                if (error.isError()) {
+                    break;
+                }
+
+                ++stored;
+                promise.setProgressValue(qMin(stored * 100 / items.size(), 100));
+            }
+
+            promise.addResult(WriteResult{stored, error});
+
+            database.close();
+        }
+
+        QSqlDatabase::removeDatabase(workerConnectionName);
     }
 
     /**
@@ -951,42 +1102,150 @@ public:
      * and the reference accounts held with it. Either all three are written or
      * none is, so that no account ends up carrying the balance of an older write.
      */
-    Error storeAccount(const QMap<QString, QVariant> &map)
+    static Error storeAccountOn(QSqlDatabase database,
+                                const QString &key,
+                                const QString &fileName,
+                                const QMap<QString, QVariant> &map)
     {
         auto accountMap = map;
 
-        // Both are kept in tables of their own. Left in place they would be
-        // reported as columnless properties on every single write.
+        // The first two are kept in tables of their own, the state is written by
+        // a statement of its own. Left in place they would be reported as
+        // columnless properties on every single write.
         const auto balance = accountMap.take(QStringLiteral("balance"));
         const auto referenceAccounts = accountMap.take(QStringLiteral("refAccounts"));
+        const auto active = accountMap.take(QStringLiteral("active"));
+        const auto uniqueId = accountMap.value(QStringLiteral("unique_id"));
 
-        if (!connection()->beginTransaction()) {
+        // The transaction is taken on the handle that was passed in, not on the
+        // connection of this object. The worker thread of storeItems holds one of
+        // its own, and a transaction belongs to the connection it was begun on.
+        // The handle is taken by value: QSqlDatabase shares its connection, so
+        // the copy drives the same one and transaction() is not const.
+        if (!database.transaction()) {
             return Error(ErrorCode::DatabaseFailure,
                          QStringLiteral("Could not begin a transaction on %1: %2")
-                             .arg(m_storageFileName, lastErrorMessage()));
+                             .arg(fileName, database.lastError().text()));
         }
 
-        const auto accountId = insertRow(accountInsertQuery(),
-                                         accountMap,
-                                         QStringLiteral("Account"));
+        if (const auto written = insertRowOn(database,
+                                             key,
+                                             fileName,
+                                             accountInsertQuery(),
+                                             accountMap,
+                                             QStringLiteral("Account"));
+            !written.hasValue()) {
+            return rollbackOn(database, written.error());
+        }
+
+        // The upsert may have taken its update branch, and SQLite leaves
+        // sqlite3_last_insert_rowid() where it was for that. The id insertRow
+        // hands back would then belong to whichever account was inserted last,
+        // and the balance and the reference accounts would hang on that one.
+        const auto accountId = accountIdOfOn(database, key, fileName, uniqueId);
         if (!accountId.hasValue()) {
-            return rollback(accountId.error());
+            return rollbackOn(database, accountId.error());
         }
 
-        if (const auto error = storeBalance(accountId.value(), balance, accountMap);
+        if (const auto error = storeAccountStateOn(database, key, fileName, uniqueId, active);
             error.isError()) {
-            return rollback(error);
+            return rollbackOn(database, error);
         }
 
-        if (const auto error = storeReferenceAccounts(accountId.value(), referenceAccounts);
+        if (const auto error
+            = storeBalanceOn(database, key, fileName, accountId.value(), balance, accountMap);
             error.isError()) {
-            return rollback(error);
+            return rollbackOn(database, error);
         }
 
-        if (!connection()->commitTransaction()) {
+        if (const auto error = storeReferenceAccountsOn(database,
+                                                        key,
+                                                        fileName,
+                                                        accountId.value(),
+                                                        referenceAccounts);
+            error.isError()) {
+            return rollbackOn(database, error);
+        }
+
+        if (!database.commit()) {
             return Error(ErrorCode::DatabaseFailure,
                          QStringLiteral("Could not commit an account to %1: %2")
-                             .arg(m_storageFileName, lastErrorMessage()));
+                             .arg(fileName, database.lastError().text()));
+        }
+
+        return {};
+    }
+
+    /**
+     * The id of the row that carries this unique id. Read rather than taken from
+     * the write, because an upsert that updated an existing account reports no
+     * new row id.
+     */
+    static Result<QVariant> accountIdOfOn(const QSqlDatabase &database,
+                                          const QString &key,
+                                          const QString &fileName,
+                                          const QVariant &uniqueId)
+    {
+        QSqlQuery query;
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
+            return error;
+        }
+
+        if (!query.prepare(
+                QStringLiteral("SELECT id FROM accounts WHERE unique_id = :unique_id;"))) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the lookup of an account: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        query.bindValue(QStringLiteral(":unique_id"), uniqueId);
+
+        if (!query.exec() || !query.next()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not find the account just written to %1: %2")
+                             .arg(fileName, query.lastError().text()));
+        }
+
+        return query.value(0);
+    }
+
+    /**
+     * Sets whether the user keeps the account. An account handed in without the
+     * property keeps the state the row already carries, which is what the
+     * default of the column gives a row that was never touched.
+     */
+    static Error storeAccountStateOn(const QSqlDatabase &database,
+                                     const QString &key,
+                                     const QString &fileName,
+                                     const QVariant &uniqueId,
+                                     const QVariant &active)
+    {
+        if (!active.isValid()) {
+            return {};
+        }
+
+        QSqlQuery query;
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
+            return error;
+        }
+
+        if (!query.prepare(accountStateUpdateQuery())) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the state of an account: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        // The statement names the value twice, once to compare against the old
+        // row and once to write. Two placeholders rather than one repeated,
+        // because a driver is free to bind a repeated name only once.
+        query.bindValue(QStringLiteral(":state"), active);
+        query.bindValue(QStringLiteral(":active"), active);
+        query.bindValue(QStringLiteral(":unique_id"), uniqueId);
+
+        if (!query.exec()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not store the state of an account in %1: %2")
+                             .arg(fileName, database.lastError().text()));
         }
 
         return {};
@@ -999,9 +1258,12 @@ public:
      * read. The type stays at zero for the same reason, the source does not say
      * whether the figure is booked or noted.
      */
-    Error storeBalance(const QVariant &accountId,
-                       const QVariant &balance,
-                       const QMap<QString, QVariant> &accountMap)
+    static Error storeBalanceOn(const QSqlDatabase &database,
+                                const QString &key,
+                                const QString &fileName,
+                                const QVariant &accountId,
+                                const QVariant &balance,
+                                const QMap<QString, QVariant> &accountMap)
     {
         if (!balance.isValid()) {
             return {};
@@ -1015,7 +1277,12 @@ public:
             {QStringLiteral("currency"), accountMap.value(QStringLiteral("currency"))},
         };
 
-        const auto result = insertRow(balanceInsertQuery(), balanceMap, QStringLiteral("Balance"));
+        const auto result = insertRowOn(database,
+                                        key,
+                                        fileName,
+                                        balanceInsertQuery(),
+                                        balanceMap,
+                                        QStringLiteral("Balance"));
 
         return result.hasValue() ? Error() : result.error();
     }
@@ -1027,7 +1294,11 @@ public:
      * Ownership: the entries are shared. Whichever holder goes last releases
      * them, so an early return from this function leaks nothing.
      */
-    Error storeReferenceAccounts(const QVariant &accountId, const QVariant &referenceAccounts)
+    static Error storeReferenceAccountsOn(const QSqlDatabase &database,
+                                          const QString &key,
+                                          const QString &fileName,
+                                          const QVariant &accountId,
+                                          const QVariant &referenceAccounts)
     {
         if (!referenceAccounts.canConvert<ReferenceAccounts>()) {
             return {};
@@ -1036,7 +1307,7 @@ public:
         const auto accounts = qvariant_cast<ReferenceAccounts>(referenceAccounts);
 
         QSqlQuery query;
-        if (const auto error = openQuery(query); error.isError()) {
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
             return error;
         }
 
@@ -1062,9 +1333,12 @@ public:
             auto map = referenceAccount->toMap();
             map[QStringLiteral("account_id")] = accountId;
 
-            const auto result = insertRow(referenceAccountInsertQuery(),
-                                          map,
-                                          QStringLiteral("ReferenceAccount"));
+            const auto result = insertRowOn(database,
+                                            key,
+                                            fileName,
+                                            referenceAccountInsertQuery(),
+                                            map,
+                                            QStringLiteral("ReferenceAccount"));
             if (!result.hasValue()) {
                 return result.error();
             }
@@ -1146,11 +1420,11 @@ public:
      * failing rollback is logged; it cannot change what the caller is told, the
      * first error is the one that matters.
      */
-    Error rollback(const Error &error)
+    static Error rollbackOn(QSqlDatabase database, const Error &error)
     {
-        if (!connection()->rollbackTransaction()) {
+        if (!database.rollback()) {
             qCWarning(lcStorage) << "could not roll back after" << error.message() << ":"
-                                 << lastErrorMessage();
+                                 << database.lastError().text();
         }
 
         return error;
@@ -1245,6 +1519,13 @@ private:
      * is still running waits for it, which would make the call blocking again.
      */
     QFutureWatcher<ReadResult> m_readWatcher;
+
+    /**
+     * The same for the run started by storeItems. A watcher of its own rather
+     * than a shared one, because the two carry different results and a run of
+     * either kind must not cancel the other.
+     */
+    QFutureWatcher<WriteResult> m_writeWatcher;
 
     friend class Storage;
     Storage *q_ptr;
@@ -1388,31 +1669,17 @@ QRegularExpression Storage::minPasswordGuidelines() const
 
 Error Storage::storeItem(const BankingItem *bankingItem)
 {
-    if (bankingItem == nullptr) {
-        return Error(ErrorCode::InvalidInput, QStringLiteral("No banking item to store"));
+    if (d_ptr->connection() == nullptr) {
+        // The write path used to reach for the connection without asking. A call
+        // before initialize took the whole application down with it.
+        return Error(ErrorCode::DatabaseFailure,
+                     QStringLiteral("No storage connection for %1").arg(d_ptr->storageFileName()));
     }
 
-    const auto type = bankingItem->itemType();
-
-    if (!bankingItem->isValid()) {
-        // Used to return success without having written anything.
-        return Error(ErrorCode::InvalidInput,
-                     QStringLiteral("Invalid banking item of type %1").arg(type));
-    }
-
-    auto error = Error();
-
-    if (type == QLatin1StringView("Account")) {
-        error = d_ptr->storeAccount(bankingItem->toMap());
-    } else if (type == QLatin1StringView("Transaction")) {
-        const auto result = d_ptr->insertRow(transactionInsertQuery(), bankingItem->toMap(), type);
-        error = result.hasValue() ? Error() : result.error();
-    } else {
-        // Category and Contact have no table of their own yet. The branch used to
-        // be empty, which sent an unprepared query on its way.
-        return Error(ErrorCode::NotImplemented,
-                     QStringLiteral("Storing an item of type %1 is not implemented").arg(type));
-    }
+    const auto error = Private::storeItemOn(d_ptr->connection()->database(),
+                                            d_ptr->m_key,
+                                            d_ptr->storageFileName(),
+                                            bankingItem);
 
     if (error.isError()) {
         qCCritical(lcStorage) << error.message();
@@ -1423,11 +1690,91 @@ Error Storage::storeItem(const BankingItem *bankingItem)
         return error;
     }
 
-    qCDebug(lcStorage) << "stored an item of type" << type;
+    qCDebug(lcStorage) << "stored an item of type" << bankingItem->itemType();
 
     Q_EMIT finished();
 
     return {};
+}
+
+void Storage::storeItems(const BankingItems &items)
+{
+    const auto reportError = [this](ErrorCode code, const QString &message) {
+        qCCritical(lcStorage) << message;
+
+        Q_EMIT errorOccurred(code, message);
+        Q_EMIT finished();
+    };
+
+    if (d_ptr->connection() == nullptr || !d_ptr->connection()->isOpen()) {
+        reportError(ErrorCode::DatabaseFailure,
+                    QStringLiteral("No open storage connection for %1")
+                        .arg(d_ptr->storageFileName()));
+        return;
+    }
+
+    // A second run while one is still going would be a second transaction on the
+    // same file, and the watcher of the first would be lost.
+    if (d_ptr->m_writeWatcher.isRunning()) {
+        reportError(ErrorCode::InvalidInput,
+                    QStringLiteral("A write to the storage is already running"));
+        return;
+    }
+
+    // A run without records is not a failure. Nothing is started, and the caller
+    // still gets its end.
+    if (items.isEmpty()) {
+        Q_EMIT itemsStored(0);
+        Q_EMIT finished();
+        return;
+    }
+
+    const auto sourceConnectionName = d_ptr->connection()->database().connectionName();
+
+    // The connections are made before the run is started. A short write could
+    // otherwise finish before anyone is listening.
+    QObject::disconnect(&d_ptr->m_writeWatcher, nullptr, this, nullptr);
+
+    connect(&d_ptr->m_writeWatcher,
+            &QFutureWatcher<WriteResult>::progressValueChanged,
+            this,
+            [this](int progress) { Q_EMIT progressChanged(progress); });
+
+    connect(&d_ptr->m_writeWatcher, &QFutureWatcher<WriteResult>::finished, this, [this]() {
+        const auto future = d_ptr->m_writeWatcher.future();
+        if (future.resultCount() == 0) {
+            // Cannot happen through writeItems, which reports on every path. A
+            // cancelled future can end here, and a silent return would leave the
+            // caller waiting for a signal that never comes.
+            qCCritical(lcStorage) << "the storage write ended without a result";
+
+            Q_EMIT errorOccurred(ErrorCode::DatabaseFailure,
+                                 QStringLiteral("The storage write ended without a result"));
+            Q_EMIT itemsStored(0);
+            Q_EMIT finished();
+            return;
+        }
+
+        const auto result = future.result();
+        if (result.error.isError()) {
+            qCCritical(lcStorage) << result.error.message();
+
+            Q_EMIT errorOccurred(result.error.code(), result.error.message());
+        } else {
+            qCDebug(lcStorage) << "stored" << result.stored << "items";
+        }
+
+        // The count goes out on both paths. It is what the failure has to be
+        // reported with, see FR-006a.
+        Q_EMIT itemsStored(result.stored);
+        Q_EMIT finished();
+    });
+
+    d_ptr->m_writeWatcher.setFuture(QtConcurrent::run(&Private::writeItems,
+                                                      sourceConnectionName,
+                                                      d_ptr->m_key,
+                                                      d_ptr->storageFileName(),
+                                                      items));
 }
 
 void Storage::receiveItems(Type type, int offset, int limit)

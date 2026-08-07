@@ -64,6 +64,53 @@ private:
         return workingDirectory->filePath(QStringLiteral("storage.obfx"));
     }
 
+    /**
+     * Runs one statement against the store, past Storage, and hands back the
+     * first value of the first row. An invalid QVariant means the file would not
+     * open, the statement failed, or it returned no row.
+     *
+     * The tests use it for what Storage offers no way to ask: what a column
+     * actually holds after a write, and how many rows a table carries.
+     */
+    static QVariant scalarOf(const QString &file, const QString &statement)
+    {
+        auto value = QVariant();
+
+        {
+            auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
+                                                      QStringLiteral("StorageTestDirect"));
+            database.setDatabaseName(file);
+
+            if (database.open()) {
+                auto key = password();
+                key.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+                QSqlQuery query(database);
+                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(key)) && query.exec(statement)
+                    && query.next()) {
+                    value = query.value(0);
+                }
+
+                database.close();
+            }
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("StorageTestDirect"));
+
+        return value;
+    }
+
+    /**
+     * The schema version a file carries, read the way Storage reads it: the
+     * number in the first four characters of the highest applied migration.
+     */
+    static int schemaVersionOf(const QString &file)
+    {
+        return scalarOf(file,
+                        QStringLiteral("SELECT COALESCE(MAX(CAST(substr(name, 1, 4) AS INTEGER)), "
+                                       "0) FROM migrations WHERE migrated = 1;"))
+            .toInt();
+    }
+
 private Q_SLOTS:
     void initTestCase();
     void init();
@@ -73,15 +120,23 @@ private Q_SLOTS:
     void initializeRejectsEmptyStorageFile();
     void initializeRejectsEmptyPassword();
     void initializeCreatesUsableStorage();
+    void initializeRunsTwiceAndLeavesTheSchemaAtItsVersion();
     void changeKeyMakesOldPasswordInvalid();
     void settingReturnsTheDefaultForAnUnknownKey();
     void storeSettingPersistsValueUnderGroup();
     void storeItemPersistsAccountAndEmitsFinished();
     void storeItemKeepsBalanceAndReferenceAccounts();
+    void anAccountSurvivesAReopenWithEveryVisibleProperty();
+    void storingTheSameAccountTwiceLeavesOneRow();
+    void anUpdateOfTheBankDetailsLeavesTheStateAlone();
+    void deselectingKeepsTheRowAndItsTransactions();
     void initializeRejectsAFileFromANewerVersion();
     void receiveItemsReturnsBeforeTheItemsArrive();
     void receiveItemsSignalsArriveInOrderAndInTheCallingThread();
     void receiveItemsRefusesASecondRunWhileOneIsGoing();
+    void storeItemsReturnsBeforeTheAccountsAreWritten();
+    void storeItemsSignalsArriveInOrderAndInTheCallingThread();
+    void storeItemsRefusesASecondRunWhileOneIsGoing();
 };
 
 void StorageTest::initTestCase()
@@ -168,6 +223,33 @@ void StorageTest::initializeCreatesUsableStorage()
     storage.close();
 
     QVERIFY(QFile::exists(file));
+}
+
+/**
+ * setupTables runs the whole schema resource again on every version step, so
+ * every statement in it has to do nothing the second time round. Opening the
+ * same file twice is what puts that to the test: the second open replays the
+ * statements against a file that already carries what they create.
+ *
+ * The version is read afterwards because a statement that fails silently would
+ * leave the file behind at its old number.
+ */
+void StorageTest::initializeRunsTwiceAndLeavesTheSchemaAtItsVersion()
+{
+    const auto file = storageFile();
+
+    for (int run = 0; run < 2; ++run) {
+        Storage storage(applicationInfo());
+        QVERIFY(!storage.setKey(password()).isError());
+        storage.setStorageFile(file);
+
+        QVERIFY(!storage.initialize(true).isError());
+        QVERIFY(storage.isValid());
+
+        storage.close();
+    }
+
+    QCOMPARE(schemaVersionOf(file), 3);
 }
 
 void StorageTest::changeKeyMakesOldPasswordInvalid()
@@ -317,6 +399,203 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
     QCOMPARE(referenceAccounts.at(0)->ownerName(), QStringLiteral("Erika Müller-Groß"));
 
     storage.close();
+}
+
+/**
+ * What US1 promises the user: the accounts chosen in the wizard are there again
+ * on the next start, with everything the interface shows of them.
+ */
+void StorageTest::anAccountSurvivesAReopenWithEveryVisibleProperty()
+{
+    const auto file = storageFile();
+
+    const auto written = Account::fromMap(TestHelpers::createFakeAccountMap());
+    QVERIFY(written != nullptr);
+    QVERIFY(written->isValid());
+
+    {
+        Storage storage(applicationInfo());
+        QVERIFY(!storage.setKey(password()).isError());
+        storage.setStorageFile(file);
+        QVERIFY(!storage.initialize(true).isError());
+
+        QVERIFY(!storage.storeItem(written.get()).isError());
+        storage.close();
+    }
+
+    Storage storage(applicationInfo());
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    storage.receiveItems(Storage::StorageAccount);
+    QVERIFY(itemsSpy.wait());
+
+    const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
+    QCOMPARE(items.size(), 1);
+
+    const auto readBack = std::dynamic_pointer_cast<Account>(items.at(0));
+    QVERIFY(readBack != nullptr);
+
+    QCOMPARE(readBack->accountName(), written->accountName());
+    QCOMPARE(readBack->ownerName(), written->ownerName());
+    QCOMPARE(readBack->bankName(), written->bankName());
+    QCOMPARE(readBack->iban(), written->iban());
+    QCOMPARE(readBack->bic(), written->bic());
+    QCOMPARE(readBack->accountNumber(), written->accountNumber());
+    QCOMPARE(readBack->currency(), written->currency());
+    QCOMPARE(readBack->balance(), written->balance());
+
+    storage.close();
+}
+
+/**
+ * A second run of the wizard hands over the same accounts again. Each of them
+ * has to end up in the row it already has, which is what the unique index on
+ * unique_id and the upsert built on it are for.
+ */
+void StorageTest::storingTheSameAccountTwiceLeavesOneRow()
+{
+    const auto file = storageFile();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto account = Account::fromMap(TestHelpers::createFakeAccountMap());
+    QVERIFY(account != nullptr);
+
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    storage.close();
+
+    QCOMPARE(scalarOf(file, QStringLiteral("SELECT COUNT(*) FROM accounts;")).toInt(), 1);
+}
+
+/**
+ * The update carries what the bank reports and nothing else. An account the user
+ * deselected must not become visible again merely because the wizard offered it
+ * once more, so the state stays out of the statement that writes the rest.
+ */
+void StorageTest::anUpdateOfTheBankDetailsLeavesTheStateAlone()
+{
+    const auto file = storageFile();
+    const auto map = TestHelpers::createFakeAccountMap();
+    const auto uniqueId = map.value(QStringLiteral("unique_id")).toUInt();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    {
+        const auto deselected = Account::fromMap(map);
+        QVERIFY(deselected != nullptr);
+        deselected->setActive(false);
+
+        QVERIFY(!storage.storeItem(deselected.get()).isError());
+    }
+
+    const auto stateAfterDeselect = scalarOf(file,
+                                             QStringLiteral("SELECT active FROM accounts WHERE "
+                                                            "unique_id = %1;")
+                                                 .arg(uniqueId));
+    QCOMPARE(stateAfterDeselect.toInt(), 0);
+
+    // The same account as the bank now reports it. Nobody decided about its
+    // state this time round, so nothing about the state is handed over.
+    auto updated = map;
+    updated[QStringLiteral("account_name")] = QStringLiteral("Girokonto neu");
+    updated[QStringLiteral("owner_name")] = QStringLiteral("Erika Müller-Groß");
+
+    const auto offeredAgain = Account::fromMap(updated);
+    QVERIFY(offeredAgain != nullptr);
+
+    QVERIFY(!storage.storeItem(offeredAgain.get()).isError());
+    storage.close();
+
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT account_name FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toString(),
+             QStringLiteral("Girokonto neu"));
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT owner_name FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toString(),
+             QStringLiteral("Erika Müller-Groß"));
+
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT active FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toInt(),
+             0);
+}
+
+/**
+ * Deselecting an account keeps it. Its transactions hang on the id of its row,
+ * and that id is what an INSERT OR REPLACE would have thrown away. Choosing the
+ * account again therefore finds the same transactions.
+ */
+void StorageTest::deselectingKeepsTheRowAndItsTransactions()
+{
+    const auto file = storageFile();
+    const auto map = TestHelpers::createFakeAccountMap();
+    const auto uniqueId = map.value(QStringLiteral("unique_id")).toUInt();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto account = Account::fromMap(map);
+    QVERIFY(account != nullptr);
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    const auto accountId
+        = scalarOf(file,
+                   QStringLiteral("SELECT id FROM accounts WHERE unique_id = %1;").arg(uniqueId))
+              .toInt();
+    QVERIFY(accountId > 0);
+
+    // Transactions of their own, hung on the account the way the storage hangs
+    // them. Epic 1 has no way to fetch any, so the test puts them there.
+    QVERIFY(scalarOf(file,
+                     QStringLiteral("INSERT INTO transactions (account_id, purpose) VALUES (%1, "
+                                    "'Miete'), (%1, 'Gehalt') RETURNING account_id;")
+                         .arg(accountId))
+                .isValid());
+
+    const auto transactionsOfTheAccount = QStringLiteral("SELECT COUNT(*) FROM transactions WHERE "
+                                                         "account_id = %1;")
+                                              .arg(accountId);
+    QCOMPARE(scalarOf(file, transactionsOfTheAccount).toInt(), 2);
+
+    account->setActive(false);
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    QCOMPARE(scalarOf(file, QStringLiteral("SELECT COUNT(*) FROM accounts;")).toInt(), 1);
+    QCOMPARE(scalarOf(file, transactionsOfTheAccount).toInt(), 2);
+
+    account->setActive(true);
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    storage.close();
+
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT id FROM accounts WHERE unique_id = %1;").arg(uniqueId))
+                 .toInt(),
+             accountId);
+    QCOMPARE(scalarOf(file,
+                      QStringLiteral("SELECT active FROM accounts WHERE unique_id = %1;")
+                          .arg(uniqueId))
+                 .toInt(),
+             1);
+    QCOMPARE(scalarOf(file, transactionsOfTheAccount).toInt(), 2);
 }
 
 /**
@@ -496,6 +775,137 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
     // The first run is unaffected and still delivers.
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
+
+    storage.close();
+}
+
+/**
+ * What FR-007 asks of the write: the thread that called it goes on. The wizard
+ * hands over the accounts of a whole institution at once, and each of them costs
+ * three tables and a transaction.
+ */
+void StorageTest::storeItemsReturnsBeforeTheAccountsAreWritten()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto accounts = BankingItems();
+    for (int i = 0; i < 5; ++i) {
+        accounts << TestHelpers::createFakeAccount();
+    }
+
+    QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    storage.storeItems(accounts);
+
+    // Straight after the call. No event has been processed yet, so nothing can
+    // have been delivered even if the worker were already done.
+    QCOMPARE(storedSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
+
+    QVERIFY(storedSpy.wait());
+    QCOMPARE(storedSpy.count(), 1);
+    QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
+
+    QCOMPARE(scalarOf(storageFile(), QStringLiteral("SELECT COUNT(*) FROM accounts;")).toInt(), 5);
+
+    storage.close();
+}
+
+/**
+ * The signals belong to the thread that called, not to the one that wrote. A
+ * receiver connected to them puts a message on the screen, which is only allowed
+ * there. Whoever waits for finished has to be able to assume that the count has
+ * already arrived.
+ */
+void StorageTest::storeItemsSignalsArriveInOrderAndInTheCallingThread()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto accounts = BankingItems();
+    for (int i = 0; i < 3; ++i) {
+        accounts << TestHelpers::createFakeAccount();
+    }
+
+    QThread *const callingThread = QThread::currentThread();
+    QStringList order;
+    QList<QThread *> threads;
+
+    connect(&storage, &Storage::progressChanged, &storage, [&](int) {
+        if (order.isEmpty() || order.last() != QStringLiteral("progress")) {
+            order << QStringLiteral("progress");
+        }
+        threads << QThread::currentThread();
+    });
+
+    connect(&storage, &Storage::itemsStored, &storage, [&](int) {
+        order << QStringLiteral("stored");
+        threads << QThread::currentThread();
+    });
+
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    connect(&storage, &Storage::finished, &storage, [&]() {
+        order << QStringLiteral("finished");
+        threads << QThread::currentThread();
+    });
+
+    storage.storeItems(accounts);
+
+    QVERIFY(finishedSpy.wait());
+
+    QCOMPARE(order,
+             QStringList{} << QStringLiteral("progress") << QStringLiteral("stored")
+                           << QStringLiteral("finished"));
+
+    QVERIFY(!threads.isEmpty());
+    for (QThread *const thread : std::as_const(threads)) {
+        QCOMPARE(thread, callingThread);
+    }
+
+    storage.close();
+}
+
+/**
+ * Two writers on one storage would be two transactions on one file, and the
+ * watcher of the first would be lost. Refused with an error, the way a second
+ * read is.
+ */
+void StorageTest::storeItemsRefusesASecondRunWhileOneIsGoing()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto accounts = BankingItems();
+    for (int i = 0; i < 5; ++i) {
+        accounts << TestHelpers::createFakeAccount();
+    }
+
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+
+    storage.storeItems(accounts);
+
+    // The first run is still going, this thread has not processed an event since
+    // it started. The refusal comes back in this thread, before any waiting.
+    storage.storeItems(accounts);
+
+    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+
+    // The first run is unaffected and still delivers.
+    QVERIFY(storedSpy.wait());
+    QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
 
     storage.close();
 }
