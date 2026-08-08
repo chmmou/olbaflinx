@@ -78,6 +78,36 @@ public:
      */
     bool createStorage(const QString &name, const QString &password);
 
+public Q_SLOTS:
+    /**
+     * @brief Asks the user for a name and a password and creates a storage.
+     *
+     * Reachable from the window as well, because the menu carries the same
+     * command as the button in the overview.
+     */
+    void addStorage();
+
+Q_SIGNALS:
+    /**
+     * @brief A storage was opened and its accounts are on their way.
+     *
+     * The window listens for this and turns to the page that shows them. The
+     * overview itself does not switch pages; it does not own the window it sits
+     * in.
+     */
+    void storageOpened();
+
+    /**
+     * @brief Something the user needs to read, already worded for him.
+     *
+     * The overview is a page and has no status bar of its own. It says what
+     * happened and lets the window decide where that goes. A signal rather than
+     * a call into the window, because createStorage() is reachable without one.
+     *
+     * @param message What the user gets to see. It names no path and no password.
+     */
+    void message(const QString &message);
+
 protected:
     /**
      * Sizes that derive from the font are computed again when the font changes.

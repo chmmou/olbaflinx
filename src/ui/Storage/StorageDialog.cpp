@@ -182,7 +182,10 @@ public:
 
         btnNewStorageItem->setIcon(icon);
         btnNewStorageItem->setFlat(true);
-        btnNewStorageItem->setShortcut(QKeySequence(QStringLiteral("Ctrl+N")));
+
+        // The shortcut used to sit on this button. It belongs to the menu entry
+        // now, which carries the same command; two widgets on one sequence make
+        // it ambiguous and neither of them fires.
         connect(btnNewStorageItem, &QPushButton::clicked, q_ptr, [&] { addNewStorageItem(); });
 
         hlStoragePage->addWidget(btnNewStorageItem);
@@ -263,9 +266,9 @@ public:
         if (!QDir().mkpath(directory)) {
             qCWarning(lcUiStorage) << "could not create the directory for the storages";
 
-            QMessageBox::critical(q_ptr,
-                                  tr("Storage"),
-                                  tr("The directory for your data vaults could not be created."));
+            Q_EMIT q_ptr->message(
+                tr("The directory for your data vaults could not be created. Check the permissions "
+                   "on your home directory."));
 
             return false;
         }
@@ -286,9 +289,8 @@ public:
         if (const auto error = storage->setKey(password); error.isError()) {
             qCWarning(lcUiStorage) << "the key was refused:" << error.message();
 
-            QMessageBox::critical(q_ptr,
-                                  tr("Storage"),
-                                  tr("The password does not meet the guidelines."));
+            Q_EMIT q_ptr->message(
+                tr("The password does not meet the guidelines. Choose a longer one."));
 
             return false;
         }
@@ -301,10 +303,9 @@ public:
             qCWarning(lcUiStorage) << "could not create the storage:" << error.message();
 
             storage->close();
-            QMessageBox::critical(q_ptr,
-                                  tr("Storage"),
-                                  tr("Your data vault could not be created. Check the permissions "
-                                     "on the directory."));
+            Q_EMIT q_ptr->message(tr("The data vault \"%1\" could not be created. Check the "
+                                     "permissions on the directory it belongs in.")
+                                      .arg(name));
 
             return false;
         }
@@ -399,7 +400,11 @@ private:
                 Private::dateFormat());
         }
 
-        storageItem->setFileInfo(tr("Created on %1").arg(lastModifiedDateTimeString));
+        // The label used to say "Created on" while showing this value. The two
+        // fall together only until something is written; from the first account
+        // onwards the file carries a later time than the day it was made, and no
+        // creation time is kept anywhere.
+        storageItem->setFileInfo(tr("Changed on %1").arg(lastModifiedDateTimeString));
 
         disconnect(storageItem, &NewStorageItem::storageOpened, nullptr, nullptr);
         disconnect(storageItem, &NewStorageItem::storageDeleted, nullptr, nullptr);
@@ -414,13 +419,16 @@ private:
                     // core, where no caller can walk past it.
                     const bool creating = !QFile::exists(filePath);
 
+                    // The name stands for the file in everything the user gets to
+                    // read. The full path names his home directory and stays out
+                    // of it, and out of the log.
+                    const QString name = QFileInfo(filePath).baseName();
+
                     if (creating && !storage->minPasswordGuidelines().match(password).hasMatch()) {
-                        QMessageBox::critical(
-                            q_ptr,
-                            tr("Error"),
-                            tr("The password does not meet the guidelines. It needs at least 12 "
-                               "characters, among them a lower case and an upper case letter, a "
-                               "digit and a special character."));
+                        Q_EMIT q_ptr->message(
+                            tr("The password needs at least %1 characters, among them a lower and "
+                               "an upper case letter, a digit and a special character.")
+                                .arg(storage->minPasswordLength()));
 
                         return;
                     }
@@ -428,10 +436,10 @@ private:
                     if (const auto error = storage->setKey(password); error.isError()) {
                         qCWarning(lcUiStorage) << "the key was refused:" << error.message();
 
-                        QMessageBox::critical(q_ptr,
-                                              tr("Error"),
-                                              tr("The password has to be between 12 and 128 "
-                                                 "characters long."));
+                        Q_EMIT q_ptr->message(
+                            tr("The password has to be at least %1 characters long, so this one "
+                               "cannot be the right one.")
+                                .arg(storage->minPasswordLength()));
 
                         return;
                     }
@@ -439,27 +447,24 @@ private:
                     storage->setStorageFile(filePath);
 
                     if (const auto error = storage->initialize(true); error.isError()) {
-                        // The technical message goes to the log, the dialog gets
-                        // the short form. Opening a vault is what the user just
-                        // asked for, so this one does block.
-                        qCWarning(lcUiStorage) << "could not open the storage:" << error.message();
+                        // The technical message names the file and the statement
+                        // and goes to the log. What reaches the screen is the name
+                        // the user gave the vault and what he can do about it.
+                        qCWarning(lcUiStorage) << "could not open a storage:" << error.message();
 
                         storage->close();
-                        QMessageBox::critical(
-                            q_ptr,
-                            tr("Error"),
-                            tr("Your data vault could not be opened. Check the password, or "
-                               "restore a backup if the file is damaged."));
+                        Q_EMIT q_ptr->message(
+                            tr("\"%1\" could not be opened. Check the password, or restore a "
+                               "backup if the file is damaged.")
+                                .arg(name));
 
                         return;
                     }
 
                     if (!storage->isValid()) {
                         storage->close();
-                        QMessageBox::critical(
-                            q_ptr,
-                            tr("Error"),
-                            tr("Your data vault is corrupted and or not readable / writeable."));
+                        Q_EMIT q_ptr->message(
+                            tr("\"%1\" is damaged, or it cannot be read and written.").arg(name));
 
                         return;
                     }
@@ -470,6 +475,10 @@ private:
                     });
 
                     storage->receiveItems(Storage::StorageAccount);
+
+                    // Last, and only on the way that got through. The window turns
+                    // to the page with the accounts on it when it sees this.
+                    Q_EMIT q_ptr->storageOpened();
                 });
 
         connect(storageItem,
@@ -477,12 +486,11 @@ private:
                 q_ptr,
                 [this](bool success, NewStorageItem *item, const QString &reason) {
                     if (!success) {
-                        qCWarning(lcUiStorage) << "could not remove the storage file:" << reason;
+                        qCWarning(lcUiStorage) << "could not remove a storage file:" << reason;
 
-                        QMessageBox::critical(q_ptr,
-                                              tr("Storage"),
-                                              tr("The data vault could not be removed. Check "
-                                                 "the permissions on the file."));
+                        Q_EMIT q_ptr->message(tr("\"%1\" could not be removed. Check the "
+                                                 "permissions on the file.")
+                                                  .arg(QFileInfo(item->filePath()).baseName()));
                         return;
                     }
 
@@ -597,6 +605,11 @@ void StorageDialog::initialize(QMainWindow *window)
 void StorageDialog::reload()
 {
     d_ptr->loadStorageItems();
+}
+
+void StorageDialog::addStorage()
+{
+    d_ptr->addNewStorageItem();
 }
 
 QString StorageDialog::availableName(const QString &name) const
