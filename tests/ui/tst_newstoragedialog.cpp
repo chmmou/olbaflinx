@@ -35,8 +35,7 @@ namespace olbaflinx::ui::storage::tests {
 /**
  * The dialog used to hand nothing to its caller and to accept whatever was
  * typed, because Ok was wired to accept() in the form itself. It reports name
- * and password now and refuses input that cannot carry a storage (FR-043 to
- * FR-046, FR-048).
+ * and password now and refuses input that cannot carry a storage.
  */
 class NewStorageDialogTest final : public QObject
 {
@@ -111,8 +110,8 @@ void NewStorageDialogTest::initTestCase()
 }
 
 /**
- * FR-043. Without this the caller learns that the dialog was confirmed but not
- * what with, and there is nothing to create.
+ * Without this the caller learns that the dialog was confirmed but not what
+ * with, and there is nothing to create.
  */
 void NewStorageDialogTest::nameAndPasswordReportWhatWasEntered()
 {
@@ -143,7 +142,7 @@ void NewStorageDialogTest::nothingCanBeConfirmedBeforeAnythingIsEntered()
 }
 
 /**
- * FR-044, US1a scenario 8. The reason is shown, not only the refusal.
+ * The reason is shown, not only the refusal.
  */
 void NewStorageDialogTest::anEmptyNameCannotBeConfirmed()
 {
@@ -188,10 +187,10 @@ void NewStorageDialogTest::aPasswordBelowTheGuidelineCannotBeConfirmed()
 }
 
 /**
- * FR-048. These five are the names that cannot be a file name under Linux. The
- * dialog names the reason instead of silently replacing the name, because the
- * message of FR-047 announces a name and the storage has to carry the one the
- * user read.
+ * These five are the names that cannot be a file name under Linux. The dialog
+ * names the reason instead of silently replacing the name, because the message
+ * about a taken name announces one and the storage has to carry the one the user
+ * read.
  */
 void NewStorageDialogTest::aNameThatCannotBeAFileNameCannotBeConfirmed_data()
 {
@@ -218,7 +217,7 @@ void NewStorageDialogTest::aNameThatCannotBeAFileNameCannotBeConfirmed()
 }
 
 /**
- * FR-045, QT-SEC-043. Both fields used to show the pass phrase in clear text.
+ * Both fields used to show the pass phrase in clear text.
  */
 void NewStorageDialogTest::bothPasswordFieldsHideTheirContent()
 {
@@ -230,7 +229,7 @@ void NewStorageDialogTest::bothPasswordFieldsHideTheirContent()
 }
 
 /**
- * FR-046. The form used to name six characters where the core asks for twelve.
+ * The form used to name six characters where the core asks for twelve.
  * The number is taken from the core now, so the two cannot drift apart again.
  */
 void NewStorageDialogTest::theGuidelineIsNamedWithTheNumberTheCoreEnforces()

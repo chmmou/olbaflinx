@@ -555,9 +555,9 @@ private:
 
     static QString storageFileSuffix() { return QStringLiteral(".olbflx"); }
 
-    // FR-047 asks only for a number at the end of a name that is taken. The
-    // hyphen keeps it apart from a name that already ends in a digit, where
-    // "Konto2020" and a 2 would otherwise read as "Konto20202".
+    // A name that is taken only needs a number at the end. The hyphen keeps that
+    // number apart from a name that already ends in a digit, where "Konto2020"
+    // and a 2 would otherwise read as "Konto20202".
     static QString nameSeparator() { return QStringLiteral("-"); }
 
     StorageDialog *q_ptr;

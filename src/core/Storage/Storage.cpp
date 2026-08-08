@@ -113,16 +113,16 @@ const QRegularExpression &minPasswordPattern()
  * doubling it. Everything else passes through as UTF-8, umlauts included.
  *
  * Interpolating into a statement is normally forbidden. It is unavoidable here:
- * SQLite accepts no bound parameter in a PRAGMA. Verified against Qt 6.11.1 with
- * SQLCipher 4.5.2, where prepare("PRAGMA key = :key") fails with
- * `near ":key": syntax error`. The intent behind the ban is met, because the one
- * character that could end the literal early is escaped here and no other can.
+ * SQLite accepts no bound parameter in a PRAGMA, so prepare("PRAGMA key = :key")
+ * fails with `near ":key": syntax error`. The intent behind the ban is met,
+ * because the one character that could end the literal early is escaped here and
+ * no other can.
  *
- * This replaces a hand written escape routine that read every character through
- * QChar::toLatin1. That call answers with a signed char on this platform, so its
- * own range check for the upper half of Latin-1 could never be true and every
- * character outside 32 to 126 fell through a bare default and was dropped from
- * the key without a word.
+ * A hand written escape routine is the wrong answer. Reading each character
+ * through QChar::toLatin1 answers with a signed char on this platform, so a
+ * range check for the upper half of Latin-1 can never be true and every
+ * character outside 32 to 126 falls through the default and leaves the key
+ * without a word.
  */
 QString keyLiteral(const QString &key)
 {
@@ -1769,8 +1769,8 @@ void Storage::storeItems(const BankingItems &items)
             qCDebug(lcStorage) << "stored" << result.stored << "items";
         }
 
-        // The count goes out on both paths. It is what the failure has to be
-        // reported with, see FR-006a.
+        // The count goes out on both paths. A failure has to be reported with
+        // the number of items that made it, not on its own.
         Q_EMIT itemsStored(result.stored);
         Q_EMIT finished();
     });

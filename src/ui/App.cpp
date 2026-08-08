@@ -106,9 +106,8 @@ public:
         ui->appCentralWidget->initialize(q_ptr);
 
         // The overview used to be a window of its own, put up next to this one by
-        // main. It is the first page of the central area now (FR-041). It needs
-        // the storage, which is why it is built here and not in the central
-        // widget.
+        // main. It is the first page of the central area now. It needs the
+        // storage, which is why it is built here and not in the central widget.
         auto *overview = new StorageDialog(storage, q_ptr);
         ui->appCentralWidget->setStorageOverview(overview);
         overview->initialize(q_ptr);

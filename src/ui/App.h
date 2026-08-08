@@ -79,8 +79,8 @@ public:
      * the caller knows, such as how many accounts of a run reached the storage.
      * Nothing here is modal.
      *
-     * @param message What the user gets to see. It must name no account of
-     *  anyone, see FR-036a.
+     * @param message What the user gets to see. It must name no account, no
+     *  balance and no amount.
      */
     void showMessage(const QString &message);
 

@@ -157,8 +157,8 @@ void StorageDialogTest::dialogDoesNotCloseTheStorageItDoesNotOwn()
 }
 
 /**
- * FR-049, SC-013. The list used to be read and written by nobody, so a storage
- * that had just been created was gone the next time the overview was built.
+ * The list used to be read and written by nobody, so a storage that had just
+ * been created was gone the next time the overview was built.
  *
  * The check goes out through storeSetting and back in through setting, because
  * the two take key, value and group in a different order and a swapped pair
@@ -187,12 +187,11 @@ void StorageDialogTest::aCreatedStorageIsStillThereAfterTheOverviewIsBuiltAgain(
 }
 
 /**
- * FR-047, US1a scenarios 5 and 6. The name that the message announces is the one
- * the storage has to be created under, so both sides ask the same function.
+ * The name that the message announces is the one the storage has to be created
+ * under, so both sides ask the same function.
  *
  * The message itself is modal and stays out of this test; what it announces and
- * what gets created are checked here, the cancel path of scenario 7 is walked by
- * hand.
+ * what gets created are checked here. Cancelling it is walked by hand.
  */
 void StorageDialogTest::aTakenNameGetsANumberBehindASeparator()
 {
@@ -216,8 +215,8 @@ void StorageDialogTest::aTakenNameGetsANumberBehindASeparator()
 }
 
 /**
- * FR-050, SC-013. A file that was removed outside the application leaves the
- * list instead of standing in the overview as an entry that cannot be opened.
+ * A file that was removed outside the application leaves the list instead of
+ * standing in the overview as an entry that cannot be opened.
  */
 void StorageDialogTest::anEntryWhoseFileIsGoneDoesNotShowUp()
 {
