@@ -160,6 +160,11 @@ public:
     {
         ui->appCentralWidget->setPage(page);
 
+        // A message belongs to the page it was raised on. "Nothing was found,
+        // import your accounts" says nothing on the overview, where there is no
+        // storage to import into.
+        q_ptr->statusBar()->clearMessage();
+
         const bool storageIsOpen = page == AppCentralWidget::Page::Banking;
 
         ui->appToolBar->setVisible(storageIsOpen);

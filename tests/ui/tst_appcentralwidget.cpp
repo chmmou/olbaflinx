@@ -96,6 +96,8 @@ private Q_SLOTS:
     void theCommandsThatNeedAStorageWaitForOne();
     void theEntriesWithoutTheirStoryStayDisabled();
     void aMessageFromTheOverviewReachesTheStatusBar();
+    void leavingAPageTakesItsMessageWithIt();
+    void theOverviewDoesNotForceASizeOnTheWindow();
 };
 
 void AppCentralWidgetTest::initTestCase()
@@ -309,6 +311,52 @@ void AppCentralWidgetTest::aMessageFromTheOverviewReachesTheStatusBar()
     Q_EMIT overview->message(text);
 
     QCOMPARE(app.statusBar()->currentMessage(), text);
+}
+
+/**
+ * A message belongs to the page it was raised on. "Nothing was found, import
+ * your accounts" is true of an open storage and says nothing on the overview,
+ * where there is no storage to import into. It used to stay there after the
+ * storage was closed.
+ */
+void AppCentralWidgetTest::leavingAPageTakesItsMessageWithIt()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *overview = app.findChild<StorageDialog *>();
+    QVERIFY(overview != nullptr);
+
+    Q_EMIT overview->storageOpened();
+
+    const QString text = QStringLiteral("Nothing was found.");
+    app.showMessage(text);
+
+    QCOMPARE(app.statusBar()->currentMessage(), text);
+
+    app.closeStorage();
+
+    QCOMPARE(app.statusBar()->currentMessage(), QString());
+}
+
+/**
+ * The overview used to be a window of its own and carried the minimum size of
+ * one. As a page inside the window it hands that size on to the window, and
+ * where the window is smaller its contents run out of it. The scroll area it
+ * already carries is what handles a window too small for the entries.
+ */
+void AppCentralWidgetTest::theOverviewDoesNotForceASizeOnTheWindow()
+{
+    Storage storage(applicationInfo());
+
+    StorageDialog overview(&storage);
+    overview.initialize(nullptr);
+
+    QCOMPARE(overview.minimumWidth(), 0);
+    QCOMPARE(overview.minimumHeight(), 0);
 }
 
 /**

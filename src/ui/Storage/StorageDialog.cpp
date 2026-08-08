@@ -49,17 +49,14 @@ using namespace olbaflinx::core::storage;
 
 namespace {
 
-// The outer dimensions of the dialog, the header height and the logo size derive
-// from the font metrics, so that they hold at a different font size or scaling.
+// The header height and the logo size derive from the font metrics, so that they
+// hold at a different font size or scaling. The factors were measured against the
+// fixed values the dialog used to carry, 82 for the header and 64 for the logo,
+// at an average character width of 7 and a line height of 17.
 //
-// The factors were measured against the fixed values the dialog used to carry,
-// 930 by 646 for itself, 82 for the header and 64 for the logo. At the default
-// font of this platform, an average character width of 7 and a line height of
-// 17, they come to 132.9, 38.0, 4.8 and 3.8. The first two were guessed at 120
-// and 30 before, which made the dialog about a tenth narrower and a fifth
-// shorter than it was meant to be.
-constexpr int DialogWidthInCharacters = 133;
-constexpr int DialogHeightInLines = 38;
+// The outer dimensions used to be measured the same way, from 930 by 646. They
+// belonged to a window; this is a page now, and a page that carries the minimum
+// size of a window hands it on to the window it sits in.
 constexpr int HeaderHeightInLines = 5;
 constexpr int LogoSizeInLines = 4;
 
@@ -84,18 +81,17 @@ public:
     ~Private() = default;
 
     /**
-     * Sizes the dialog, its header and its logo from the current font.
+     * Sizes the header and the logo from the current font.
      *
      * They used to be set in two places, the constructor and initialize, each
      * measuring for itself, and none of them ran again when the font changed.
      * This one runs from initialize and from changeEvent.
+     *
+     * The scroll area is what handles a window too small for the entries.
      */
     void applyMetrics()
     {
         const QFontMetrics metrics(q_ptr->font());
-
-        q_ptr->setMinimumSize(metrics.averageCharWidth() * DialogWidthInCharacters,
-                              metrics.height() * DialogHeightInLines);
 
         if (headerWidget) {
             headerWidget->setMinimumSize(0, metrics.height() * HeaderHeightInLines);
