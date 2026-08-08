@@ -67,6 +67,7 @@ private Q_SLOTS:
     void aCreatedStorageIsStillThereAfterTheOverviewIsBuiltAgain();
     void aTakenNameGetsANumberBehindASeparator();
     void anEntryWhoseFileIsGoneDoesNotShowUp();
+    void aNameThatLeavesTheDirectoryCreatesNothing();
 };
 
 void StorageDialogTest::initTestCase()
@@ -235,6 +236,25 @@ void StorageDialogTest::anEntryWhoseFileIsGoneDoesNotShowUp()
 
     QCOMPARE(dialog.findChildren<NewStorageItem *>().size(), 0);
     QVERIFY(storedPaths(storage).isEmpty());
+}
+
+/**
+ * The dialog refuses a name with a path separator in it, so this cannot be
+ * reached through the window. createStorage can be called without it, and a name
+ * that walks up a directory would write the file anywhere the process may write.
+ */
+void StorageDialogTest::aNameThatLeavesTheDirectoryCreatesNothing()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(!dialog.createStorage(QStringLiteral("../Privat"), password()));
+
+    QVERIFY(storedPaths(storage).isEmpty());
+    QVERIFY(!QFileInfo::exists(QStringLiteral("%1/../Privat.olbflx").arg(storage.storagePath())));
 }
 
 } // namespace olbaflinx::ui::storage::tests

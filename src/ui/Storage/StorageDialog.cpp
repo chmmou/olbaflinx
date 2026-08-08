@@ -270,6 +270,19 @@ public:
             return false;
         }
 
+        const QString filePath = storageFilePath(name);
+
+        // The dialog refuses a name that cannot be a file name, but this call is
+        // reachable without it, and a name carrying ".." would write outside the
+        // directory the storages live in. No message box: a user cannot reach
+        // this through the dialog, so the log is where it belongs.
+        if (QFileInfo(filePath).absoluteDir().canonicalPath() != QDir(directory).canonicalPath()) {
+            qCWarning(lcUiStorage)
+                << "the name does not stay inside the directory for the storages";
+
+            return false;
+        }
+
         if (const auto error = storage->setKey(password); error.isError()) {
             qCWarning(lcUiStorage) << "the key was refused:" << error.message();
 
@@ -280,7 +293,6 @@ public:
             return false;
         }
 
-        const QString filePath = storageFilePath(name);
         storage->setStorageFile(filePath);
 
         // The file is written here and not on the first open. An entry without a
