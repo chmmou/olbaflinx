@@ -157,6 +157,19 @@ public:
     [[nodiscard]] QRegularExpression minPasswordGuidelines() const;
 
     /**
+     * @brief Gets the smallest length minPasswordGuidelines accepts.
+     *
+     * The guideline carries the number inside its pattern, where a caller
+     * cannot read it without taking the pattern apart. Whoever has to name the
+     * rule to the user would otherwise write the number down a second time,
+     * which is how the dialog came to promise six where the core asks for
+     * twelve.
+     *
+     * @return Minimum length of a pass phrase in characters
+     */
+    [[nodiscard]] int minPasswordLength() const;
+
+    /**
      * @brief Stores a banking item into the database.
      *
      * @param bankingItem A pointer to the BankingItem object to be stored.

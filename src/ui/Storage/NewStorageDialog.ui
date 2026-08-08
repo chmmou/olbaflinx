@@ -101,7 +101,7 @@
      <item>
       <widget class="QLabel" name="labelStoragePasswordDescriptionTop">
        <property name="text">
-        <string>If possible, choose a secure password with at least 6 letters, numbers and special characters.</string>
+        <string>If possible, choose a secure password with at least %1 letters, numbers and special characters.</string>
        </property>
        <property name="textFormat">
         <enum>Qt::PlainText</enum>
@@ -159,7 +159,11 @@
             </widget>
            </item>
            <item>
-            <widget class="QLineEdit" name="lineEditPassword"/>
+            <widget class="QLineEdit" name="lineEditPassword">
+             <property name="echoMode">
+              <enum>QLineEdit::Password</enum>
+             </property>
+            </widget>
            </item>
            <item>
             <widget class="QLabel" name="labelHelpPassword">
@@ -183,7 +187,7 @@
         &lt;li&gt;At least one lower and upper case letter: a-z A-Z öäü ÖÄÜ&lt;/li&gt;
         &lt;li&gt;At least one digit: 0-9&lt;/li&gt;
         &lt;li&gt;At least one of special character: !&amp;quot;§$%&amp;/()=?&amp;#180;&amp;#96;{}[]\ß&amp;#64;€~’*'+#-_.:,;µ&amp;ouml;&amp;auml;&amp;uuml;&amp;Ouml;&amp;Auml;&amp;Uuml;&amp;lt;|&amp;gt;&lt;/li&gt;
-        &lt;li&gt;Minimum six in length 6 (with the anchors)&lt;/li&gt;
+        &lt;li&gt;At least %1 characters in length&lt;/li&gt;
     &lt;/ul&gt;
 &lt;/body&gt;
 &lt;/html&gt;
@@ -230,7 +234,11 @@
             </widget>
            </item>
            <item>
-            <widget class="QLineEdit" name="lineEditPasswordConfirm"/>
+            <widget class="QLineEdit" name="lineEditPasswordConfirm">
+             <property name="echoMode">
+              <enum>QLineEdit::Password</enum>
+             </property>
+            </widget>
            </item>
            <item>
             <widget class="QLabel" name="labelHelpPasswordConfirm">
@@ -254,7 +262,7 @@
         &lt;li&gt;At least one lower and upper case letter: a-z A-Z öäü ÖÄÜ&lt;/li&gt;
         &lt;li&gt;At least one digit: 0-9&lt;/li&gt;
         &lt;li&gt;At least one of special character: !&amp;quot;§$%&amp;/()=?&amp;#180;&amp;#96;{}[]\ß&amp;#64;€~’*'+#-_.:,;µ&amp;ouml;&amp;auml;&amp;uuml;&amp;Ouml;&amp;Auml;&amp;Uuml;&amp;lt;|&amp;gt;&lt;/li&gt;
-        &lt;li&gt;Minimum six in length 6 (with the anchors)&lt;/li&gt;
+        &lt;li&gt;At least %1 characters in length&lt;/li&gt;
     &lt;/ul&gt;
 &lt;/body&gt;
 &lt;/html&gt;
@@ -281,6 +289,19 @@
       <widget class="QLabel" name="labelVaultPasswordDescriptionBottom">
        <property name="text">
         <string>The password is only known to you and can be reset if necessary. If you forget the password, you will no longer be able to access the storage.</string>
+       </property>
+       <property name="textFormat">
+        <enum>Qt::PlainText</enum>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="labelValidation">
+       <property name="text">
+        <string/>
        </property>
        <property name="textFormat">
         <enum>Qt::PlainText</enum>
@@ -390,22 +411,6 @@
     <hint type="destinationlabel">
      <x>188</x>
      <y>322</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>pushButtonOk</sender>
-   <signal>clicked()</signal>
-   <receiver>UiNewStorageDialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>470</x>
-     <y>365</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>113</x>
-     <y>331</y>
     </hint>
    </hints>
   </connection>
