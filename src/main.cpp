@@ -102,7 +102,7 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
     //
     // The count carries the whole outcome: a run that ends early leaves fewer
     // accounts than it was given. The technical cause is already in the log, put
-    // there by the storage, and none of it belongs on the screen (FR-036a).
+    // there by the storage, and none of it belongs on the screen.
     QObject::connect(
         &storage,
         &Storage::itemsStored,

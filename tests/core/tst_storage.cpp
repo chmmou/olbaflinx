@@ -64,10 +64,10 @@ private:
      * How long a spy waits for a signal a worker thread has to produce first.
      *
      * QSignalSpy::wait defaults to five seconds. Writing five accounts costs
-     * three tables and a transaction each and takes a little over five seconds
-     * on a development machine, so the default held there and ran out on a
-     * slower runner. The number is an upper bound and not a wait: the call
-     * returns the moment the signal arrives, which is what QT-TEST-025 asks for.
+     * three tables and a transaction each and takes a little over that, so the
+     * default is too tight to rely on. The number is an upper bound and not a
+     * wait: the call returns the moment the signal arrives, so no test sleeps
+     * for it.
      */
     static constexpr auto workerTimeout = std::chrono::seconds{30};
 
@@ -414,7 +414,7 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
 }
 
 /**
- * What US1 promises the user: the accounts chosen in the wizard are there again
+ * What the user is promised: the accounts chosen in the wizard are there again
  * on the next start, with everything the interface shows of them.
  */
 void StorageTest::anAccountSurvivesAReopenWithEveryVisibleProperty()
@@ -792,7 +792,7 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
 }
 
 /**
- * What FR-007 asks of the write: the thread that called it goes on. The wizard
+ * What the write owes its caller: the thread that started it goes on. The wizard
  * hands over the accounts of a whole institution at once, and each of them costs
  * three tables and a transaction.
  */

@@ -28,7 +28,7 @@ namespace olbaflinx::ui::tests {
 /**
  * The central area used to be a single page with two widgets on fixed
  * rectangles. It carries two pages now, and the window switches between them
- * when a storage is opened or closed (FR-040).
+ * when a storage is opened or closed.
  */
 class AppCentralWidgetTest final : public QObject
 {
@@ -59,8 +59,8 @@ void AppCentralWidgetTest::startsOnTheStorageOverview()
 }
 
 /**
- * The page that is left has to survive being left. FR-015 lets the models drop
- * their records when a storage is closed, not the page drop its widgets.
+ * The page that is left has to survive being left. Closing a storage drops the
+ * records out of the models, not the widgets out of the page.
  */
 void AppCentralWidgetTest::switchingKeepsBothPagesAlive()
 {

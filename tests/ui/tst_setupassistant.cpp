@@ -150,7 +150,7 @@ void SetupAssistantTest::onlyTheChosenAccountsComeBack()
 /**
  * A second run of the backend reports what it finds then. An account it no
  * longer reports is not turned down, it was not on offer, and the lists have to
- * say so: FR-003a keeps it untouched in the store.
+ * say so. What is already in the store stays untouched.
  */
 void SetupAssistantTest::anAccountThatIsNoLongerOfferedDropsOutOfBothLists()
 {

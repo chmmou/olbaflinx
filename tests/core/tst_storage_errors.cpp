@@ -421,13 +421,12 @@ void StorageErrorTest::receiveItemsFillsTransactionFields()
 }
 
 /**
- * FR-006a: the bracket sits around the single account, not around the run. Three
- * accounts go in, the second one cannot be stored. The first stays, the second
- * does not, and the third was never attempted, because an account that fails may
- * be the reason the ones behind it would fail too.
+ * The bracket sits around the single account, not around the run. Three accounts
+ * go in, the second one cannot be stored. The first stays, the second does not,
+ * and the third was never attempted, because an account that fails may be the
+ * reason the ones behind it would fail too.
  *
- * A second run of the wizard picks the rest up, which is what the upsert of
- * FR-002 is for.
+ * A second run of the wizard picks the rest up. That is what the upsert is for.
  */
 void StorageErrorTest::storeItemsEndsAtTheFailingAccountAndKeepsWhatWentIn()
 {
