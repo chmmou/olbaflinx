@@ -18,12 +18,14 @@
 
 #include "ui/App.h"
 #include "ui/Logging.h"
+#include "ui/Storage/NewStorageDialog.h"
 #include "ui/Storage/NewStorageItem.h"
 
 #include "core/Banking/BankingItem.h"
 #include "core/Storage/Storage.h"
 
 #include <QtCore/QDateTime>
+#include <QtCore/QDir>
 #include <QtCore/QEvent>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
@@ -200,28 +202,186 @@ public:
 
     void loadStorageItems()
     {
-        auto items = storage
-                         ->setting(QStringLiteral("Paths"), QStringLiteral("Items"), QStringList())
-                         .toStringList();
-        if (items.isEmpty()) {
-            removeStorageInfo();
+        // The overview used to be appended to rather than built, so a second
+        // call showed every entry a second time.
+        clearStorageItems();
+
+        const QStringList stored = storedPaths();
+
+        QStringList existing;
+        existing.reserve(stored.size());
+
+        for (const auto &file : stored) {
+            if (QFileInfo::exists(file)) {
+                existing.append(file);
+            }
+        }
+
+        // Building the overview is the only moment the application looks at the
+        // files, so it is the moment an entry whose file was removed elsewhere
+        // leaves the list.
+        if (existing.size() != stored.size()) {
+            storePaths(existing);
+        }
+
+        if (existing.isEmpty()) {
             addStorageInfo();
             return;
         }
 
-        for (const auto &file : std::as_const(items)) {
+        for (const auto &file : std::as_const(existing)) {
             addStorageItem(QFileInfo(file).baseName(), file);
         }
 
         storageContentsLayout->addItem(scrollAreaSpacerBottom);
         storageContentsLayout->update();
+    }
 
-        items.clear();
+    QString availableName(const QString &name) const
+    {
+        if (!QFileInfo::exists(storageFilePath(name))) {
+            return name;
+        }
+
+        // Every step asks about a different file, so the loop ends as soon as
+        // one of the names is free.
+        for (int number = 2;; ++number) {
+            const QString candidate = QStringLiteral("%1%2%3").arg(name,
+                                                                   nameSeparator(),
+                                                                   QString::number(number));
+
+            if (!QFileInfo::exists(storageFilePath(candidate))) {
+                return candidate;
+            }
+        }
+    }
+
+    bool createStorage(const QString &name, const QString &password)
+    {
+        const QString directory = storage->storagePath();
+
+        if (!QDir().mkpath(directory)) {
+            qCWarning(lcUiStorage) << "could not create the directory for the storages";
+
+            QMessageBox::critical(q_ptr,
+                                  tr("Storage"),
+                                  tr("The directory for your data vaults could not be created."));
+
+            return false;
+        }
+
+        const QString filePath = storageFilePath(name);
+
+        // The dialog refuses a name that cannot be a file name, but this call is
+        // reachable without it, and a name carrying ".." would write outside the
+        // directory the storages live in. No message box: a user cannot reach
+        // this through the dialog, so the log is where it belongs.
+        if (QFileInfo(filePath).absoluteDir().canonicalPath() != QDir(directory).canonicalPath()) {
+            qCWarning(lcUiStorage)
+                << "the name does not stay inside the directory for the storages";
+
+            return false;
+        }
+
+        if (const auto error = storage->setKey(password); error.isError()) {
+            qCWarning(lcUiStorage) << "the key was refused:" << error.message();
+
+            QMessageBox::critical(q_ptr,
+                                  tr("Storage"),
+                                  tr("The password does not meet the guidelines."));
+
+            return false;
+        }
+
+        storage->setStorageFile(filePath);
+
+        // The file is written here and not on the first open. An entry without a
+        // file would be dropped again the next time the overview is built.
+        if (const auto error = storage->initialize(true); error.isError()) {
+            qCWarning(lcUiStorage) << "could not create the storage:" << error.message();
+
+            storage->close();
+            QMessageBox::critical(q_ptr,
+                                  tr("Storage"),
+                                  tr("Your data vault could not be created. Check the permissions "
+                                     "on the directory."));
+
+            return false;
+        }
+
+        storage->close();
+
+        QStringList paths = storedPaths();
+        paths.append(filePath);
+        storePaths(paths);
+
+        loadStorageItems();
+
+        return true;
+    }
+
+    void addNewStorageItem()
+    {
+        NewStorageDialog dialog(storage, q_ptr);
+
+        // The dialog is shown again rather than built again, so that cancelling
+        // the conflict message leaves it standing with what was entered.
+        while (dialog.exec() == QDialog::Accepted) {
+            const QString wanted = dialog.name();
+            const QString available = availableName(wanted);
+
+            if (available != wanted) {
+                const auto answer = QMessageBox::question(
+                    q_ptr,
+                    tr("Storage"),
+                    tr("A data vault named \"%1\" already exists. The new one is created as "
+                       "\"%2\".")
+                        .arg(wanted, available));
+
+                if (answer != QMessageBox::Yes) {
+                    continue;
+                }
+            }
+
+            createStorage(available, dialog.password());
+            return;
+        }
     }
 
     Storage *storage;
 
 private:
+    [[nodiscard]] QStringList storedPaths() const
+    {
+        return storage->setting(QStringLiteral("Paths"), QStringLiteral("Items"), QStringList())
+            .toStringList();
+    }
+
+    void storePaths(const QStringList &paths) const
+    {
+        // storeSetting takes key, value, group and setting takes key, group,
+        // default. A swapped pair files the list where the reading side never
+        // looks for it.
+        storage->storeSetting(QStringLiteral("Paths"), paths, QStringLiteral("Items"));
+    }
+
+    [[nodiscard]] QString storageFilePath(const QString &name) const
+    {
+        return QStringLiteral("%1/%2%3").arg(storage->storagePath(), name, storageFileSuffix());
+    }
+
+    void clearStorageItems()
+    {
+        const auto items = q_ptr->findChildren<NewStorageItem *>();
+
+        for (auto *item : items) {
+            storageContentsLayout->removeWidget(item);
+            delete item;
+        }
+
+        removeStorageInfo();
+    }
+
     void addStorageItem(const QString &title, const QString &fileName)
     {
         auto storageItem = new NewStorageItem(storage, q_ptr);
@@ -326,14 +486,15 @@ private:
                         return;
                     }
 
+                    QStringList paths = storedPaths();
+                    paths.removeAll(item->filePath());
+                    storePaths(paths);
+
                     item->deleteLater();
                 });
 
         storageContentsLayout->addWidget(storageItem);
     }
-
-    void addNewStorageItem() {}
-    void removeStorageItem() {}
 
     void addStorageInfo()
     {
@@ -392,6 +553,13 @@ private:
 
     static QString dateFormat() { return QStringLiteral("dd.MM.yyyy hh:mm"); }
 
+    static QString storageFileSuffix() { return QStringLiteral(".olbflx"); }
+
+    // FR-047 asks only for a number at the end of a name that is taken. The
+    // hyphen keeps it apart from a name that already ends in a digit, where
+    // "Konto2020" and a 2 would otherwise read as "Konto20202".
+    static QString nameSeparator() { return QStringLiteral("-"); }
+
     StorageDialog *q_ptr;
     App *app;
 
@@ -429,6 +597,16 @@ void StorageDialog::initialize(QMainWindow *window)
 void StorageDialog::reload()
 {
     d_ptr->loadStorageItems();
+}
+
+QString StorageDialog::availableName(const QString &name) const
+{
+    return d_ptr->availableName(name);
+}
+
+bool StorageDialog::createStorage(const QString &name, const QString &password)
+{
+    return d_ptr->createStorage(name, password);
 }
 
 void StorageDialog::changeEvent(QEvent *event)
