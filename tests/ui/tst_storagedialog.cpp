@@ -80,6 +80,7 @@ private Q_SLOTS:
     void aCreatedStorageIsStillThereAfterTheOverviewIsBuiltAgain();
     void aTakenNameGetsANumberBehindASeparator();
     void theWelcomeTextStaysAwayWhenThereIsAnEntry();
+    void deletingTheLastStorageBringsTheWelcomeTextBack();
     void cancellingTheConflictMessageLeavesTheDialogStanding();
     void anEntryWhoseFileIsGoneDoesNotShowUp();
     void aNameThatLeavesTheDirectoryCreatesNothing();
@@ -263,6 +264,53 @@ void StorageDialogTest::theWelcomeTextStaysAwayWhenThereIsAnEntry()
 
     QVERIFY(welcome != labels.cend());
     QVERIFY(!(*welcome)->isVisibleTo(&dialog));
+}
+
+/**
+ * The other half of the same rule: an overview that has just lost its last
+ * entry is empty, and an empty overview says what a data vault is for.
+ *
+ * Deleting used to drop the entry and nothing else, so the overview never
+ * rebuilt and the text never reached the layout. It stood there anyway, because
+ * it was sitting free in the corner; the two faults hid each other.
+ */
+void StorageDialogTest::deletingTheLastStorageBringsTheWelcomeTextBack()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+
+    const auto entries = dialog.findChildren<NewStorageItem *>();
+    QCOMPARE(entries.size(), 1);
+
+    QVERIFY(QFile::remove(entries.first()->filePath()));
+
+    // The way the entry reports that its file is gone. The dialog rebuilds from
+    // there, and it does so through the event loop, because the entry that sent
+    // this is one of the widgets the rebuild releases.
+    Q_EMIT entries.first()->storageDeleted(true, entries.first(), QString());
+
+    QTRY_COMPARE(dialog.findChildren<NewStorageItem *>().size(), 0);
+
+    const auto labels = dialog.findChildren<QLabel *>();
+    const auto welcome = std::find_if(labels.cbegin(), labels.cend(), [](const QLabel *label) {
+        return label->text().contains(QStringLiteral("<h1>"));
+    });
+
+    QVERIFY(welcome != labels.cend());
+    QVERIFY((*welcome)->isVisibleTo(&dialog));
+
+    // Visible is not enough: the label was visible before this was fixed, but as
+    // a free child of the dialog sitting in the corner. Only a layout moves it
+    // into the contents of the scroll area.
+    QVERIFY((*welcome)->parentWidget() != nullptr);
+    QCOMPARE((*welcome)->parentWidget()->objectName(), QStringLiteral("scrollAreaStorageContents"));
+
+    QVERIFY(storedPaths(storage).isEmpty());
 }
 
 /**

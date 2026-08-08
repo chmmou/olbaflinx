@@ -494,7 +494,14 @@ private:
                     paths.removeAll(item->filePath());
                     storePaths(paths);
 
-                    item->deleteLater();
+                    // Rebuilding is what decides whether the overview is empty
+                    // and needs its welcome text. Dropping the entry alone left
+                    // an overview that says nothing once the last one is gone.
+                    //
+                    // Queued, because the rebuild releases the widget whose
+                    // signal is still on the stack here.
+                    QMetaObject::invokeMethod(
+                        q_ptr, [this] { loadStorageItems(); }, Qt::QueuedConnection);
                 });
 
         storageContentsLayout->addWidget(storageItem);
