@@ -46,9 +46,37 @@ public:
     void initialize(QMainWindow *window);
 
     /**
-     * @brief Reads the list of storages again.
+     * @brief Reads the list of storages again and builds the overview from it.
+     *
+     * Entries whose file is gone are dropped from the list on the way.
      */
     void reload();
+
+    /**
+     * @brief The name a new storage can be created under.
+     *
+     * A name that is already taken gets a number behind a hyphen, and the number
+     * grows for as long as the name it forms is taken as well. The message that
+     * announces the conflict and the call that creates the storage ask this same
+     * function, so that the storage carries the name the user was shown.
+     *
+     * @param name The name that was entered
+     * @return name itself when it is free, otherwise the first free variant
+     */
+    [[nodiscard]] QString availableName(const QString &name) const;
+
+    /**
+     * @brief Creates a storage file for name and puts it into the overview.
+     *
+     * The file is written right away, not on the first time it is opened. An
+     * entry without a file would disappear again the next time the overview is
+     * built.
+     *
+     * @param name A free name, as availableName() answers it
+     * @param password The pass phrase the file is encrypted with
+     * @return true when the file was created and the list was written
+     */
+    bool createStorage(const QString &name, const QString &password);
 
 protected:
     /**

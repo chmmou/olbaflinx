@@ -51,8 +51,7 @@ private:
 
     static QStringList storedPaths(const Storage &storage)
     {
-        return storage
-            .setting(QStringLiteral("Paths"), QStringLiteral("Items"), QStringList())
+        return storage.setting(QStringLiteral("Paths"), QStringLiteral("Items"), QStringList())
             .toStringList();
     }
 
