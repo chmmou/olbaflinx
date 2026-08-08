@@ -84,6 +84,29 @@ public:
      */
     void showMessage(const QString &message);
 
+public Q_SLOTS:
+    /**
+     * @brief Closes the open storage and returns to the overview.
+     *
+     * Everything the storage brought in goes with it: the window shows the first
+     * page again and the models let go of their records. A record left behind
+     * would show up under the next storage that is opened.
+     *
+     * Does nothing when no storage is open. The entry is reachable through its
+     * shortcut before one ever was.
+     */
+    void closeStorage();
+
+Q_SIGNALS:
+    /**
+     * @brief The user asked for the setup wizard.
+     *
+     * The window does not know what a wizard needs to be built, so it asks
+     * rather than builds. Whoever assembled the application answers, and the
+     * accounts come back through setAccounts like any others.
+     */
+    void setupAssistantRequested();
+
 protected:
     bool event(QEvent *event) override;
     void moveEvent(QMoveEvent *event) override;

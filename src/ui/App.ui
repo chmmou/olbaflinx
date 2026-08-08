@@ -34,14 +34,87 @@
    </attribute>
   </widget>
   <widget class="QMenuBar" name="appMenuBar">
+   <widget class="QMenu" name="appFileMenu">
+    <property name="title">
+     <string>&amp;File</string>
+    </property>
+    <addaction name="appNewStorageAction"/>
+    <addaction name="appCloseStorageAction"/>
+    <addaction name="separator"/>
+    <addaction name="appQuitAction"/>
+   </widget>
+   <widget class="QMenu" name="appAccountsMenu">
+    <property name="title">
+     <string>&amp;Accounts</string>
+    </property>
+    <addaction name="appSetupAssistantAction"/>
+    <addaction name="appFetchTransactionsAction"/>
+   </widget>
+   <widget class="QMenu" name="appViewMenu">
+    <property name="title">
+     <string>&amp;View</string>
+    </property>
+    <addaction name="appAccountsViewAction"/>
+    <addaction name="appResetLayoutAction"/>
+   </widget>
    <widget class="QMenu" name="appHelpMenu">
     <property name="title">
      <string>&amp;Help</string>
     </property>
     <addaction name="appAboutAction"/>
    </widget>
+   <addaction name="appFileMenu"/>
+   <addaction name="appAccountsMenu"/>
+   <addaction name="appViewMenu"/>
    <addaction name="appHelpMenu"/>
   </widget>
+  <action name="appNewStorageAction">
+   <property name="text">
+    <string>&amp;New Data Vault</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
+   </property>
+  </action>
+  <action name="appCloseStorageAction">
+   <property name="text">
+    <string>&amp;Close Data Vault</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+W</string>
+   </property>
+  </action>
+  <action name="appQuitAction">
+   <property name="text">
+    <string>&amp;Quit</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
+  </action>
+  <action name="appSetupAssistantAction">
+   <property name="text">
+    <string>&amp;Setup Assistant</string>
+   </property>
+  </action>
+  <action name="appFetchTransactionsAction">
+   <property name="text">
+    <string>&amp;Fetch Transactions</string>
+   </property>
+  </action>
+  <action name="appAccountsViewAction">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;Accounts View</string>
+   </property>
+  </action>
+  <action name="appResetLayoutAction">
+   <property name="text">
+    <string>&amp;Reset Layout</string>
+   </property>
+  </action>
   <action name="appAboutAction">
    <property name="text">
     <string>&amp;About OlbaFlinx</string>
