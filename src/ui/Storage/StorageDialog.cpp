@@ -505,6 +505,9 @@ private:
         storageContentsLayout->addItem(scrollAreaSpacerTop);
         storageContentsLayout->addWidget(storageInfoLabel);
         storageContentsLayout->addItem(scrollAreaSpacerBottom);
+
+        // The layout does not undo the hide() from createStorageInfoLabel.
+        storageInfoLabel->show();
     }
 
     void removeStorageInfo()
@@ -552,6 +555,13 @@ private:
                    "<p>Click the plus sign or type Ctrl+N to create a new data storage.</p>"
                    "<p>You can create as many vaults as you like, each with its own password, e.g. "
                    "for different user and or accounts.</p>"));
+
+            // Until addStorageInfo puts it into the layout, nothing places this
+            // label. A child that no layout places sits in the top left corner
+            // of its parent, and one built before the window is first shown
+            // becomes visible along with it. That is what happened at every
+            // start that found an entry in the list.
+            storageInfoLabel->hide();
         }
     }
 

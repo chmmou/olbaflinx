@@ -79,6 +79,7 @@ private Q_SLOTS:
     void dialogDoesNotCloseTheStorageItDoesNotOwn();
     void aCreatedStorageIsStillThereAfterTheOverviewIsBuiltAgain();
     void aTakenNameGetsANumberBehindASeparator();
+    void theWelcomeTextStaysAwayWhenThereIsAnEntry();
     void cancellingTheConflictMessageLeavesTheDialogStanding();
     void anEntryWhoseFileIsGoneDoesNotShowUp();
     void aNameThatLeavesTheDirectoryCreatesNothing();
@@ -226,6 +227,42 @@ void StorageDialogTest::aTakenNameGetsANumberBehindASeparator()
     const QStringList paths = storedPaths(storage);
     QCOMPARE(paths.size(), 2);
     QVERIFY(paths.at(1).endsWith(QStringLiteral("/Privat-2.olbflx")));
+}
+
+/**
+ * The welcome text belongs to the empty overview and to nothing else. It is
+ * built in initialize, before the window is shown, and it is a child of the
+ * dialog rather than of the layout. Where a stored entry exists, it never
+ * reaches the layout, and a child that no layout places sits at the top left
+ * corner on top of whatever is there.
+ *
+ * The case only exists since the list of storages survives a restart. Before
+ * that the overview was empty at every start.
+ */
+void StorageDialogTest::theWelcomeTextStaysAwayWhenThereIsAnEntry()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    {
+        StorageDialog first(&storage);
+        first.initialize(nullptr);
+        QVERIFY(first.createStorage(QStringLiteral("Privat"), password()));
+    }
+
+    // A second dialog over the same settings is what a restart looks like.
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QCOMPARE(dialog.findChildren<NewStorageItem *>().size(), 1);
+
+    const auto labels = dialog.findChildren<QLabel *>();
+    const auto welcome = std::find_if(labels.cbegin(), labels.cend(), [](const QLabel *label) {
+        return label->text().contains(QStringLiteral("<h1>"));
+    });
+
+    QVERIFY(welcome != labels.cend());
+    QVERIFY(!(*welcome)->isVisibleTo(&dialog));
 }
 
 /**
