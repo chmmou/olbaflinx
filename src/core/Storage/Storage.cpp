@@ -1667,6 +1667,11 @@ QRegularExpression Storage::minPasswordGuidelines() const
     return minPasswordPattern();
 }
 
+int Storage::minPasswordLength() const
+{
+    return MinPasswordLength;
+}
+
 Error Storage::storeItem(const BankingItem *bankingItem)
 {
     if (d_ptr->connection() == nullptr) {

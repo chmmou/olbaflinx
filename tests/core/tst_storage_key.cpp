@@ -130,6 +130,7 @@ private Q_SLOTS:
 
     void minPasswordGuidelinesReturnsValidPattern();
     void minPasswordGuidelinesIsStable();
+    void minPasswordLengthMatchesWhatTheGuidelineAccepts();
     void setKeyRejectsAKeyBelowTheMinimumLength_data();
     void setKeyRejectsAKeyBelowTheMinimumLength();
     void passwordPolicyBoundsLengthAtTheDecidedMaximum();
@@ -351,6 +352,27 @@ void StorageKeyTest::minPasswordGuidelinesIsStable()
 
     QCOMPARE(first.pattern(), second.pattern());
     QCOMPARE(first, second);
+}
+
+/**
+ * The number is reported so that a dialog can name the rule without writing it
+ * down a second time. It is only worth reporting if it is the number the pattern
+ * actually enforces, so the two passwords below sit on either side of it.
+ */
+void StorageKeyTest::minPasswordLengthMatchesWhatTheGuidelineAccepts()
+{
+    const Storage storage(applicationInfo());
+
+    const int length = storage.minPasswordLength();
+    QVERIFY(length > 0);
+
+    const QString filler = QStringLiteral("Ab1!");
+    const QString atTheBound = filler + QString(length - filler.length(), QLatin1Char('c'));
+    const QString oneShort = atTheBound.left(length - 1);
+
+    QCOMPARE(atTheBound.length(), length);
+    QVERIFY(accepts(atTheBound));
+    QVERIFY(!accepts(oneShort));
 }
 
 /**
