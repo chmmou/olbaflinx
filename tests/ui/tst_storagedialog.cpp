@@ -19,12 +19,20 @@
 
 #include "core/ApplicationInfo.h"
 #include "core/Storage/Storage.h"
+#include "ui/Storage/NewStorageDialog.h"
 #include "ui/Storage/NewStorageItem.h"
 
 #include <QtTest/QtTest>
 
-#include <QtWidgets/QLabel>
+#include <QtCore/QTimer>
 
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QLineEdit>
+#include <QtWidgets/QMessageBox>
+#include <QtWidgets/QPushButton>
+
+#include <chrono>
 #include <memory>
 
 using namespace olbaflinx::core;
@@ -49,6 +57,11 @@ private:
     // special character, which is what the core asks of a pass phrase.
     static QString password() { return QStringLiteral("Aa1!Aa1!Aa1!"); }
 
+    static QLineEdit *fieldOf(const QWidget *dialog, const QString &name)
+    {
+        return dialog->findChild<QLineEdit *>(name);
+    }
+
     static QStringList storedPaths(const Storage &storage)
     {
         return storage.setting(QStringLiteral("Paths"), QStringLiteral("Items"), QStringList())
@@ -66,6 +79,9 @@ private Q_SLOTS:
     void dialogDoesNotCloseTheStorageItDoesNotOwn();
     void aCreatedStorageIsStillThereAfterTheOverviewIsBuiltAgain();
     void aTakenNameGetsANumberBehindASeparator();
+    void theWelcomeTextStaysAwayWhenThereIsAnEntry();
+    void deletingTheLastStorageBringsTheWelcomeTextBack();
+    void cancellingTheConflictMessageLeavesTheDialogStanding();
     void anEntryWhoseFileIsGoneDoesNotShowUp();
     void aNameThatLeavesTheDirectoryCreatesNothing();
 };
@@ -191,7 +207,7 @@ void StorageDialogTest::aCreatedStorageIsStillThereAfterTheOverviewIsBuiltAgain(
  * under, so both sides ask the same function.
  *
  * The message itself is modal and stays out of this test; what it announces and
- * what gets created are checked here. Cancelling it is walked by hand.
+ * what gets created are checked here. Cancelling it has a test of its own.
  */
 void StorageDialogTest::aTakenNameGetsANumberBehindASeparator()
 {
@@ -212,6 +228,184 @@ void StorageDialogTest::aTakenNameGetsANumberBehindASeparator()
     const QStringList paths = storedPaths(storage);
     QCOMPARE(paths.size(), 2);
     QVERIFY(paths.at(1).endsWith(QStringLiteral("/Privat-2.olbflx")));
+}
+
+/**
+ * The welcome text belongs to the empty overview and to nothing else. It is
+ * built in initialize, before the window is shown, and it is a child of the
+ * dialog rather than of the layout. Where a stored entry exists, it never
+ * reaches the layout, and a child that no layout places sits at the top left
+ * corner on top of whatever is there.
+ *
+ * The case only exists since the list of storages survives a restart. Before
+ * that the overview was empty at every start.
+ */
+void StorageDialogTest::theWelcomeTextStaysAwayWhenThereIsAnEntry()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    {
+        StorageDialog first(&storage);
+        first.initialize(nullptr);
+        QVERIFY(first.createStorage(QStringLiteral("Privat"), password()));
+    }
+
+    // A second dialog over the same settings is what a restart looks like.
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QCOMPARE(dialog.findChildren<NewStorageItem *>().size(), 1);
+
+    const auto labels = dialog.findChildren<QLabel *>();
+    const auto welcome = std::find_if(labels.cbegin(), labels.cend(), [](const QLabel *label) {
+        return label->text().contains(QStringLiteral("<h1>"));
+    });
+
+    QVERIFY(welcome != labels.cend());
+    QVERIFY(!(*welcome)->isVisibleTo(&dialog));
+}
+
+/**
+ * The other half of the same rule: an overview that has just lost its last
+ * entry is empty, and an empty overview says what a data vault is for.
+ *
+ * Deleting used to drop the entry and nothing else, so the overview never
+ * rebuilt and the text never reached the layout. It stood there anyway, because
+ * it was sitting free in the corner; the two faults hid each other.
+ */
+void StorageDialogTest::deletingTheLastStorageBringsTheWelcomeTextBack()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+
+    const auto entries = dialog.findChildren<NewStorageItem *>();
+    QCOMPARE(entries.size(), 1);
+
+    QVERIFY(QFile::remove(entries.first()->filePath()));
+
+    // The way the entry reports that its file is gone. The dialog rebuilds from
+    // there, and it does so through the event loop, because the entry that sent
+    // this is one of the widgets the rebuild releases.
+    Q_EMIT entries.first()->storageDeleted(true, entries.first(), QString());
+
+    QTRY_COMPARE(dialog.findChildren<NewStorageItem *>().size(), 0);
+
+    const auto labels = dialog.findChildren<QLabel *>();
+    const auto welcome = std::find_if(labels.cbegin(), labels.cend(), [](const QLabel *label) {
+        return label->text().contains(QStringLiteral("<h1>"));
+    });
+
+    QVERIFY(welcome != labels.cend());
+    QVERIFY((*welcome)->isVisibleTo(&dialog));
+
+    // Visible is not enough: the label was visible before this was fixed, but as
+    // a free child of the dialog sitting in the corner. Only a layout moves it
+    // into the contents of the scroll area.
+    QVERIFY((*welcome)->parentWidget() != nullptr);
+    QCOMPARE((*welcome)->parentWidget()->objectName(), QStringLiteral("scrollAreaStorageContents"));
+
+    QVERIFY(storedPaths(storage).isEmpty());
+}
+
+/**
+ * Cancelling the conflict message has to bring the entry dialog back with what
+ * was entered, not end the command. That only holds because the dialog is shown
+ * again in a loop instead of being built again.
+ *
+ * Two modal loops stack up here and addStorage() does not return until both are
+ * gone, so the test drives them from a timer. The timer reacts to whichever
+ * window is modal rather than to a moment it could compute: the second
+ * appearance of the entry dialog is a state, not a point in time.
+ */
+void StorageDialogTest::cancellingTheConflictMessageLeavesTheDialogStanding()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+
+    bool wasFilledIn = false;
+    bool messageWasCancelled = false;
+    bool gaveUp = false;
+    QString nameAfterCancelling;
+    QString passwordAfterCancelling;
+
+    // A window that never comes would leave addStorage() waiting forever. This
+    // turns that into a failed test instead of a hanging one.
+    QTimer::singleShot(std::chrono::seconds(5), &dialog, [&gaveUp] { gaveUp = true; });
+
+    QTimer driver;
+    driver.setInterval(0);
+
+    connect(&driver, &QTimer::timeout, &dialog, [&] {
+        auto *modal = QApplication::activeModalWidget();
+        if (modal == nullptr) {
+            return;
+        }
+
+        if (gaveUp) {
+            modal->close();
+            return;
+        }
+
+        if (auto *message = qobject_cast<QMessageBox *>(modal)) {
+            messageWasCancelled = true;
+            message->button(QMessageBox::No)->click();
+            return;
+        }
+
+        auto *entry = qobject_cast<NewStorageDialog *>(modal);
+        if (entry == nullptr) {
+            return;
+        }
+
+        if (!wasFilledIn) {
+            wasFilledIn = true;
+
+            fieldOf(entry, QStringLiteral("lineEditStorageName"))->setText(QStringLiteral("Privat"));
+            fieldOf(entry, QStringLiteral("lineEditPassword"))->setText(password());
+            fieldOf(entry, QStringLiteral("lineEditPasswordConfirm"))->setText(password());
+
+            entry->findChild<QPushButton *>(QStringLiteral("pushButtonOk"))->click();
+            return;
+        }
+
+        // Ok leaves the dialog modal for as long as its loop takes to unwind, so
+        // seeing it again before the message means the driver is early.
+        if (!messageWasCancelled) {
+            return;
+        }
+
+        nameAfterCancelling = fieldOf(entry, QStringLiteral("lineEditStorageName"))->text();
+        passwordAfterCancelling = fieldOf(entry, QStringLiteral("lineEditPassword"))->text();
+
+        driver.stop();
+        entry->reject();
+    });
+
+    driver.start();
+    dialog.addStorage();
+
+    QVERIFY(!gaveUp);
+    QVERIFY(messageWasCancelled);
+    QCOMPARE(nameAfterCancelling, QStringLiteral("Privat"));
+    QCOMPARE(passwordAfterCancelling, password());
+
+    // The storage that was there is the only one, and the announced name was not
+    // used behind the user's back.
+    const QStringList paths = storedPaths(storage);
+    QCOMPARE(paths.size(), 1);
+    QVERIFY(paths.first().endsWith(QStringLiteral("/Privat.olbflx")));
+    QCOMPARE(dialog.availableName(QStringLiteral("Privat")), QStringLiteral("Privat-2"));
 }
 
 /**

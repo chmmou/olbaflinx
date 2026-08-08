@@ -18,6 +18,7 @@
 #include "core/Banking/Banking.h"
 #include "core/Logger/Logger.h"
 #include "core/Storage/Storage.h"
+#include "ui/AppCentralWidget.h"
 #include "ui/Assistant/SetupAssistant.h"
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
@@ -60,6 +61,7 @@ public:
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
         , logWidgetContainer(nullptr)
+        , overview(nullptr)
         , q_ptr(app)
     {
         logger->enable();
@@ -68,8 +70,6 @@ public:
 
         QApplication::setWindowIcon(QIcon(QStringLiteral(":/app/olbaflinx-logo-128")));
         q_ptr->setWindowIconText(QApplication::applicationName());
-
-        QObject::connect(ui->appAboutAction, &QAction::triggered, q_ptr, [this] { showAbout(); });
 
         // Every error core reports on an asynchronous path ends up here. Without
         // this the signal had no receiver at all and the user saw nothing.
@@ -101,6 +101,77 @@ public:
                                     QApplication::organizationDomain()));
     }
 
+    /**
+     * Wires the menu and fills the tool bar.
+     *
+     * Three entries have no story behind them yet and stay disabled: fetching
+     * transactions belongs to the next epic, the two under View to the one that
+     * builds the dock areas. They are created here so that the menu keeps its
+     * shape once they are switched on.
+     */
+    void setUpActions()
+    {
+        QObject::connect(ui->appAboutAction, &QAction::triggered, q_ptr, [this] { showAbout(); });
+
+        QObject::connect(ui->appNewStorageAction, &QAction::triggered, q_ptr, [this] {
+            overview->addStorage();
+        });
+
+        QObject::connect(ui->appCloseStorageAction, &QAction::triggered, q_ptr, [this] {
+            q_ptr->closeStorage();
+        });
+
+        QObject::connect(ui->appQuitAction, &QAction::triggered, q_ptr, [] {
+            QApplication::quit();
+        });
+
+        // The window does not know what a wizard needs to be built. The assembly
+        // does, so the request travels there and the result comes back through
+        // setAccounts like any other.
+        QObject::connect(ui->appSetupAssistantAction, &QAction::triggered, q_ptr, [this] {
+            Q_EMIT q_ptr->setupAssistantRequested();
+        });
+
+        QObject::connect(overview, &StorageDialog::storageOpened, q_ptr, [this] {
+            applyPage(AppCentralWidget::Page::Banking);
+        });
+
+        QObject::connect(overview, &StorageDialog::message, q_ptr, &App::showMessage);
+
+        ui->appFetchTransactionsAction->setEnabled(false);
+        ui->appAccountsViewAction->setEnabled(false);
+        ui->appResetLayoutAction->setEnabled(false);
+
+        ui->appToolBar->addAction(ui->appSetupAssistantAction);
+        ui->appToolBar->addAction(ui->appFetchTransactionsAction);
+        ui->appToolBar->addSeparator();
+        ui->appToolBar->addAction(ui->appCloseStorageAction);
+    }
+
+    /**
+     * Shows a page and puts the controls into the state that belongs to it.
+     *
+     * Every command in the tool bar needs an open storage, so the bar itself
+     * only belongs on the second page. The menu entries stay where they are and
+     * turn grey instead, so that the menu does not change shape underneath the
+     * user while he learns it.
+     */
+    void applyPage(AppCentralWidget::Page page)
+    {
+        ui->appCentralWidget->setPage(page);
+
+        // A message belongs to the page it was raised on. "Nothing was found,
+        // import your accounts" says nothing on the overview, where there is no
+        // storage to import into.
+        q_ptr->statusBar()->clearMessage();
+
+        const bool storageIsOpen = page == AppCentralWidget::Page::Banking;
+
+        ui->appToolBar->setVisible(storageIsOpen);
+        ui->appCloseStorageAction->setEnabled(storageIsOpen);
+        ui->appSetupAssistantAction->setEnabled(storageIsOpen);
+    }
+
     void initialize()
     {
         ui->appCentralWidget->initialize(q_ptr);
@@ -108,9 +179,12 @@ public:
         // The overview used to be a window of its own, put up next to this one by
         // main. It is the first page of the central area now. It needs the
         // storage, which is why it is built here and not in the central widget.
-        auto *overview = new StorageDialog(storage, q_ptr);
+        overview = new StorageDialog(storage, q_ptr);
         ui->appCentralWidget->setStorageOverview(overview);
         overview->initialize(q_ptr);
+
+        setUpActions();
+        applyPage(AppCentralWidget::Page::Storages);
 
         // Kept on purpose as the reference for the pending docking rework, and
         // not activated: accountWidget() returns nullptr, so every call on aw
@@ -173,6 +247,10 @@ public:
     CDockWidget *centralDockWidget;
     CAutoHideDockContainer *logWidgetContainer;
 
+    // The first page of the central area. Owned by the window through the widget
+    // hierarchy; kept here because the menu reaches into it.
+    StorageDialog *overview;
+
 private:
     App *q_ptr;
 };
@@ -208,6 +286,25 @@ void App::initialize()
 void App::setAccounts(const BankingItems &items)
 {
     d_ptr->accountListModel->setItems(items);
+}
+
+void App::closeStorage()
+{
+    // The page is what says whether a storage is open. Asking the storage itself
+    // would answer for the file, and the entry is reachable through its shortcut
+    // long before a file was ever opened.
+    if (d_ptr->ui->appCentralWidget->page() == AppCentralWidget::Page::Storages) {
+        return;
+    }
+
+    d_ptr->storage->close();
+    d_ptr->accountListModel->setItems({});
+
+    // Building the overview is the moment an entry whose file went away leaves
+    // the list, so the way back is a good moment to build it.
+    d_ptr->overview->reload();
+
+    d_ptr->applyPage(AppCentralWidget::Page::Storages);
 }
 
 void App::showError(ErrorCode code, const QString &reason)

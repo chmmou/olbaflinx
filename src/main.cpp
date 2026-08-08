@@ -166,12 +166,23 @@ int main(int argc, char *argv[])
     app.initialize();
     app.show();
 
-    assistant::SetupAssistant setup(applicationInfo, &app);
-    setup.exec();
+    // The wizard used to run unconditionally at startup, modally, in front of the
+    // overview and before any storage could be open. It therefore never had
+    // anywhere to write, and the window it covered was the one the user needed
+    // first. It is a menu entry now, and that entry is only enabled while a
+    // storage is open.
+    //
+    // Building it here and not in the window keeps the window free of the
+    // application info a wizard needs; assembling the parts is what this
+    // function is for.
+    QObject::connect(&app, &App::setupAssistantRequested, &app, [&] {
+        assistant::SetupAssistant wizard(applicationInfo, &app);
+        wizard.exec();
 
-    // The wizard used to end here and its result was dropped. No account had
-    // ever reached the store because of it.
-    storeTheResultOfTheWizard(app, storage, setup);
+        // The wizard used to end here and its result was dropped. No account had
+        // ever reached the store because of it.
+        storeTheResultOfTheWizard(app, storage, wizard);
+    });
 
     const int result = QApplication::exec();
 

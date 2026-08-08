@@ -49,17 +49,14 @@ using namespace olbaflinx::core::storage;
 
 namespace {
 
-// The outer dimensions of the dialog, the header height and the logo size derive
-// from the font metrics, so that they hold at a different font size or scaling.
+// The header height and the logo size derive from the font metrics, so that they
+// hold at a different font size or scaling. The factors were measured against the
+// fixed values the dialog used to carry, 82 for the header and 64 for the logo,
+// at an average character width of 7 and a line height of 17.
 //
-// The factors were measured against the fixed values the dialog used to carry,
-// 930 by 646 for itself, 82 for the header and 64 for the logo. At the default
-// font of this platform, an average character width of 7 and a line height of
-// 17, they come to 132.9, 38.0, 4.8 and 3.8. The first two were guessed at 120
-// and 30 before, which made the dialog about a tenth narrower and a fifth
-// shorter than it was meant to be.
-constexpr int DialogWidthInCharacters = 133;
-constexpr int DialogHeightInLines = 38;
+// The outer dimensions used to be measured the same way, from 930 by 646. They
+// belonged to a window; this is a page now, and a page that carries the minimum
+// size of a window hands it on to the window it sits in.
 constexpr int HeaderHeightInLines = 5;
 constexpr int LogoSizeInLines = 4;
 
@@ -84,18 +81,17 @@ public:
     ~Private() = default;
 
     /**
-     * Sizes the dialog, its header and its logo from the current font.
+     * Sizes the header and the logo from the current font.
      *
      * They used to be set in two places, the constructor and initialize, each
      * measuring for itself, and none of them ran again when the font changed.
      * This one runs from initialize and from changeEvent.
+     *
+     * The scroll area is what handles a window too small for the entries.
      */
     void applyMetrics()
     {
         const QFontMetrics metrics(q_ptr->font());
-
-        q_ptr->setMinimumSize(metrics.averageCharWidth() * DialogWidthInCharacters,
-                              metrics.height() * DialogHeightInLines);
 
         if (headerWidget) {
             headerWidget->setMinimumSize(0, metrics.height() * HeaderHeightInLines);
@@ -182,7 +178,10 @@ public:
 
         btnNewStorageItem->setIcon(icon);
         btnNewStorageItem->setFlat(true);
-        btnNewStorageItem->setShortcut(QKeySequence(QStringLiteral("Ctrl+N")));
+
+        // The shortcut used to sit on this button. It belongs to the menu entry
+        // now, which carries the same command; two widgets on one sequence make
+        // it ambiguous and neither of them fires.
         connect(btnNewStorageItem, &QPushButton::clicked, q_ptr, [&] { addNewStorageItem(); });
 
         hlStoragePage->addWidget(btnNewStorageItem);
@@ -263,9 +262,9 @@ public:
         if (!QDir().mkpath(directory)) {
             qCWarning(lcUiStorage) << "could not create the directory for the storages";
 
-            QMessageBox::critical(q_ptr,
-                                  tr("Storage"),
-                                  tr("The directory for your data vaults could not be created."));
+            Q_EMIT q_ptr->message(
+                tr("The directory for your data vaults could not be created. Check the permissions "
+                   "on your home directory."));
 
             return false;
         }
@@ -286,9 +285,8 @@ public:
         if (const auto error = storage->setKey(password); error.isError()) {
             qCWarning(lcUiStorage) << "the key was refused:" << error.message();
 
-            QMessageBox::critical(q_ptr,
-                                  tr("Storage"),
-                                  tr("The password does not meet the guidelines."));
+            Q_EMIT q_ptr->message(
+                tr("The password does not meet the guidelines. Choose a longer one."));
 
             return false;
         }
@@ -301,10 +299,9 @@ public:
             qCWarning(lcUiStorage) << "could not create the storage:" << error.message();
 
             storage->close();
-            QMessageBox::critical(q_ptr,
-                                  tr("Storage"),
-                                  tr("Your data vault could not be created. Check the permissions "
-                                     "on the directory."));
+            Q_EMIT q_ptr->message(tr("The data vault \"%1\" could not be created. Check the "
+                                     "permissions on the directory it belongs in.")
+                                      .arg(name));
 
             return false;
         }
@@ -399,7 +396,11 @@ private:
                 Private::dateFormat());
         }
 
-        storageItem->setFileInfo(tr("Created on %1").arg(lastModifiedDateTimeString));
+        // The label used to say "Created on" while showing this value. The two
+        // fall together only until something is written; from the first account
+        // onwards the file carries a later time than the day it was made, and no
+        // creation time is kept anywhere.
+        storageItem->setFileInfo(tr("Changed on %1").arg(lastModifiedDateTimeString));
 
         disconnect(storageItem, &NewStorageItem::storageOpened, nullptr, nullptr);
         disconnect(storageItem, &NewStorageItem::storageDeleted, nullptr, nullptr);
@@ -414,13 +415,16 @@ private:
                     // core, where no caller can walk past it.
                     const bool creating = !QFile::exists(filePath);
 
+                    // The name stands for the file in everything the user gets to
+                    // read. The full path names his home directory and stays out
+                    // of it, and out of the log.
+                    const QString name = QFileInfo(filePath).baseName();
+
                     if (creating && !storage->minPasswordGuidelines().match(password).hasMatch()) {
-                        QMessageBox::critical(
-                            q_ptr,
-                            tr("Error"),
-                            tr("The password does not meet the guidelines. It needs at least 12 "
-                               "characters, among them a lower case and an upper case letter, a "
-                               "digit and a special character."));
+                        Q_EMIT q_ptr->message(
+                            tr("The password needs at least %1 characters, among them a lower and "
+                               "an upper case letter, a digit and a special character.")
+                                .arg(storage->minPasswordLength()));
 
                         return;
                     }
@@ -428,10 +432,10 @@ private:
                     if (const auto error = storage->setKey(password); error.isError()) {
                         qCWarning(lcUiStorage) << "the key was refused:" << error.message();
 
-                        QMessageBox::critical(q_ptr,
-                                              tr("Error"),
-                                              tr("The password has to be between 12 and 128 "
-                                                 "characters long."));
+                        Q_EMIT q_ptr->message(
+                            tr("The password has to be at least %1 characters long, so this one "
+                               "cannot be the right one.")
+                                .arg(storage->minPasswordLength()));
 
                         return;
                     }
@@ -439,27 +443,24 @@ private:
                     storage->setStorageFile(filePath);
 
                     if (const auto error = storage->initialize(true); error.isError()) {
-                        // The technical message goes to the log, the dialog gets
-                        // the short form. Opening a vault is what the user just
-                        // asked for, so this one does block.
-                        qCWarning(lcUiStorage) << "could not open the storage:" << error.message();
+                        // The technical message names the file and the statement
+                        // and goes to the log. What reaches the screen is the name
+                        // the user gave the vault and what he can do about it.
+                        qCWarning(lcUiStorage) << "could not open a storage:" << error.message();
 
                         storage->close();
-                        QMessageBox::critical(
-                            q_ptr,
-                            tr("Error"),
-                            tr("Your data vault could not be opened. Check the password, or "
-                               "restore a backup if the file is damaged."));
+                        Q_EMIT q_ptr->message(
+                            tr("\"%1\" could not be opened. Check the password, or restore a "
+                               "backup if the file is damaged.")
+                                .arg(name));
 
                         return;
                     }
 
                     if (!storage->isValid()) {
                         storage->close();
-                        QMessageBox::critical(
-                            q_ptr,
-                            tr("Error"),
-                            tr("Your data vault is corrupted and or not readable / writeable."));
+                        Q_EMIT q_ptr->message(
+                            tr("\"%1\" is damaged, or it cannot be read and written.").arg(name));
 
                         return;
                     }
@@ -470,6 +471,10 @@ private:
                     });
 
                     storage->receiveItems(Storage::StorageAccount);
+
+                    // Last, and only on the way that got through. The window turns
+                    // to the page with the accounts on it when it sees this.
+                    Q_EMIT q_ptr->storageOpened();
                 });
 
         connect(storageItem,
@@ -477,12 +482,11 @@ private:
                 q_ptr,
                 [this](bool success, NewStorageItem *item, const QString &reason) {
                     if (!success) {
-                        qCWarning(lcUiStorage) << "could not remove the storage file:" << reason;
+                        qCWarning(lcUiStorage) << "could not remove a storage file:" << reason;
 
-                        QMessageBox::critical(q_ptr,
-                                              tr("Storage"),
-                                              tr("The data vault could not be removed. Check "
-                                                 "the permissions on the file."));
+                        Q_EMIT q_ptr->message(tr("\"%1\" could not be removed. Check the "
+                                                 "permissions on the file.")
+                                                  .arg(QFileInfo(item->filePath()).baseName()));
                         return;
                     }
 
@@ -490,7 +494,14 @@ private:
                     paths.removeAll(item->filePath());
                     storePaths(paths);
 
-                    item->deleteLater();
+                    // Rebuilding is what decides whether the overview is empty
+                    // and needs its welcome text. Dropping the entry alone left
+                    // an overview that says nothing once the last one is gone.
+                    //
+                    // Queued, because the rebuild releases the widget whose
+                    // signal is still on the stack here.
+                    QMetaObject::invokeMethod(
+                        q_ptr, [this] { loadStorageItems(); }, Qt::QueuedConnection);
                 });
 
         storageContentsLayout->addWidget(storageItem);
@@ -501,6 +512,9 @@ private:
         storageContentsLayout->addItem(scrollAreaSpacerTop);
         storageContentsLayout->addWidget(storageInfoLabel);
         storageContentsLayout->addItem(scrollAreaSpacerBottom);
+
+        // The layout does not undo the hide() from createStorageInfoLabel.
+        storageInfoLabel->show();
     }
 
     void removeStorageInfo()
@@ -548,6 +562,13 @@ private:
                    "<p>Click the plus sign or type Ctrl+N to create a new data storage.</p>"
                    "<p>You can create as many vaults as you like, each with its own password, e.g. "
                    "for different user and or accounts.</p>"));
+
+            // Until addStorageInfo puts it into the layout, nothing places this
+            // label. A child that no layout places sits in the top left corner
+            // of its parent, and one built before the window is first shown
+            // becomes visible along with it. That is what happened at every
+            // start that found an entry in the list.
+            storageInfoLabel->hide();
         }
     }
 
@@ -597,6 +618,11 @@ void StorageDialog::initialize(QMainWindow *window)
 void StorageDialog::reload()
 {
     d_ptr->loadStorageItems();
+}
+
+void StorageDialog::addStorage()
+{
+    d_ptr->addNewStorageItem();
 }
 
 QString StorageDialog::availableName(const QString &name) const
