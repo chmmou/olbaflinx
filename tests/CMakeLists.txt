@@ -59,7 +59,7 @@ olbaflinx_add_test(tst_transaction core/tst_transaction.cpp OlbaFlinxCore::OlbaF
 olbaflinx_add_test(tst_logger core/tst_logger.cpp OlbaFlinxCore::OlbaFlinxCore)
 
 # The ui targets need Widgets. They run without a display.
-olbaflinx_add_test(tst_accountlistmodel ui/tst_accountlistmodel.cpp
+olbaflinx_add_test(tst_accounttreemodel ui/tst_accounttreemodel.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_transactionlistmodel ui/tst_transactionlistmodel.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
