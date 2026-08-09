@@ -64,7 +64,17 @@ public:
         , overview(nullptr)
         , q_ptr(app)
     {
-        logger->enable();
+        // Connected before the log is opened, because a file that cannot be
+        // opened reports it during the call.
+        QObject::connect(logger, &Logger::logFileUnavailable, q_ptr, [this] {
+            // Not the way of an error from core: that way leads into the log
+            // that is missing.
+            q_ptr->statusBar()->showMessage(
+                App::tr("No log is being kept. The program runs on, but a report about a "
+                        "failure will carry no cause."));
+        });
+
+        logger->enable(Logger::LoggerLevel::Notice, Logger::defaultLogFile());
 
         ui->setupUi(q_ptr);
 
@@ -175,6 +185,7 @@ public:
     void initialize()
     {
         ui->appCentralWidget->initialize(q_ptr);
+        ui->appCentralWidget->setAccountModel(accountTreeModel);
 
         // The overview used to be a window of its own, put up next to this one by
         // main. It is the first page of the central area now. It needs the
@@ -186,9 +197,9 @@ public:
         setUpActions();
         applyPage(AppCentralWidget::Page::Storages);
 
-        // Kept on purpose as the reference for the pending docking rework, and
-        // not activated: accountWidget() returns nullptr, so every call on aw
-        // below would dereference a null pointer.
+        // Kept on purpose as the reference for the pending docking rework. The
+        // accounts sit on the second page of the central area until it is done,
+        // and taking the view out of that page here would leave the page empty.
         /*CDockManager::setConfigFlags(CDockManager::DefaultBaseConfig);
         CDockManager::setConfigFlag(CDockManager::OpaqueSplitterResize, true);
         CDockManager::setConfigFlag(CDockManager::XmlCompressionEnabled, false);
@@ -309,8 +320,9 @@ void App::closeStorage()
 
 void App::showError(ErrorCode code, const QString &reason)
 {
-    // The technical message can name a file or a statement. It goes to the log,
-    // never to the screen.
+    // The technical message can name a file or a statement, and one out of a
+    // foreign library is not translated either. It goes to the log, never to the
+    // screen; what the user reads is made from the code alone.
     qCWarning(lcUi) << "error from core:" << reason;
 
     const QString message = userMessage(code);
@@ -319,6 +331,13 @@ void App::showError(ErrorCode code, const QString &reason)
     }
 
     statusBar()->showMessage(message);
+
+    // A failed read is not an empty storage, and the views must not fall into
+    // the notice that says nothing is there. Every error core reports while the
+    // accounts are on screen is one about what that page shows.
+    if (d_ptr->ui->appCentralWidget->page() == AppCentralWidget::Page::Banking) {
+        d_ptr->ui->appCentralWidget->showAccountsUnreadable(message);
+    }
 }
 
 void App::showMessage(const QString &message)

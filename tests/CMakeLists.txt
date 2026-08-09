@@ -75,4 +75,6 @@ olbaflinx_add_test(tst_appcentralwidget ui/tst_appcentralwidget.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_newstoragedialog ui/tst_newstoragedialog.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_appaccessibility ui/tst_appaccessibility.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 ### Adding tests here

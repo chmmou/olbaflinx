@@ -56,7 +56,7 @@
      <widget class="QWidget" name="pageBanking">
       <layout class="QHBoxLayout" name="bankingLayout">
        <item>
-        <widget class="QListWidget" name="listWidgetBankingAccounts">
+        <widget class="QStackedWidget" name="stackedWidgetAccounts">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
            <horstretch>0</horstretch>
@@ -69,6 +69,52 @@
            <height>0</height>
           </size>
          </property>
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="pageAccountTree">
+          <layout class="QVBoxLayout" name="accountTreeLayout">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QTreeView" name="treeViewBankingAccounts">
+             <property name="headerHidden">
+              <bool>true</bool>
+             </property>
+             <property name="rootIsDecorated">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="pageAccountsNotice">
+          <layout class="QVBoxLayout" name="accountsNoticeLayout">
+           <item>
+            <widget class="QLabel" name="labelAccountsNotice">
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignCenter</set>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
         </widget>
        </item>
        <item>
@@ -84,10 +130,28 @@
            <string>Transactions</string>
           </attribute>
           <layout class="QVBoxLayout" name="transactionsLayout">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
            <item>
-            <widget class="QLabel" name="label">
-             <property name="alignment">
-              <set>Qt::AlignmentFlag::AlignCenter</set>
+            <widget class="QTableView" name="tableViewTransactions">
+             <property name="selectionBehavior">
+              <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+             </property>
+             <property name="alternatingRowColors">
+              <bool>true</bool>
              </property>
             </widget>
            </item>

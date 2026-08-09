@@ -597,6 +597,10 @@ public:
 
     void close()
     {
+        // Raised before anything is torn down. A read that is still going keeps
+        // its own number and is answered as stale when it comes back.
+        ++m_readGeneration;
+
         if (m_connection) {
             if (m_connection->isOpen()) {
                 QSqlQuery query;
@@ -1521,6 +1525,13 @@ private:
     QFutureWatcher<ReadResult> m_readWatcher;
 
     /**
+     * Tells the run that is going from the one that was going before the storage
+     * was closed. Closing raises it, and a result that comes back under an older
+     * number belongs to a file nobody has open any more.
+     */
+    quint64 m_readGeneration = 0;
+
+    /**
      * The same for the run started by storeItems. A watcher of its own rather
      * than a shared one, because the two carry different results and a run of
      * either kind must not cancel the other.
@@ -1860,7 +1871,21 @@ void Storage::receiveItems(Type type, int offset, int limit)
             this,
             [this](int progress) { Q_EMIT progressChanged(progress); });
 
-    connect(&d_ptr->m_readWatcher, &QFutureWatcher<ReadResult>::finished, this, [this]() {
+    const quint64 generation = d_ptr->m_readGeneration;
+
+    connect(&d_ptr->m_readWatcher, &QFutureWatcher<ReadResult>::finished, this, [this, generation]() {
+        if (generation != d_ptr->m_readGeneration) {
+            // The storage was closed while this run was going, and the file it
+            // read is not the one that is open now. Handing the records on would
+            // show the accounts of the previous storage under the name of the
+            // current one. The completion is still reported, so that nobody
+            // waits for a run that is over.
+            qCInfo(lcStorage) << "dropping the result of a read that outlived its storage";
+
+            Q_EMIT finished();
+            return;
+        }
+
         const auto future = d_ptr->m_readWatcher.future();
         if (future.resultCount() == 0) {
             // Cannot happen through readItems, which reports on every path. A

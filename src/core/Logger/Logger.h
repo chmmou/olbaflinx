@@ -52,8 +52,25 @@ public:
     ~Logger() override;
 
     /**
+     * The file the application logs to when no other one is named.
+     *
+     * It sits in the writable data location of the application, so that a user
+     * who is asked for a log has somewhere to fetch it from. A console has no
+     * such place: whoever starts the program from a menu never sees one.
+     *
+     * @return The absolute path. Empty when the platform names no such location.
+     */
+    [[nodiscard]] static QString defaultLogFile();
+
+    /**
      * Enables the logging functionality for the application, specifying the desired log level
      * and an optional log file where the logs should be written.
+     *
+     * With a file named, the messages of the Qt logging categories go there as well as to the
+     * console. Without one, both stay on the console.
+     *
+     * A file that cannot be opened is reported through logFileUnavailable() and stops nothing:
+     * the caller keeps running and the console keeps its output.
      *
      * @param level The log level to use. It determines the severity of messages that should be logged.
      *              Possible values are defined in the LoggerLevel enumeration, such as Notice, Debug, Error, etc.
@@ -84,6 +101,15 @@ public:
      *                that will be written to the log output.
      */
     void log(const QString &message);
+
+Q_SIGNALS:
+    /**
+     * @brief No log is being kept, and the run goes on without one.
+     *
+     * Raised at most once between enable() and disable(), so that a caller can
+     * tell the user about it once instead of at every entry that is lost.
+     */
+    void logFileUnavailable();
 
 private:
     [[nodiscard]] bool isEnabled() const;

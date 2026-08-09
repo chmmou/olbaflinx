@@ -19,17 +19,93 @@
 
 #include <gwenhywfar/logger.h>
 
+#include <QtCore/QCoreApplication>
+#include <QtCore/QDir>
 #include <QtCore/QFile>
+#include <QtCore/QFileInfo>
+#include <QtCore/QMutex>
+#include <QtCore/QStandardPaths>
+#include <QtCore/QTextStream>
+
+#include <memory>
 
 #define OLBAFLINX_CORE_LOGDOMAIN "de.chm-projects.olbaflinx"
 #define OLBAFLINX_CORE_LOGDOMAIN_IDENT "olbaflinx"
 
 using namespace olbaflinx::core::logger;
 
+namespace {
+
+// The message handler is a free function without state of its own, and it is
+// called from every thread that logs. What it needs to reach the file therefore
+// lives here, under a lock.
+QMutex s_logMutex;
+QFile *s_logFile = nullptr;
+QtMessageHandler s_previousHandler = nullptr;
+Logger *s_owner = nullptr;
+bool s_lossReported = false;
+
+/**
+ * Reports the loss of the log once, through the logger that installed this
+ * handler.
+ *
+ * The handler runs in whichever thread logged, so the signal is queued into the
+ * thread of the logger rather than emitted here.
+ */
+void reportLoss()
+{
+    if (s_lossReported || s_owner == nullptr) {
+        return;
+    }
+
+    s_lossReported = true;
+
+    Logger *owner = s_owner;
+    QMetaObject::invokeMethod(
+        owner, [owner] { Q_EMIT owner->logFileUnavailable(); }, Qt::QueuedConnection);
+}
+
+void appendToLogFile(QtMsgType type, const QMessageLogContext &context, const QString &message)
+{
+    // The console keeps what it always had. The file is what a user who starts
+    // the program from a menu can be asked for.
+    if (s_previousHandler != nullptr) {
+        s_previousHandler(type, context, message);
+    }
+
+    const QMutexLocker locker(&s_logMutex);
+    if (s_logFile == nullptr || !s_logFile->isOpen()) {
+        return;
+    }
+
+    QTextStream stream(s_logFile);
+    stream << qFormatLogMessage(type, context, message) << '\n';
+    stream.flush();
+
+    if (s_logFile->error() != QFileDevice::NoError) {
+        // A full disk or a file that went away. Closing it here keeps every
+        // further entry from running into the same error, and the run goes on.
+        s_logFile->close();
+        reportLoss();
+    }
+}
+
+} // namespace
+
 Logger::Logger(QObject *parent)
     : QObject(parent)
 {}
 Logger::~Logger() = default;
+
+QString Logger::defaultLogFile()
+{
+    const QString location = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (location.isEmpty()) {
+        return {};
+    }
+
+    return QDir(location).filePath(QStringLiteral("olbaflinx.log"));
+}
 
 void Logger::enable(LoggerLevel level, const QString &logFile)
 {
@@ -49,6 +125,41 @@ void Logger::enable(LoggerLevel level, const QString &logFile)
                          GWEN_LoggerFacility_User);
         GWEN_Logger_SetLevel(OLBAFLINX_CORE_LOGDOMAIN, (GWEN_LOGGER_LEVEL) level);
     }
+
+    if (logFile.isEmpty()) {
+        return;
+    }
+
+    bool lost = false;
+
+    {
+        const QMutexLocker locker(&s_logMutex);
+        if (s_logFile != nullptr) {
+            return;
+        }
+
+        s_owner = this;
+        s_lossReported = false;
+
+        // The directory below the writable data location does not exist before
+        // the application has written anything there.
+        QDir().mkpath(QFileInfo(logFile).absolutePath());
+
+        auto file = std::make_unique<QFile>(logFile);
+        if (file->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+            s_logFile = file.release();
+            s_previousHandler = qInstallMessageHandler(appendToLogFile);
+        } else {
+            s_lossReported = true;
+            lost = true;
+        }
+    }
+
+    // Outside the lock. A receiver that logs would otherwise wait for the lock
+    // this call holds.
+    if (lost) {
+        Q_EMIT logFileUnavailable();
+    }
 }
 
 void Logger::disable()
@@ -57,6 +168,19 @@ void Logger::disable()
         GWEN_Logger_Enable(OLBAFLINX_CORE_LOGDOMAIN, 0);
         GWEN_Logger_Close(OLBAFLINX_CORE_LOGDOMAIN);
     }
+
+    const QMutexLocker locker(&s_logMutex);
+    if (s_logFile == nullptr) {
+        s_owner = nullptr;
+        return;
+    }
+
+    qInstallMessageHandler(s_previousHandler);
+    s_previousHandler = nullptr;
+
+    delete s_logFile;
+    s_logFile = nullptr;
+    s_owner = nullptr;
 }
 
 void Logger::setLevel(LoggerLevel level)

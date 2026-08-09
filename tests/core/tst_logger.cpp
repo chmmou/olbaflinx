@@ -17,6 +17,8 @@
 
 #include "core/Logger/Logger.h"
 
+#include "core/Logging.h"
+
 #include <QtTest/QtTest>
 
 #include <memory>
@@ -67,6 +69,9 @@ private Q_SLOTS:
     void setLevelWithoutEnableHasNoEffect();
     void nonAsciiMessageReachesTheFile();
     void nonAsciiPathReachesTheFile();
+    void aCategoryMessageReachesTheSameFile();
+    void aFileThatCannotBeOpenedIsReportedAndStopsNothing();
+    void theDefaultFileSitsInTheDataLocationOfTheApplication();
 };
 
 void LoggerTest::init()
@@ -167,7 +172,8 @@ void LoggerTest::nonAsciiMessageReachesTheFile()
     logger.log(QStringLiteral("Überweisung an Müller-Groß über 12,50 Euro"));
     logger.disable();
 
-    QVERIFY(contentsOf(file).contains(QStringLiteral("Überweisung an Müller-Groß über 12,50 Euro")));
+    QVERIFY(
+        contentsOf(file).contains(QStringLiteral("Überweisung an Müller-Groß über 12,50 Euro")));
 }
 
 /**
@@ -187,6 +193,57 @@ void LoggerTest::nonAsciiPathReachesTheFile()
 
     QVERIFY(QFile::exists(file));
     QVERIFY(contentsOf(file).contains(QStringLiteral("written to a path with umlauts")));
+}
+
+/**
+ * The technical cause of an error travels through a logging category, not
+ * through log(). A file that only held what log() wrote would carry none of it,
+ * and the promise that the cause can be looked up would hold for nobody.
+ */
+void LoggerTest::aCategoryMessageReachesTheSameFile()
+{
+    const auto file = logFile("categories");
+
+    Logger logger;
+    logger.enable(Logger::Notice, file);
+
+    qCWarning(lcStorage) << "the storage could not be read";
+
+    logger.disable();
+
+    QVERIFY(contentsOf(file).contains(QStringLiteral("the storage could not be read")));
+}
+
+/**
+ * A directory cannot be opened as a file. The run goes on without a log, and the
+ * caller hears about it once so that it can be said once.
+ */
+void LoggerTest::aFileThatCannotBeOpenedIsReportedAndStopsNothing()
+{
+    Logger logger;
+    QSignalSpy unavailableSpy(&logger, &Logger::logFileUnavailable);
+
+    logger.enable(Logger::Notice, workingDirectory->path());
+
+    QCOMPARE(unavailableSpy.count(), 1);
+
+    // Nothing here throws or blocks, which is the whole of what the caller needs.
+    logger.log(QStringLiteral("this one is lost"));
+    qCWarning(lcStorage) << "and so is this one";
+
+    logger.disable();
+
+    QCOMPARE(unavailableSpy.count(), 1);
+}
+
+void LoggerTest::theDefaultFileSitsInTheDataLocationOfTheApplication()
+{
+    const QString file = Logger::defaultLogFile();
+
+    QVERIFY(!file.isEmpty());
+    QVERIFY(QFileInfo(file).isAbsolute());
+    QCOMPARE(QFileInfo(file).fileName(), QStringLiteral("olbaflinx.log"));
+    QVERIFY(file.startsWith(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)));
 }
 
 } // namespace olbaflinx::core::logger::tests
