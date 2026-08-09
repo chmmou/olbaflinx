@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "ui/Models/AccountListModel.h"
+#include "ui/Models/AccountTreeModel.h"
 
 #include "core/Banking/Transaction/Transaction.h"
 
@@ -28,7 +28,7 @@ using namespace olbaflinx::ui::models;
 
 namespace olbaflinx::ui::models::tests {
 
-class AccountListModelTest final : public QObject
+class AccountTreeModelTest final : public QObject
 {
     Q_OBJECT
 
@@ -62,16 +62,16 @@ private Q_SLOTS:
     void roleNamesCoverEveryRole();
 };
 
-void AccountListModelTest::emptyModelHasNoRows()
+void AccountTreeModelTest::emptyModelHasNoRows()
 {
-    const AccountListModel model;
+    const AccountTreeModel model;
 
     QCOMPARE(model.rowCount(), 0);
 }
 
-void AccountListModelTest::setItemsCountsOnlyAccounts()
+void AccountTreeModelTest::setItemsCountsOnlyAccounts()
 {
-    AccountListModel model;
+    AccountTreeModel model;
 
     BankingItems items;
     items << Account::fromMap(accountMap("Girokonto"));
@@ -83,9 +83,9 @@ void AccountListModelTest::setItemsCountsOnlyAccounts()
     QCOMPARE(model.rowCount(), 2);
 }
 
-void AccountListModelTest::setItemsWithEmptyListClearsTheModel()
+void AccountTreeModelTest::setItemsWithEmptyListClearsTheModel()
 {
-    AccountListModel model;
+    AccountTreeModel model;
 
     BankingItems items;
     items << Account::fromMap(accountMap("Girokonto"));
@@ -97,9 +97,9 @@ void AccountListModelTest::setItemsWithEmptyListClearsTheModel()
     QCOMPARE(model.rowCount(), 0);
 }
 
-void AccountListModelTest::dataReturnsTheMappedRoles()
+void AccountTreeModelTest::dataReturnsTheMappedRoles()
 {
-    AccountListModel model;
+    AccountTreeModel model;
 
     BankingItems items;
     items << Account::fromMap(accountMap("Girokonto"));
@@ -107,36 +107,36 @@ void AccountListModelTest::dataReturnsTheMappedRoles()
 
     const QModelIndex index = model.index(0, 0);
 
-    QCOMPARE(model.data(index, AccountListModel::AccountNameRole).toString(),
+    QCOMPARE(model.data(index, AccountTreeModel::AccountNameRole).toString(),
              QStringLiteral("Girokonto"));
-    QCOMPARE(model.data(index, AccountListModel::OwnerNameRole).toString(),
+    QCOMPARE(model.data(index, AccountTreeModel::OwnerNameRole).toString(),
              QStringLiteral("Max Mustermann"));
-    QCOMPARE(model.data(index, AccountListModel::IbanRole).toString(),
+    QCOMPARE(model.data(index, AccountTreeModel::IbanRole).toString(),
              QStringLiteral("DE02500105170137075030"));
-    QCOMPARE(model.data(index, AccountListModel::BalanceRole).toDouble(), 12.5);
+    QCOMPARE(model.data(index, AccountTreeModel::BalanceRole).toDouble(), 12.5);
     QVERIFY(!model.data(index, Qt::DisplayRole).toString().isEmpty());
 }
 
-void AccountListModelTest::dataOutsideTheModelIsInvalid()
+void AccountTreeModelTest::dataOutsideTheModelIsInvalid()
 {
-    AccountListModel model;
+    AccountTreeModel model;
 
-    QVERIFY(!model.data(model.index(0, 0), AccountListModel::AccountNameRole).isValid());
-    QVERIFY(!model.data(QModelIndex(), AccountListModel::AccountNameRole).isValid());
+    QVERIFY(!model.data(model.index(0, 0), AccountTreeModel::AccountNameRole).isValid());
+    QVERIFY(!model.data(QModelIndex(), AccountTreeModel::AccountNameRole).isValid());
 }
 
-void AccountListModelTest::roleNamesCoverEveryRole()
+void AccountTreeModelTest::roleNamesCoverEveryRole()
 {
-    const AccountListModel model;
+    const AccountTreeModel model;
     const auto roles = model.roleNames();
 
-    QCOMPARE(roles.value(AccountListModel::UniqueIdRole), QByteArrayLiteral("uniqueId"));
-    QCOMPARE(roles.value(AccountListModel::BalanceRole), QByteArrayLiteral("balance"));
+    QCOMPARE(roles.value(AccountTreeModel::UniqueIdRole), QByteArrayLiteral("uniqueId"));
+    QCOMPARE(roles.value(AccountTreeModel::BalanceRole), QByteArrayLiteral("balance"));
     QCOMPARE(roles.size(), 9);
 }
 
 } // namespace olbaflinx::ui::models::tests
 
-QTEST_MAIN(olbaflinx::ui::models::tests::AccountListModelTest)
+QTEST_MAIN(olbaflinx::ui::models::tests::AccountTreeModelTest)
 
-#include "tst_accountlistmodel.moc"
+#include "tst_accounttreemodel.moc"

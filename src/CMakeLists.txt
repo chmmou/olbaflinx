@@ -128,8 +128,8 @@ qt_add_library(OlbaFlinxUi STATIC
         ui/Assistant/Pages/OptionBankingPage.cpp
         ui/Assistant/Pages/OptionBankingPage.h
         ui/Assistant/Pages/OptionBankingPage.ui
-        ui/Models/AccountListModel.cpp
-        ui/Models/AccountListModel.h
+        ui/Models/AccountTreeModel.cpp
+        ui/Models/AccountTreeModel.h
         ui/Models/TransactionListModel.cpp
         ui/Models/TransactionListModel.h
         ui/Storage/NewStorageDialog.cpp

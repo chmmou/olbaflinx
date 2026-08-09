@@ -15,18 +15,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "ui/Models/AccountListModel.h"
+#include "ui/Models/AccountTreeModel.h"
 
 using namespace olbaflinx::ui::models;
 
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::account;
 
-AccountListModel::AccountListModel(QObject *parent)
+AccountTreeModel::AccountTreeModel(QObject *parent)
     : QAbstractListModel(parent)
 {}
 
-int AccountListModel::rowCount(const QModelIndex &parent) const
+int AccountTreeModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid()) {
         return 0;
@@ -35,7 +35,7 @@ int AccountListModel::rowCount(const QModelIndex &parent) const
     return static_cast<int>(m_accounts.size());
 }
 
-QVariant AccountListModel::data(const QModelIndex &index, int role) const
+QVariant AccountTreeModel::data(const QModelIndex &index, int role) const
 {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_accounts.size()) {
         return {};
@@ -69,7 +69,7 @@ QVariant AccountListModel::data(const QModelIndex &index, int role) const
     }
 }
 
-QHash<int, QByteArray> AccountListModel::roleNames() const
+QHash<int, QByteArray> AccountTreeModel::roleNames() const
 {
     return {
         {UniqueIdRole, QByteArrayLiteral("uniqueId")},
@@ -84,7 +84,7 @@ QHash<int, QByteArray> AccountListModel::roleNames() const
     };
 }
 
-void AccountListModel::setItems(const BankingItems &items)
+void AccountTreeModel::setItems(const BankingItems &items)
 {
     beginResetModel();
 

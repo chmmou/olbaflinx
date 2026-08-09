@@ -22,7 +22,7 @@
 #include "core/Logger/Logger.h"
 #include "core/Storage/Storage.h"
 #include "ui/App.h"
-#include "ui/Models/AccountListModel.h"
+#include "ui/Models/AccountTreeModel.h"
 #include "ui/Storage/StorageDialog.h"
 
 #include <QtTest/QtTest>
@@ -183,7 +183,7 @@ void AppCentralWidgetTest::closingAStorageReturnsToTheOverviewAndDropsTheAccount
     auto *central = app.findChild<AppCentralWidget *>();
     QVERIFY(central != nullptr);
 
-    auto *model = app.findChild<AccountListModel *>();
+    auto *model = app.findChild<AccountTreeModel *>();
     QVERIFY(model != nullptr);
 
     auto *overview = app.findChild<StorageDialog *>();

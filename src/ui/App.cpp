@@ -22,7 +22,7 @@
 #include "ui/Assistant/SetupAssistant.h"
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
-#include "ui/Models/AccountListModel.h"
+#include "ui/Models/AccountTreeModel.h"
 #include "ui/Storage/StorageDialog.h"
 
 #include "ui_App.h"
@@ -56,7 +56,7 @@ public:
     explicit Private(App *app, Logger *appLogger, Storage *appStorage)
         : logger(appLogger)
         , storage(appStorage)
-        , accountListModel(new AccountListModel(app))
+        , accountTreeModel(new AccountTreeModel(app))
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
@@ -240,7 +240,7 @@ public:
 
     Logger *logger;
     Storage *storage;
-    AccountListModel *accountListModel;
+    AccountTreeModel *accountTreeModel;
     Ui::UiApp *ui;
 
     CDockManager *dockManager;
@@ -285,7 +285,7 @@ void App::initialize()
 
 void App::setAccounts(const BankingItems &items)
 {
-    d_ptr->accountListModel->setItems(items);
+    d_ptr->accountTreeModel->setItems(items);
 }
 
 void App::closeStorage()
@@ -298,7 +298,7 @@ void App::closeStorage()
     }
 
     d_ptr->storage->close();
-    d_ptr->accountListModel->setItems({});
+    d_ptr->accountTreeModel->setItems({});
 
     // Building the overview is the moment an entry whose file went away leaves
     // the list, so the way back is a good moment to build it.
