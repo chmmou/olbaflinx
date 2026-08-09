@@ -18,6 +18,7 @@
 #include "ui/Models/AccountTreeModel.h"
 
 #include <QtCore/QCollator>
+#include <QtCore/QLocale>
 
 #include <algorithm>
 #include <limits>
@@ -109,7 +110,12 @@ QVariant AccountTreeModel::data(const QModelIndex &index, int role) const
 
     switch (role) {
     case Qt::DisplayRole:
-        return account->toString();
+        // The three the entry shows, and no more. An account whose bank reports
+        // no IBAN leaves that place empty and stays in the tree.
+        return tr("%1 - %2 - %3")
+            .arg(account->accountName(),
+                 account->iban(),
+                 QLocale().toCurrencyString(account->balance(), account->currency()));
     case UniqueIdRole:
         return account->uniqueId();
     case AccountNameRole:

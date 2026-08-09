@@ -17,27 +17,34 @@
 #include "ui/AppCentralWidget.h"
 
 #include "ui/App.h"
-#include "ui/Themes/ThemeManager.h"
-#include "ui/Themes/ThemeManagerIconNames.h"
 
 #include "ui_AppCentralWidget.h"
+
+#include <QtCore/QAbstractItemModel>
 
 #include <QtWidgets/QBoxLayout>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QStackedWidget>
 
 using namespace olbaflinx::ui;
-using namespace olbaflinx::ui::themes;
 
 class AppCentralWidget::Private
 {
 public:
     explicit Private(AppCentralWidget *widget)
         : ui(new Ui::UiAppCentralWidget)
+        , accountModel(nullptr)
         , app(nullptr)
         , q_ptr(widget)
     {
         ui->setupUi(q_ptr);
+
+        // Neither view carries a visible label that could name it, so both need
+        // one of their own for an assistive tool to announce.
+        ui->treeViewBankingAccounts->setAccessibleName(AppCentralWidget::tr("Accounts"));
+        ui->tableViewTransactions->setAccessibleName(AppCentralWidget::tr("Transactions"));
+
+        applyAccountNotice();
     }
 
     // The generated form is created with new above and belongs to nobody else.
@@ -45,16 +52,64 @@ public:
     // against tst_apperrorhandling.
     ~Private() { delete ui; }
 
-    void initialize(QMainWindow *window)
-    {
-        app = qobject_cast<App *>(window);
+    void initialize(QMainWindow *window) { app = qobject_cast<App *>(window); }
 
-        ui->label->setPixmap(ThemeManager::pixmap(ThemeManagerIconNames::AlertTriangle));
+    void setAccountModel(QAbstractItemModel *model)
+    {
+        if (accountModel) {
+            QObject::disconnect(accountModel, nullptr, q_ptr, nullptr);
+        }
+
+        accountModel = model;
+        unreadable.clear();
+        ui->treeViewBankingAccounts->setModel(model);
+
+        if (accountModel) {
+            const auto refresh = [this] { applyAccountNotice(); };
+
+            QObject::connect(accountModel, &QAbstractItemModel::modelReset, q_ptr, refresh);
+            QObject::connect(accountModel, &QAbstractItemModel::rowsInserted, q_ptr, refresh);
+            QObject::connect(accountModel, &QAbstractItemModel::rowsRemoved, q_ptr, refresh);
+        }
+
+        applyAccountNotice();
+    }
+
+    void showAccountsUnreadable(const QString &message)
+    {
+        unreadable = message;
+
+        applyAccountNotice();
+    }
+
+    /**
+     * Decides between the tree and the notice that stands in for it.
+     *
+     * A read that failed is not a storage without accounts. The notice therefore
+     * only names the missing accounts while nothing went wrong, and a run that
+     * did bring accounts back clears the message a previous one left.
+     */
+    void applyAccountNotice()
+    {
+        if (accountModel != nullptr && accountModel->rowCount() > 0) {
+            unreadable.clear();
+            ui->stackedWidgetAccounts->setCurrentWidget(ui->pageAccountTree);
+            return;
+        }
+
+        ui->labelAccountsNotice->setText(
+            unreadable.isEmpty() ? AppCentralWidget::tr("No account has been set up yet. The setup "
+                                                        "assistant fetches them from your bank.")
+                                 : unreadable);
+
+        ui->stackedWidgetAccounts->setCurrentWidget(ui->pageAccountsNotice);
     }
 
     Ui::UiAppCentralWidget *ui;
 
 private:
+    QAbstractItemModel *accountModel;
+    QString unreadable;
     App *app;
     AppCentralWidget *q_ptr;
 };
@@ -74,9 +129,19 @@ void AppCentralWidget::initialize(QMainWindow *window)
     d_ptr->initialize(window);
 }
 
-QTreeWidget *AppCentralWidget::accountWidget() const
+QTreeView *AppCentralWidget::accountWidget() const
 {
-    return nullptr;
+    return d_ptr->ui->treeViewBankingAccounts;
+}
+
+void AppCentralWidget::setAccountModel(QAbstractItemModel *model)
+{
+    d_ptr->setAccountModel(model);
+}
+
+void AppCentralWidget::showAccountsUnreadable(const QString &message)
+{
+    d_ptr->showAccountsUnreadable(message);
 }
 
 void AppCentralWidget::setPage(Page page)

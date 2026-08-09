@@ -146,6 +146,7 @@ private Q_SLOTS:
     void receiveItemsReturnsBeforeTheItemsArrive();
     void receiveItemsSignalsArriveInOrderAndInTheCallingThread();
     void receiveItemsRefusesASecondRunWhileOneIsGoing();
+    void closingWhileAReadIsGoingDropsItsResult();
     void storeItemsReturnsBeforeTheAccountsAreWritten();
     void storeItemsSignalsArriveInOrderAndInTheCallingThread();
     void storeItemsRefusesASecondRunWhileOneIsGoing();
@@ -789,6 +790,43 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
     QCOMPARE(itemsSpy.count(), 1);
 
     storage.close();
+}
+
+/**
+ * Closing does not stop the worker, and its result belongs to a file nobody has
+ * open any more. Handed on, the accounts of the storage that was closed would
+ * appear under the name of the one opened next, and the user would take a
+ * foreign holding for his own.
+ *
+ * The completion is still reported. A caller waiting for it would otherwise wait
+ * for a run that is over.
+ */
+void StorageTest::closingWhileAReadIsGoingDropsItsResult()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    for (int i = 0; i < 5; ++i) {
+        const auto account = TestHelpers::createFakeAccount();
+        QVERIFY(!storage.storeItem(account.get()).isError());
+    }
+
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    storage.receiveItems(Storage::StorageAccount);
+
+    // Nothing has been delivered yet, this thread has not processed an event
+    // since the run started.
+    QCOMPARE(itemsSpy.count(), 0);
+
+    storage.close();
+
+    QVERIFY(finishedSpy.wait(workerTimeout));
+    QCOMPARE(itemsSpy.count(), 0);
 }
 
 /**

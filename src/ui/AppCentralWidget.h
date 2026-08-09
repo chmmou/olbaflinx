@@ -17,8 +17,12 @@
 #pragma once
 
 #include <QtWidgets/QMainWindow>
-#include <QtWidgets/QTreeWidget>
+#include <QtWidgets/QTreeView>
 #include <QtWidgets/QWidget>
+
+QT_BEGIN_NAMESPACE
+class QAbstractItemModel;
+QT_END_NAMESPACE
 
 namespace olbaflinx::ui {
 
@@ -69,17 +73,36 @@ public:
     void setStorageOverview(QWidget *overview);
 
     /**
-     * @brief The tree of accounts in the left dock.
+     * @brief The tree of accounts, grouped by bank.
      *
-     * Answers with nullptr. The dock it belongs to is not built yet; the code
-     * that would fill it is commented out in App. Kept rather than removed so
-     * that the place it is meant to take stays visible, but every caller has to
-     * expect nothing back until the dock exists. It is const while it hands out
-     * nothing; a widget meant to be worked on afterwards would not be.
-     *
-     * @return nullptr.
+     * @return The view. Never null once the widget is built.
      */
-    [[nodiscard]] QTreeWidget *accountWidget() const;
+    [[nodiscard]] QTreeView *accountWidget() const;
+
+    /**
+     * @brief Hands the accounts to the view and takes over showing the notices.
+     *
+     * The view keeps no records of its own, so an empty tree and a tree that was
+     * never filled look the same. This is where the difference is told: as long
+     * as the model reports no row, the notice from setUpAccountNotice() stands in
+     * its place.
+     *
+     * @param model Externally owned model, has to outlive this widget. Passing
+     *  nullptr detaches the view.
+     */
+    void setAccountModel(QAbstractItemModel *model);
+
+    /**
+     * @brief Says that the accounts could not be read.
+     *
+     * A failed read is not an empty storage. What the view already shows stays
+     * where it is; only a view that has nothing to show trades the notice about
+     * the missing accounts for this one.
+     *
+     * @param message What the user gets to see. It names no file and no
+     *  statement.
+     */
+    void showAccountsUnreadable(const QString &message);
 
 private:
     class Private;
