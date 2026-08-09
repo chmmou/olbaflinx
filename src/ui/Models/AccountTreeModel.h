@@ -20,20 +20,25 @@
 #include "core/Banking/Account/Account.h"
 #include "core/Banking/BankingItem.h"
 
-#include <QtCore/QAbstractListModel>
+#include <QtCore/QAbstractItemModel>
 
 #include <memory>
 
 namespace olbaflinx::ui::models {
 
 /**
- * @brief Maps the accounts reported by core onto display roles.
+ * @brief Maps the accounts reported by core onto two levels, bank and account.
+ *
+ * The upper level is no record of its own. It is formed from the bank name every
+ * account carries, so two banks of that same name become one node and cannot be
+ * told apart. A bank node answers every account role with an invalid QVariant,
+ * which is how a selection recognises that no account was picked.
  *
  * Ownership: the model holds the records it receives through setItems. That is
  * not a second copy of the truth, because Storage lets go of them once the
  * signal is emitted and holds none of them itself.
  */
-class AccountTreeModel final : public QAbstractListModel
+class AccountTreeModel final : public QAbstractItemModel
 {
     Q_OBJECT
 
@@ -53,20 +58,33 @@ public:
 
     explicit AccountTreeModel(QObject *parent = nullptr);
 
+    [[nodiscard]] QModelIndex index(int row,
+                                    int column,
+                                    const QModelIndex &parent = QModelIndex()) const override;
+    [[nodiscard]] QModelIndex parent(const QModelIndex &child) const override;
     [[nodiscard]] int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    [[nodiscard]] int columnCount(const QModelIndex &parent = QModelIndex()) const override;
     [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
 public Q_SLOTS:
     /**
-     * @brief Takes over the reported records.
+     * @brief Takes over the reported records and groups them by bank.
      *
-     * Records that are not an account are skipped.
+     * Records that are not an account are skipped, and so are accounts the user
+     * has deselected. A bank whose accounts are all deselected leaves no node
+     * behind.
      */
     void setItems(const olbaflinx::core::banking::BankingItems &items);
 
 private:
-    QList<std::shared_ptr<olbaflinx::core::banking::account::Account>> m_accounts;
+    struct Bank
+    {
+        QString name;
+        QList<std::shared_ptr<olbaflinx::core::banking::account::Account>> accounts;
+    };
+
+    QList<Bank> m_banks;
 };
 
 } // namespace olbaflinx::ui::models
