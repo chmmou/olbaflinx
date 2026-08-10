@@ -146,13 +146,121 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QTableView" name="tableViewTransactions">
-             <property name="selectionBehavior">
-              <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+            <widget class="QWidget" name="widgetTransactionFilter" native="true">
+             <layout class="QHBoxLayout" name="transactionFilterLayout">
+              <item>
+               <widget class="QLineEdit" name="lineEditTransactionSearch">
+                <property name="clearButtonEnabled">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="comboBoxTransactionPeriod"/>
+              </item>
+              <item>
+               <widget class="QComboBox" name="comboBoxTransactionDirection"/>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButtonTransactionFilterReset"/>
+              </item>
+              <item>
+               <widget class="QLabel" name="labelTransactionCount"/>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QStackedWidget" name="stackedWidgetTransactions">
+             <property name="currentIndex">
+              <number>0</number>
              </property>
-             <property name="alternatingRowColors">
-              <bool>true</bool>
-             </property>
+             <widget class="QWidget" name="pageTransactionTable">
+              <layout class="QVBoxLayout" name="transactionTableLayout">
+               <property name="spacing">
+                <number>0</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QTableView" name="tableViewTransactions">
+                 <property name="selectionBehavior">
+                  <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+                 </property>
+                 <property name="alternatingRowColors">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+             <widget class="QWidget" name="pageTransactionsNotice">
+              <layout class="QVBoxLayout" name="transactionsNoticeLayout">
+               <item>
+                <widget class="QLabel" name="labelTransactionsHeadline">
+                 <property name="alignment">
+                  <set>Qt::AlignmentFlag::AlignCenter</set>
+                 </property>
+                 <property name="wordWrap">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="labelTransactionsNotice">
+                 <property name="alignment">
+                  <set>Qt::AlignmentFlag::AlignCenter</set>
+                 </property>
+                 <property name="wordWrap">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="transactionsNoticeButtonLayout">
+                 <item>
+                  <spacer name="transactionsNoticeSpacerLeft">
+                   <property name="orientation">
+                    <enum>Qt::Orientation::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="pushButtonTransactionsNoticeReset"/>
+                 </item>
+                 <item>
+                  <spacer name="transactionsNoticeSpacerRight">
+                   <property name="orientation">
+                    <enum>Qt::Orientation::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
             </widget>
            </item>
           </layout>

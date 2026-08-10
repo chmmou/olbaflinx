@@ -47,6 +47,8 @@ private:
 private Q_SLOTS:
     void theAccountViewCarriesANameAndARole();
     void theTransactionViewCarriesANameAndARole();
+    void everyControlOfTheFilterBarCarriesANameAndARole_data();
+    void everyControlOfTheFilterBarCarriesANameAndARole();
 };
 
 void AppAccessibilityTest::theAccountViewCarriesANameAndARole()
@@ -75,6 +77,43 @@ void AppAccessibilityTest::theTransactionViewCarriesANameAndARole()
 
     QVERIFY(!accessible->text(QAccessible::Name).isEmpty());
     QCOMPARE(accessible->role(), QAccessible::Table);
+}
+
+/**
+ * The bar above the transactions carries four controls and one readout, and
+ * none of them stands next to a visible label. Each says what it is and what
+ * kind of thing it is.
+ */
+void AppAccessibilityTest::everyControlOfTheFilterBarCarriesANameAndARole_data()
+{
+    QTest::addColumn<QString>("objectName");
+    QTest::addColumn<QAccessible::Role>("role");
+
+    QTest::newRow("search") << QStringLiteral("lineEditTransactionSearch")
+                            << QAccessible::EditableText;
+    QTest::newRow("period") << QStringLiteral("comboBoxTransactionPeriod") << QAccessible::ComboBox;
+    QTest::newRow("direction") << QStringLiteral("comboBoxTransactionDirection")
+                               << QAccessible::ComboBox;
+    QTest::newRow("reset") << QStringLiteral("pushButtonTransactionFilterReset")
+                           << QAccessible::Button;
+    QTest::newRow("counter") << QStringLiteral("labelTransactionCount") << QAccessible::StaticText;
+}
+
+void AppAccessibilityTest::everyControlOfTheFilterBarCarriesANameAndARole()
+{
+    QFETCH(QString, objectName);
+    QFETCH(QAccessible::Role, role);
+
+    AppCentralWidget widget;
+
+    auto *control = widget.findChild<QWidget *>(objectName);
+    QVERIFY(control != nullptr);
+
+    auto *accessible = interfaceOf(control);
+    QVERIFY(accessible != nullptr);
+
+    QVERIFY(!accessible->text(QAccessible::Name).isEmpty());
+    QCOMPARE(accessible->role(), role);
 }
 
 } // namespace olbaflinx::ui::tests

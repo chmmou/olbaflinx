@@ -23,6 +23,7 @@
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
 #include "ui/Models/AccountTreeModel.h"
+#include "ui/Models/TransactionTableModel.h"
 #include "ui/Storage/StorageDialog.h"
 
 #include "ui_App.h"
@@ -57,6 +58,7 @@ public:
         : logger(appLogger)
         , storage(appStorage)
         , accountTreeModel(new AccountTreeModel(app))
+        , transactionTableModel(new TransactionTableModel(app))
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
@@ -182,10 +184,72 @@ public:
         ui->appSetupAssistantAction->setEnabled(storageIsOpen);
     }
 
+    /**
+     * Turns what is picked in the tree into the account the transactions are
+     * shown for.
+     *
+     * A bank node is no account: the tree answers its account roles with an
+     * invalid value, and that is what tells the two apart. Whatever the state,
+     * the notice of the empty transaction view is set along with it, so that the
+     * right words are in place by the time a read comes back with nothing.
+     */
+    void applySelection(const QModelIndex &index)
+    {
+        const QVariant uniqueId = accountTreeModel->data(index, AccountTreeModel::UniqueIdRole);
+
+        if (!index.isValid()) {
+            transactionTableModel->setAccountId(0);
+            ui->appCentralWidget->setTransactionNotice(
+                AppCentralWidget::TransactionNotice::NoAccountSelected);
+            return;
+        }
+
+        if (!uniqueId.isValid()) {
+            transactionTableModel->setAccountId(0);
+            ui->appCentralWidget->setTransactionNotice(
+                AppCentralWidget::TransactionNotice::BankSelected);
+            return;
+        }
+
+        transactionTableModel->setAccountId(uniqueId.toUInt());
+        ui->appCentralWidget->setTransactionNotice(
+            AppCentralWidget::TransactionNotice::AccountWithoutTransactions);
+    }
+
+    /**
+     * A single click on an account is what shows its transactions.
+     *
+     * The tree is refilled whenever the accounts are read, and an account that
+     * the user has since deselected is gone from it. The selection then points
+     * nowhere, which is a state of its own and not a bank node, so the reset of
+     * the model is followed up here rather than waiting for a click.
+     */
+    void setUpAccountSelection()
+    {
+        auto *const view = ui->appCentralWidget->accountWidget();
+        auto *const selection = view->selectionModel();
+
+        QObject::connect(selection,
+                         &QItemSelectionModel::currentChanged,
+                         q_ptr,
+                         [this](const QModelIndex &current, const QModelIndex &) {
+                             applySelection(current);
+                         });
+
+        QObject::connect(accountTreeModel, &QAbstractItemModel::modelReset, q_ptr, [this, view] {
+            applySelection(view->currentIndex());
+        });
+    }
+
     void initialize()
     {
         ui->appCentralWidget->initialize(q_ptr);
         ui->appCentralWidget->setAccountModel(accountTreeModel);
+
+        transactionTableModel->setStorage(storage);
+        ui->appCentralWidget->setTransactionModel(transactionTableModel);
+
+        setUpAccountSelection();
 
         // The overview used to be a window of its own, put up next to this one by
         // main. It is the first page of the central area now. It needs the
@@ -252,6 +316,7 @@ public:
     Logger *logger;
     Storage *storage;
     AccountTreeModel *accountTreeModel;
+    TransactionTableModel *transactionTableModel;
     Ui::UiApp *ui;
 
     CDockManager *dockManager;
@@ -311,6 +376,13 @@ void App::closeStorage()
     d_ptr->storage->close();
     d_ptr->accountTreeModel->setItems({});
 
+    // A choice of account does not outlive the storage it was made in. Emptying
+    // the tree takes the selection with it, and the transactions of the account
+    // that was shown go with it as well. Neither does the filter: it survives a
+    // change of account, not the storage it was set in.
+    d_ptr->transactionTableModel->setAccountId(0);
+    d_ptr->ui->appCentralWidget->resetTransactionFilter();
+
     // Building the overview is the moment an entry whose file went away leaves
     // the list, so the way back is a good moment to build it.
     d_ptr->overview->reload();
@@ -320,6 +392,20 @@ void App::closeStorage()
 
 void App::showError(ErrorCode code, const QString &reason)
 {
+    // A read that found no record is not a failure. The storage reports it
+    // through the same signal as one, with the code for "nothing found", and
+    // taken as a failure it would hold the views away from the very notices that
+    // are meant for the case: a storage without accounts, an account without
+    // transactions, and a filter without a match. The models are empty at this
+    // point, which is all those notices need.
+    //
+    // It is noted rather than reported, and not as a warning: a log that calls
+    // it an error says the opposite of what happened.
+    if (code == ErrorCode::NotFound) {
+        qCDebug(lcUi) << "a read came back empty:" << reason;
+        return;
+    }
+
     // The technical message can name a file or a statement, and one out of a
     // foreign library is not translated either. It goes to the log, never to the
     // screen; what the user reads is made from the code alone.

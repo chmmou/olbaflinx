@@ -23,6 +23,7 @@
 #include "core/Storage/Storage.h"
 #include "ui/App.h"
 #include "ui/Models/AccountTreeModel.h"
+#include "ui/Models/TransactionTableModel.h"
 #include "ui/Storage/StorageDialog.h"
 
 #include "TestHelpers.h"
@@ -32,6 +33,8 @@
 #include <QtCore/QTemporaryDir>
 
 #include <QtWidgets/QLabel>
+#include <QtWidgets/QLineEdit>
+#include <QtWidgets/QPushButton>
 #include <QtWidgets/QStackedWidget>
 #include <QtWidgets/QStatusBar>
 #include <QtWidgets/QToolBar>
@@ -78,6 +81,50 @@ private:
         return widget.findChild<QLabel *>(QStringLiteral("labelAccountsNotice"));
     }
 
+    static QStackedWidget *transactionPagesOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QStackedWidget *>(QStringLiteral("stackedWidgetTransactions"));
+    }
+
+    static QLabel *transactionHeadlineOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QLabel *>(QStringLiteral("labelTransactionsHeadline"));
+    }
+
+    static QLabel *transactionNoticeOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QLabel *>(QStringLiteral("labelTransactionsNotice"));
+    }
+
+    static QWidget *filterBarOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QWidget *>(QStringLiteral("widgetTransactionFilter"));
+    }
+
+    static QLineEdit *searchFieldOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QLineEdit *>(QStringLiteral("lineEditTransactionSearch"));
+    }
+
+    static QLabel *counterOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QLabel *>(QStringLiteral("labelTransactionCount"));
+    }
+
+    static QPushButton *noticeResetOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QPushButton *>(QStringLiteral("pushButtonTransactionsNoticeReset"));
+    }
+
+    /**
+     * The index of the first account under the first bank, the one a click in
+     * the tree would land on.
+     */
+    static QModelIndex firstAccountOf(const AccountTreeModel &model)
+    {
+        return model.index(0, 0, model.index(0, 0));
+    }
+
     static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
 
     /**
@@ -85,6 +132,46 @@ private:
      * The call returns the moment the signal arrives, so no test sleeps for it.
      */
     static constexpr auto workerTimeout = std::chrono::seconds{30};
+
+    /**
+     * The same bound where a macro needs it in milliseconds.
+     */
+    static constexpr int workerTimeoutMs = 30000;
+
+    [[nodiscard]] bool openStorage(Storage &storage) const
+    {
+        if (storage.setKey(password()).isError()) {
+            return false;
+        }
+
+        storage.setStorageFile(storageFile());
+
+        return !storage.initialize(true).isError();
+    }
+
+    /**
+     * Brings the accounts of the storage onto the screen the way the application
+     * does it, over the core and not by handing the model a list.
+     */
+    static bool readAccountsInto(App &app, Storage &storage)
+    {
+        auto *const overview = app.findChild<StorageDialog *>();
+        if (overview == nullptr) {
+            return false;
+        }
+
+        // For this one read, the way the dialog does it. A standing connection
+        // would hand the transactions of an account to the account tree as well
+        // and leave it empty.
+        connect(&storage, &Storage::itemsReceived, &app, &App::setAccounts, Qt::SingleShotConnection);
+
+        Q_EMIT overview->storageOpened();
+
+        QSignalSpy finishedSpy(&storage, &Storage::finished);
+        storage.receiveItems({.type = Storage::StorageAccount});
+
+        return finishedSpy.wait(workerTimeout);
+    }
 
     [[nodiscard]] QString storageFile() const
     {
@@ -124,6 +211,17 @@ private Q_SLOTS:
     void init();
     void cleanup();
 
+    void theEmptyTransactionViewNamesItsReason();
+    void choosingAnAccountShowsItsTransactionsAndABankClearsThem();
+    void anAccountThatBecomesInactiveTakesTheSelectionWithIt();
+    void openingAStorageLeavesNoAccountSelected();
+    void aStorageWithoutAccountsSaysSoWithoutAMessage();
+    void anAccountWithoutTransactionsSaysSoWithoutAMessage();
+    void theFilterBarStandsAndWaitsWhileNoAccountIsChosen();
+    void aFilterWithoutAMatchGetsAnEmptyStateOfItsOwnWithAButton();
+    void theCounterNamesWhatTheFilterLeaves();
+    void closingTheStorageTakesTheFilterWithIt();
+
     void theAccountViewIsThereAndCarriesTheModel();
     void anEmptyModelPutsTheNoticeInPlaceOfTheTree();
     void anEntryCarriesTheAccountNameTheIbanAndTheBalance();
@@ -157,6 +255,468 @@ void AppCentralWidgetTest::init()
 void AppCentralWidgetTest::cleanup()
 {
     workingDirectory.reset();
+}
+
+/**
+ * An empty transaction view says why it is empty. Three states, and a reader has
+ * to be able to tell them apart without knowing the code.
+ *
+ * Choosing a bank shares its headline with choosing nothing at all, because it
+ * is no choice of an account either. What it carries of its own is the
+ * explanation.
+ */
+void AppCentralWidgetTest::theEmptyTransactionViewNamesItsReason()
+{
+    AppCentralWidget widget;
+    TransactionTableModel model;
+
+    widget.setTransactionModel(&model);
+
+    auto *pages = transactionPagesOf(widget);
+    auto *headline = transactionHeadlineOf(widget);
+    auto *notice = transactionNoticeOf(widget);
+
+    QVERIFY(pages != nullptr);
+    QVERIFY(headline != nullptr);
+    QVERIFY(notice != nullptr);
+
+    widget.setTransactionNotice(AppCentralWidget::TransactionNotice::NoAccountSelected);
+
+    QCOMPARE(pages->currentWidget(), notice->parentWidget());
+    QVERIFY(!headline->text().isEmpty());
+    QVERIFY(!notice->text().isEmpty());
+
+    const QString headlineWithoutAnAccount = headline->text();
+    const QString noticeWithoutAnAccount = notice->text();
+
+    widget.setTransactionNotice(AppCentralWidget::TransactionNotice::BankSelected);
+
+    QCOMPARE(headline->text(), headlineWithoutAnAccount);
+    QVERIFY(notice->text() != noticeWithoutAnAccount);
+    QVERIFY(!notice->text().isEmpty());
+
+    widget.setTransactionNotice(AppCentralWidget::TransactionNotice::AccountWithoutTransactions);
+
+    QVERIFY(headline->text() != headlineWithoutAnAccount);
+    QVERIFY(notice->text() != noticeWithoutAnAccount);
+}
+
+/**
+ * One click on an account shows its transactions. A click on the bank above it
+ * is no choice of an account, so the list of the account before does not stay
+ * standing under it.
+ */
+void AppCentralWidgetTest::choosingAnAccountShowsItsTransactionsAndABankClearsThem()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(accountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
+                                                                 password(),
+                                                                 4711,
+                                                                 3,
+                                                                 QStringLiteral("Buchung")));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+
+    QVERIFY(readAccountsInto(app, storage));
+    QCOMPARE(treeModel->rowCount(), 1);
+
+    auto *pages = transactionPagesOf(*central);
+    auto *headline = transactionHeadlineOf(*central);
+    QVERIFY(pages != nullptr);
+    QVERIFY(headline != nullptr);
+
+    const QString headlineWithoutAnAccount = headline->text();
+
+    auto *view = central->accountWidget();
+    view->setCurrentIndex(firstAccountOf(*treeModel));
+
+    QCOMPARE(transactionModel->accountId(), 4711u);
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+    QCOMPARE(pages->currentIndex(), 0);
+
+    // The bank node. It groups, it is not an account.
+    view->setCurrentIndex(treeModel->index(0, 0));
+
+    QCOMPARE(transactionModel->accountId(), 0u);
+    QCOMPARE(transactionModel->rowCount(), 0);
+    QCOMPARE(pages->currentIndex(), 1);
+    QCOMPARE(headline->text(), headlineWithoutAnAccount);
+}
+
+/**
+ * An account the user deselects in the wizard leaves the tree. The selection
+ * cannot stay on an entry that is gone, so it falls away and the transaction
+ * view returns to the state where nothing is chosen.
+ */
+void AppCentralWidgetTest::anAccountThatBecomesInactiveTakesTheSelectionWithIt()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(accountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
+                                                                 password(),
+                                                                 4711,
+                                                                 3,
+                                                                 QStringLiteral("Buchung")));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+
+    QVERIFY(readAccountsInto(app, storage));
+
+    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+
+    // The wizard turns the account down. What reaches the window is the run of
+    // accounts without it.
+    app.setAccounts({});
+
+    QCOMPARE(treeModel->rowCount(), 0);
+    QCOMPARE(transactionModel->accountId(), 0u);
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 0, workerTimeoutMs);
+
+    auto *headline = transactionHeadlineOf(*central);
+    QVERIFY(headline != nullptr);
+    QVERIFY(!headline->text().isEmpty());
+}
+
+/**
+ * A choice of account does not outlive its storage. After one is opened nothing
+ * is chosen, whatever was chosen before it was closed.
+ */
+void AppCentralWidgetTest::openingAStorageLeavesNoAccountSelected()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(accountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
+                                                                 password(),
+                                                                 4711,
+                                                                 3,
+                                                                 QStringLiteral("Buchung")));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+
+    QVERIFY(readAccountsInto(app, storage));
+
+    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+
+    app.closeStorage();
+
+    QCOMPARE(transactionModel->accountId(), 0u);
+    QCOMPARE(transactionModel->rowCount(), 0);
+    QCOMPARE(transactionPagesOf(*central)->currentIndex(), 1);
+}
+
+/**
+ * A read that finds nothing is not a failure. A storage without accounts reaches
+ * the notice that says none is set up, and the status bar stays clear; taken as
+ * an error it would say instead that the holding could not be read.
+ */
+void AppCentralWidgetTest::aStorageWithoutAccountsSaysSoWithoutAMessage()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    QVERIFY(central != nullptr);
+
+    auto *notice = accountNoticeOf(*central);
+    QVERIFY(notice != nullptr);
+
+    const QString noticeOfAnEmptyStorage = notice->text();
+
+    QVERIFY(readAccountsInto(app, storage));
+
+    QCOMPARE(app.statusBar()->currentMessage(), QString());
+    QCOMPARE(notice->text(), noticeOfAnEmptyStorage);
+    QCOMPARE(accountPagesOf(*central)->currentWidget(), notice->parentWidget());
+}
+
+/**
+ * The same for an account whose transactions the bank has not brought yet: its
+ * own notice, and no message.
+ */
+void AppCentralWidgetTest::anAccountWithoutTransactionsSaysSoWithoutAMessage()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(accountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+
+    QVERIFY(readAccountsInto(app, storage));
+
+    auto *headline = transactionHeadlineOf(*central);
+    QVERIFY(headline != nullptr);
+
+    const QString headlineWithoutAnAccount = headline->text();
+
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+
+    QVERIFY(finishedSpy.wait(workerTimeout));
+
+    QCOMPARE(transactionModel->rowCount(), 0);
+    QCOMPARE(transactionPagesOf(*central)->currentIndex(), 1);
+    QVERIFY(headline->text() != headlineWithoutAnAccount);
+    QCOMPARE(app.statusBar()->currentMessage(), QString());
+}
+
+/**
+ * Without an account the bar stands there and does nothing. It does not vanish:
+ * a bar that comes and goes moves what stands below it, and an assistive tool
+ * can only say that a control exists while it is there.
+ */
+void AppCentralWidgetTest::theFilterBarStandsAndWaitsWhileNoAccountIsChosen()
+{
+    AppCentralWidget widget;
+    TransactionTableModel model;
+
+    widget.setTransactionModel(&model);
+    widget.setTransactionNotice(AppCentralWidget::TransactionNotice::NoAccountSelected);
+
+    auto *bar = filterBarOf(widget);
+    QVERIFY(bar != nullptr);
+
+    QVERIFY(!bar->isHidden());
+    QVERIFY(!bar->isEnabled());
+
+    widget.setTransactionNotice(AppCentralWidget::TransactionNotice::BankSelected);
+    QVERIFY(!bar->isHidden());
+    QVERIFY(!bar->isEnabled());
+
+    widget.setTransactionNotice(AppCentralWidget::TransactionNotice::AccountWithoutTransactions);
+    QVERIFY(bar->isEnabled());
+}
+
+/**
+ * An account that holds transactions of which none meets the filter is the
+ * fourth empty state, and the only one whose cause the user can take back where
+ * he stands. It is therefore the only one with a button.
+ */
+void AppCentralWidgetTest::aFilterWithoutAMatchGetsAnEmptyStateOfItsOwnWithAButton()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(accountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
+                                                                 password(),
+                                                                 4711,
+                                                                 3,
+                                                                 QStringLiteral("Miete")));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+
+    QVERIFY(readAccountsInto(app, storage));
+
+    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+
+    auto *headline = transactionHeadlineOf(*central);
+    auto *notice = transactionNoticeOf(*central);
+    auto *button = noticeResetOf(*central);
+    auto *search = searchFieldOf(*central);
+
+    QVERIFY(headline != nullptr);
+    QVERIFY(notice != nullptr);
+    QVERIFY(button != nullptr);
+    QVERIFY(search != nullptr);
+
+    const QString headlineWithTransactions = headline->text();
+
+    search->setText(QStringLiteral("Versicherung"));
+
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 0, workerTimeoutMs);
+    QTRY_VERIFY_WITH_TIMEOUT(!button->isHidden(), workerTimeoutMs);
+
+    QVERIFY(headline->text() != headlineWithTransactions);
+    QVERIFY(!notice->text().isEmpty());
+    QCOMPARE(transactionPagesOf(*central)->currentIndex(), 1);
+
+    // The button takes the filter back and the transactions return.
+    button->click();
+
+    QVERIFY(search->text().isEmpty());
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+    QVERIFY(button->isHidden());
+}
+
+/**
+ * The counter names what the filter leaves of the whole holding, not what the
+ * page that was read carries. A holding larger than one window is what tells the
+ * two apart.
+ */
+void AppCentralWidgetTest::theCounterNamesWhatTheFilterLeaves()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(accountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
+                                                                 password(),
+                                                                 4711,
+                                                                 120,
+                                                                 QStringLiteral("Miete")));
+    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
+                                                                 password(),
+                                                                 4711,
+                                                                 80,
+                                                                 QStringLiteral("Gehalt")));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+
+    QVERIFY(readAccountsInto(app, storage));
+
+    auto *counter = counterOf(*central);
+    auto *search = searchFieldOf(*central);
+    QVERIFY(counter != nullptr);
+    QVERIFY(search != nullptr);
+
+    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->totalRows(), 200, workerTimeoutMs);
+    QVERIFY(counter->text().contains(QStringLiteral("200")));
+
+    // A window holds fifty, and the counter must not say so.
+    QCOMPARE(transactionModel->rowCount(), 50);
+    QVERIFY(!counter->text().contains(QStringLiteral("50 ")));
+
+    search->setText(QStringLiteral("Gehalt"));
+
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->totalRows(), 80, workerTimeoutMs);
+    QVERIFY(counter->text().contains(QStringLiteral("80")));
+}
+
+/**
+ * The filter outlives a change of account, so that whoever is looking for
+ * something keeps looking for it. It does not outlive the storage it was set in.
+ */
+void AppCentralWidgetTest::closingTheStorageTakesTheFilterWithIt()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(accountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
+                                                                 password(),
+                                                                 4711,
+                                                                 3,
+                                                                 QStringLiteral("Miete")));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+
+    QVERIFY(readAccountsInto(app, storage));
+
+    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+
+    auto *search = searchFieldOf(*central);
+    QVERIFY(search != nullptr);
+
+    search->setText(QStringLiteral("Miete"));
+    QTRY_VERIFY_WITH_TIMEOUT(transactionModel->filter().isSet(), workerTimeoutMs);
+
+    app.closeStorage();
+
+    QVERIFY(search->text().isEmpty());
+    QVERIFY(!transactionModel->filter().isSet());
 }
 
 /**
@@ -313,7 +873,7 @@ void AppCentralWidgetTest::aReadThatOutlivesItsStorageReachesNoView()
     Q_EMIT overview->storageOpened();
 
     QSignalSpy finishedSpy(&storage, &Storage::finished);
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     app.closeStorage();
 

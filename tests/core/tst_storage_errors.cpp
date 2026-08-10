@@ -154,6 +154,8 @@ private Q_SLOTS:
     void initializeReportsFailureOnUnwritablePath();
     void initializeNamesTheColumnsAnOlderStoreDoesNotHave();
     void errorOccurredCarriesMatchingCode();
+    void receiveItemsRejectsAnAccountFilterOnAnotherType_data();
+    void receiveItemsRejectsAnAccountFilterOnAnotherType();
     void receiveItemsEmitsProgressWithinRange();
     void receiveItemsFillsTransactionFields();
     void storeItemsEndsAtTheFailingAccountAndKeepsWhatWentIn();
@@ -318,7 +320,7 @@ void StorageErrorTest::errorOccurredCarriesMatchingCode()
 
     // A type without a table of its own is answered before anything is started,
     // in this thread, so there is nothing to wait for here.
-    storage.receiveItems(Storage::StorageContacts);
+    storage.receiveItems({.type = Storage::StorageContacts});
 
     QCOMPARE(errorSpy.count(), 1);
     QCOMPARE(finishedSpy.count(), 1);
@@ -329,11 +331,50 @@ void StorageErrorTest::errorOccurredCarriesMatchingCode()
 
     // An empty table is not the same cause and has to carry its own code. This
     // one is found by the reading thread, so the signal is waited for.
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     QVERIFY(errorSpy.wait());
     QCOMPARE(errorSpy.count(), 1);
     QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::NotFound);
+
+    storage.close();
+}
+
+/**
+ * The account filter goes over transactions.unique_account_id, the identifier
+ * the institution assigns. No other table carries it: refaccounts hangs on the
+ * row id of accounts, which no type of the core hands out. A filter on another
+ * type would therefore mean a different identifier, and both are quint32, so
+ * nothing but this refusal tells them apart.
+ */
+void StorageErrorTest::receiveItemsRejectsAnAccountFilterOnAnotherType_data()
+{
+    QTest::addColumn<Storage::Type>("type");
+
+    QTest::newRow("account") << Storage::StorageAccount;
+    QTest::newRow("referenceAccount") << Storage::StorageReferenceAccount;
+}
+
+void StorageErrorTest::receiveItemsRejectsAnAccountFilterOnAnotherType()
+{
+    QFETCH(Storage::Type, type);
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile(QTest::currentDataTag()));
+
+    QVERIFY(!storage.initialize(true).isError());
+
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    // Answered before anything is started, in this thread, so there is nothing
+    // to wait for here.
+    storage.receiveItems({.type = type, .accountId = 815});
+
+    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(finishedSpy.count(), 1);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
 
     storage.close();
 }
@@ -358,7 +399,7 @@ void StorageErrorTest::receiveItemsEmitsProgressWithinRange()
     QSignalSpy progressSpy(&storage, &Storage::progressChanged);
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
@@ -394,7 +435,7 @@ void StorageErrorTest::receiveItemsFillsTransactionFields()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems(Storage::StorageTransaction);
+    storage.receiveItems({.type = Storage::StorageTransaction});
 
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);

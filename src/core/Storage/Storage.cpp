@@ -136,6 +136,25 @@ QString keyLiteral(const QString &key)
  * The tables the storage reads from. A table name cannot be bound, so a name is
  * checked against this list before it reaches a statement.
  */
+/**
+ * Escapes what LIKE reads as a pattern, so that the search text is looked for as
+ * it was typed. A percent sign a user enters is a character to him, not a
+ * placeholder for anything.
+ *
+ * The backslash goes first, otherwise it would escape the escapes added after
+ * it. It is the character the statements name in their ESCAPE clause.
+ */
+QString escapedForLike(const QString &text)
+{
+    auto escaped = text;
+
+    escaped.replace(QLatin1Char('\\'), QLatin1StringView("\\\\"));
+    escaped.replace(QLatin1Char('%'), QLatin1StringView("\\%"));
+    escaped.replace(QLatin1Char('_'), QLatin1StringView("\\_"));
+
+    return escaped;
+}
+
 bool isKnownTable(const QString &table)
 {
     static const QSet<QString> knownTables = {
@@ -382,6 +401,29 @@ struct ReadResult
 {
     BankingItems items;
     Error error;
+
+    /**
+     * How many records satisfy the condition of the query, the whole holding
+     * rather than the window that was read. Negative when the run ended before
+     * it could count, which is the one case where nothing is reported.
+     */
+    int matched = -1;
+};
+
+/**
+ * The condition a read stands under, as a fragment of SQL and the values that
+ * fragment binds. It carries no value of its own: everything the caller asked
+ * for reaches the statement through a binding, and only the column names are
+ * written into the text.
+ *
+ * Three queries of one read share it. The records, the size of the window for
+ * the progress, and the number the filter bar shows all have to stand under the
+ * same condition, or they contradict each other.
+ */
+struct ReadCondition
+{
+    QString where;
+    QMap<QString, QVariant> bindings;
 };
 
 /**
@@ -743,31 +785,76 @@ public:
     }
 
     /**
-     * The number of rows the given window actually yields. QSqlQuery::size() is
-     * unavailable for SQLite and numRowsAffected() is undefined for a SELECT, so
-     * the count comes from a query of its own.
+     * What a read asks the table for besides the window. The account is filtered
+     * on unique_account_id, the identifier the institution assigns, and that
+     * column exists on transactions alone; receiveItems refuses the filter on
+     * any other type before a run is started.
      */
-    static Result<int> windowedRowCountOn(const QSqlDatabase &database,
-                                          const QString &key,
-                                          const QString &fileName,
-                                          const QString &table,
-                                          int offset,
-                                          int limit)
+    static ReadCondition conditionOf(const Storage::ItemQuery &query)
     {
-        if (!isKnownTable(table)) {
-            return Error(ErrorCode::InvalidInput, QStringLiteral("Unknown table %1").arg(table));
+        auto condition = ReadCondition();
+        auto parts = QStringList();
+
+        if (query.accountId != 0) {
+            parts << QStringLiteral("unique_account_id = :accountId");
+            condition.bindings[QStringLiteral(":accountId")] = query.accountId;
         }
 
+        if (!query.text.isEmpty()) {
+            parts << QStringLiteral(
+                "(remote_name LIKE :text ESCAPE '\\' OR purpose LIKE :text ESCAPE '\\')");
+            condition.bindings[QStringLiteral(":text")] = QStringLiteral("%%%1%%").arg(
+                escapedForLike(query.text));
+        }
+
+        // Both bounds are inclusive. An invalid date leaves its side open rather
+        // than standing for today or for the beginning of time.
+        if (query.from.isValid()) {
+            parts << QStringLiteral("date >= :from");
+            condition.bindings[QStringLiteral(":from")] = query.from;
+        }
+
+        if (query.to.isValid()) {
+            parts << QStringLiteral("date <= :to");
+            condition.bindings[QStringLiteral(":to")] = query.to;
+        }
+
+        // The sign of the value is what tells the direction. A booking of nought
+        // is neither, and neither restriction lets it through.
+        switch (query.direction) {
+        case Storage::Direction::Incoming:
+            parts << QStringLiteral("value > 0");
+            break;
+        case Storage::Direction::Outgoing:
+            parts << QStringLiteral("value < 0");
+            break;
+        case Storage::Direction::Any:
+            break;
+        }
+
+        if (!parts.isEmpty()) {
+            condition.where = QStringLiteral(" WHERE ") + parts.join(QStringLiteral(" AND "));
+        }
+
+        return condition;
+    }
+
+    /**
+     * Runs one COUNT statement and hands back its number. The two counts of a
+     * read differ in their statement alone; the key, the preparation and the
+     * bindings are the same for both.
+     */
+    static Result<int> countOn(const QSqlDatabase &database,
+                               const QString &key,
+                               const QString &fileName,
+                               const QString &table,
+                               const QString &statement,
+                               const QMap<QString, QVariant> &bindings)
+    {
         QSqlQuery query;
         if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
             return error;
         }
-
-        // The table name is interpolated because SQL knows no binding for an
-        // identifier. It passed the list above. The window is bound.
-        const auto statement
-            = QStringLiteral("SELECT COUNT(*) FROM (SELECT 1 FROM %1 LIMIT :limit OFFSET :offset);")
-                  .arg(table);
 
         if (!query.prepare(statement)) {
             return Error(ErrorCode::DatabaseFailure,
@@ -775,8 +862,9 @@ public:
                              .arg(table, query.lastError().text()));
         }
 
-        query.bindValue(QStringLiteral(":limit"), limit);
-        query.bindValue(QStringLiteral(":offset"), offset);
+        for (const auto &[name, value] : bindings.asKeyValueRange()) {
+            query.bindValue(name, value);
+        }
 
         if (!query.exec() || !query.next()) {
             return Error(ErrorCode::DatabaseFailure,
@@ -785,6 +873,65 @@ public:
         }
 
         return query.value(0).toInt();
+    }
+
+    /**
+     * The number of rows the given window actually yields. QSqlQuery::size() is
+     * unavailable for SQLite and numRowsAffected() is undefined for a SELECT, so
+     * the count comes from a query of its own. It serves the progress.
+     */
+    static Result<int> windowedRowCountOn(const QSqlDatabase &database,
+                                          const QString &key,
+                                          const QString &fileName,
+                                          const QString &table,
+                                          const ReadCondition &condition,
+                                          int offset,
+                                          int limit)
+    {
+        if (!isKnownTable(table)) {
+            return Error(ErrorCode::InvalidInput, QStringLiteral("Unknown table %1").arg(table));
+        }
+
+        auto bindings = condition.bindings;
+        bindings[QStringLiteral(":limit")] = limit;
+        bindings[QStringLiteral(":offset")] = offset;
+
+        // The table name is interpolated because SQL knows no binding for an
+        // identifier. It passed the list above. The window and the condition are
+        // bound.
+        return countOn(database,
+                       key,
+                       fileName,
+                       table,
+                       QStringLiteral(
+                           "SELECT COUNT(*) FROM (SELECT 1 FROM %1%2 LIMIT :limit OFFSET :offset);")
+                           .arg(table, condition.where),
+                       bindings);
+    }
+
+    /**
+     * How many rows of the table satisfy the condition, without the window. This
+     * is the number the filter bar shows, and it is the one thing the count
+     * above cannot answer: a window of fifty says nothing about three thousand.
+     */
+    static Result<int> matchingRowCountOn(const QSqlDatabase &database,
+                                          const QString &key,
+                                          const QString &fileName,
+                                          const QString &table,
+                                          const ReadCondition &condition)
+    {
+        if (!isKnownTable(table)) {
+            return Error(ErrorCode::InvalidInput, QStringLiteral("Unknown table %1").arg(table));
+        }
+
+        // The table name is interpolated because SQL knows no binding for an
+        // identifier. It passed the list above. The condition is bound.
+        return countOn(database,
+                       key,
+                       fileName,
+                       table,
+                       QStringLiteral("SELECT COUNT(*) FROM %1%2;").arg(table, condition.where),
+                       condition.bindings);
     }
 
     /**
@@ -804,13 +951,15 @@ public:
                           const QString &fileName,
                           const QString &table,
                           QMap<int, QString> columnList,
-                          Storage::Type type,
-                          int offset,
-                          int limit)
+                          Storage::ItemQuery itemQuery)
     {
-        const auto fail = [&promise](ErrorCode code, const QString &message) {
-            promise.addResult(ReadResult{{}, Error(code, message)});
+        // matched stays negative on every path that ends before the count was
+        // taken. Only then is the caller told nothing about it.
+        const auto fail = [&promise](ErrorCode code, const QString &message, int matched = -1) {
+            promise.addResult(ReadResult{{}, Error(code, message), matched});
         };
+
+        const auto condition = conditionOf(itemQuery);
 
         // A name of its own, so that the two connections never collide. The one
         // of StorageConnection already carries a random number.
@@ -839,9 +988,14 @@ public:
             // The table name is interpolated because SQL knows no binding for an
             // identifier. It comes from the switch in receiveItems and has passed
             // the list in tableColumns, which answers empty for a name it does
-            // not know. The window is bound.
-            const auto statement = QStringLiteral("SELECT * FROM %1 LIMIT :limit OFFSET :offset;")
-                                       .arg(table);
+            // not know. The window and the condition are bound.
+            //
+            // The order by the row id is not a preference. Without it SQLite is
+            // free to hand two windows back in an order of its own, and a record
+            // could then fall between them or appear in both.
+            const auto statement
+                = QStringLiteral("SELECT * FROM %1%2 ORDER BY id ASC LIMIT :limit OFFSET :offset;")
+                      .arg(table, condition.where);
 
             if (!query.prepare(statement)) {
                 fail(ErrorCode::DatabaseFailure,
@@ -852,8 +1006,12 @@ public:
                 return;
             }
 
-            query.bindValue(QStringLiteral(":limit"), limit);
-            query.bindValue(QStringLiteral(":offset"), offset);
+            for (const auto &[name, value] : condition.bindings.asKeyValueRange()) {
+                query.bindValue(name, value);
+            }
+
+            query.bindValue(QStringLiteral(":limit"), itemQuery.limit);
+            query.bindValue(QStringLiteral(":offset"), itemQuery.offset);
 
             if (!query.exec()) {
                 fail(ErrorCode::DatabaseFailure,
@@ -867,12 +1025,30 @@ public:
             // numRowsAffected() is undefined for a SELECT and SQLite answers -1,
             // which turned the progress negative. The count comes from a query of
             // its own. A failure there costs the progress reporting, not the read.
-            const auto rowCount = windowedRowCountOn(database, key, fileName, table, offset, limit);
+            const auto rowCount = windowedRowCountOn(database,
+                                                     key,
+                                                     fileName,
+                                                     table,
+                                                     condition,
+                                                     itemQuery.offset,
+                                                     itemQuery.limit);
             if (!rowCount.hasValue()) {
                 qCWarning(lcStorage) << "no progress reporting:" << rowCount.error().message();
             }
 
             const int totalRows = rowCount.hasValue() ? rowCount.value() : 0;
+
+            // The number the filter bar shows. It stands under the same condition
+            // as the read and counts the whole holding, which is what the count
+            // above cannot do. A failure costs the number, not the records, so
+            // the run carries on and reports nothing rather than something wrong.
+            const auto matchCount = matchingRowCountOn(database, key, fileName, table, condition);
+            if (!matchCount.hasValue()) {
+                qCWarning(lcStorage) << "no record count:" << matchCount.error().message();
+            }
+
+            const int matched = matchCount.hasValue() ? matchCount.value() : -1;
+
             promise.setProgressRange(0, 100);
 
             // The rows are collected first. An account needs a second read for
@@ -896,7 +1072,7 @@ public:
             int index = 0;
 
             for (auto &row : rows) {
-                switch (type) {
+                switch (itemQuery.type) {
                 case Storage::StorageAccount:
                     enrichAccountRowOn(database, key, fileName, row);
                     bankingItems << Account::fromMap(row);
@@ -921,10 +1097,11 @@ public:
 
             if (bankingItems.isEmpty()) {
                 fail(ErrorCode::NotFound,
-                     QStringLiteral("No items found in the table %1").arg(table));
+                     QStringLiteral("No items found in the table %1").arg(table),
+                     matched);
             } else {
                 qCDebug(lcStorage) << "read" << bankingItems.size() << "items from" << table;
-                promise.addResult(ReadResult{bankingItems, Error()});
+                promise.addResult(ReadResult{bankingItems, Error(), matched});
             }
 
             database.close();
@@ -1793,7 +1970,7 @@ void Storage::storeItems(const BankingItems &items)
                                                       items));
 }
 
-void Storage::receiveItems(Type type, int offset, int limit)
+void Storage::receiveItems(const ItemQuery &query)
 {
     const auto reportError = [this](ErrorCode code, const QString &message) {
         qCCritical(lcStorage) << message;
@@ -1804,14 +1981,36 @@ void Storage::receiveItems(Type type, int offset, int limit)
 
     // The window used to travel into the statement unchecked. A negative offset
     // or a limit of INT_MAX is not a query anyone meant to run.
-    if (limit < 1 || limit > MaxItemsPerQuery || offset < 0) {
+    if (query.limit < 1 || query.limit > MaxItemsPerQuery || query.offset < 0) {
         reportError(ErrorCode::InvalidInput,
-                    QStringLiteral("Invalid window: limit=%1 offset=%2").arg(limit).arg(offset));
+                    QStringLiteral("Invalid window: limit=%1 offset=%2")
+                        .arg(query.limit)
+                        .arg(query.offset));
+        return;
+    }
+
+    // The account goes over transactions.unique_account_id, the identifier the
+    // institution assigns. No other table carries that column: a reference
+    // account hangs on the row id of accounts, which no type of the core hands
+    // out. Both identifiers are quint32, so a filter on another type would be a
+    // mix-up nothing else could catch.
+    //
+    // The three of the filter bar go over columns of the transactions table as
+    // well, and are refused on another type for the same reason: silently
+    // dropping them would answer a narrower question with the wider holding.
+    const bool filtered = query.accountId != 0 || !query.text.isEmpty() || query.from.isValid()
+                          || query.to.isValid() || query.direction != Direction::Any;
+
+    if (filtered && query.type != StorageTransaction) {
+        reportError(ErrorCode::InvalidInput,
+                    QStringLiteral("A filter is defined for transactions only, not for %1")
+                        .arg(QString::fromUtf8(
+                            QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
         return;
     }
 
     auto table = QString();
-    switch (type) {
+    switch (query.type) {
     case Storage::StorageAccount:
         table = QStringLiteral("accounts");
         break;
@@ -1829,7 +2028,7 @@ void Storage::receiveItems(Type type, int offset, int limit)
         reportError(ErrorCode::NotImplemented,
                     QStringLiteral("Reading items of type %1 is not implemented")
                         .arg(QString::fromUtf8(
-                            QMetaEnum::fromType<Storage::Type>().valueToKey(type))));
+                            QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
         return;
     }
 
@@ -1900,6 +2099,16 @@ void Storage::receiveItems(Type type, int offset, int limit)
         }
 
         const auto result = future.result();
+
+        // Before the records and before a failure. Whoever picks what to show
+        // when nothing was found needs the number at that moment, and a filter
+        // that matches nothing ends in exactly that pair: zero, then the report
+        // that the table held nothing. A run that never reached the table has no
+        // number to give.
+        if (result.matched >= 0) {
+            Q_EMIT itemsCounted(result.matched);
+        }
+
         if (result.error.isError()) {
             qCCritical(lcStorage) << result.error.message();
 
@@ -1918,7 +2127,5 @@ void Storage::receiveItems(Type type, int offset, int limit)
                                                      d_ptr->storageFileName(),
                                                      table,
                                                      columnList,
-                                                     type,
-                                                     offset,
-                                                     limit));
+                                                     query));
 }

@@ -23,6 +23,7 @@
 #include "core/Banking/BankingItem.h"
 #include "core/Error.h"
 
+#include <QtCore/QDate>
 #include <QtCore/QObject>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QVariant>
@@ -62,6 +63,70 @@ public:
         StorageContacts,
     };
     Q_ENUM(Type);
+
+    /**
+     * @brief The column a read may order by.
+     *
+     * An enumeration rather than a string: SQL binds no identifier, so the column
+     * name reaches the statement by interpolation. A closed set cannot carry a
+     * value that is not in the mapping.
+     *
+     * One value per column the view offers. The view has four; None covers the
+     * unordered read. A column nobody can click on has no value here.
+     */
+    enum class SortColumn : int {
+        None = 0,
+        Date,
+        Value,
+        RemoteName,
+        Purpose,
+    };
+    Q_ENUM(SortColumn)
+
+    /**
+     * @brief Which way a booking goes.
+     *
+     * The value of a transaction carries the sign, so a booking of nought is
+     * neither of the two and no restriction lets it through.
+     */
+    enum class Direction { Any, Incoming, Outgoing };
+    Q_ENUM(Direction)
+
+    /**
+     * @brief What a single read asks for.
+     *
+     * The three parameters receiveItems used to take grew to ten, four of them
+     * integral. A swapped pair would have compiled.
+     */
+    struct ItemQuery
+    {
+        Type type = StorageAccount;
+
+        // The identifier the institution assigns, transactions.unique_account_id.
+        // Not the row id of the accounts table: neither Account nor Transaction
+        // carries that one, so the caller could not name it. 0 means no filter,
+        // and a value is only meaningful for StorageTransaction.
+        quint32 accountId = 0;
+
+        SortColumn sort = SortColumn::None;
+        Qt::SortOrder order = Qt::AscendingOrder;
+        int offset = 0;
+        int limit = 50;
+
+        // The filter above the transaction list. Every field is optional; an
+        // empty text and an invalid date leave that condition out of the
+        // statement. Like accountId, all four are meaningful for
+        // StorageTransaction alone.
+        //
+        // The text is looked for in the name of the other party and in the
+        // purpose. It is bound rather than written into the statement, and its
+        // own wildcards are escaped, so a percent sign is searched for as a
+        // character.
+        QString text = {};
+        QDate from = {};
+        QDate to = {};
+        Direction direction = Direction::Any;
+    };
 
     /**
      * @brief Set absolute path with file name
@@ -180,7 +245,7 @@ public:
     Error storeItem(const BankingItem *bankingItem);
 
     /**
-     * @brief Retrieves a list of items from a database based on the specified type, offset, and limit.
+     * @brief Reads one window of records from the storage.
      *
      * The call returns at once and the reading happens in a thread of its own,
      * on a second connection to the same file. The calling thread stays
@@ -195,11 +260,13 @@ public:
      * calling thread, because they are a programming error and not worth a
      * detour. A second call while a read is running is refused the same way.
      *
-     * @param type The type of storage item to retrieve, corresponding to a specific database table.
-     * @param offset The starting point of the records to retrieve in the query.
-     * @param limit The maximum number of records to retrieve in the query.
+     * The order is unambiguous whatever is asked for: every read orders by the
+     * row id as well. Without it a record could fall between two windows or
+     * appear in both.
+     *
+     * @param query What to read. See ItemQuery.
      */
-    void receiveItems(Type type, int offset = 0, int limit = 50);
+    void receiveItems(const ItemQuery &query);
 
     /**
      * @brief Stores a run of records without holding the calling thread.
@@ -240,6 +307,23 @@ Q_SIGNALS:
      * @param items The records that were read. The receiver takes them over.
      */
     void itemsReceived(const BankingItems &items);
+
+    /**
+     * @brief This signal is emitted once per read that reached the table.
+     *
+     * It arrives before itemsReceived and before errorOccurred, so that whoever
+     * shows the number already holds it when the empty result is handled. A run
+     * that fails before the query does not report it at all.
+     *
+     * The number cannot come from the window: fifty rows say nothing about three
+     * thousand. It travels with the read rather than through a call of its own,
+     * because a second entry point would need a second worker and would meet the
+     * same refusal a second read meets today.
+     *
+     * @param count How many records match the condition of the query, the whole
+     *  holding rather than the window. Zero when none match.
+     */
+    void itemsCounted(int count);
 
     /**
      * @brief This signal is emitted when a run of storeItems has ended.

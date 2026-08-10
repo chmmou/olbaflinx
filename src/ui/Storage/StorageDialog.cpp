@@ -465,12 +465,33 @@ private:
                         return;
                     }
 
-                    disconnect(storage, &Storage::itemsReceived, nullptr, nullptr);
-                    connect(storage, &Storage::itemsReceived, q_ptr, [&](const BankingItems &items) {
-                        app->setAccounts(items);
-                    });
+                    // Only what this dialog connected. Passing nullptr took every
+                    // receiver of the signal with it, the transaction view among
+                    // them, which was left without its records from then on.
+                    disconnect(storage, &Storage::itemsReceived, q_ptr, nullptr);
 
-                    storage->receiveItems(Storage::StorageAccount);
+                    // The accounts of this one read and of no other. Every read
+                    // of the storage reports through the same signal, and the
+                    // transactions of an account handed to the account tree
+                    // would leave it empty.
+                    connect(
+                        storage,
+                        &Storage::itemsReceived,
+                        q_ptr,
+                        [this](const BankingItems &items) { app->setAccounts(items); },
+                        Qt::SingleShotConnection);
+
+                    // A read that finds no account reports no records at all, so
+                    // the connection above would stand and catch the next read
+                    // instead. finished ends the run either way.
+                    connect(
+                        storage,
+                        &Storage::finished,
+                        q_ptr,
+                        [this] { disconnect(storage, &Storage::itemsReceived, q_ptr, nullptr); },
+                        Qt::SingleShotConnection);
+
+                    storage->receiveItems({.type = Storage::StorageAccount});
 
                     // Last, and only on the way that got through. The window turns
                     // to the page with the accounts on it when it sees this.

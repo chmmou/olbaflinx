@@ -21,6 +21,10 @@
 #include <QtCore/QMap>
 #include <QtCore/QRandomGenerator>
 #include <QtCore/QString>
+#include <QtCore/QVariant>
+
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlQuery>
 
 using namespace olbaflinx::core::banking::account;
 
@@ -29,6 +33,68 @@ namespace olbaflinx::core::tests {
 class TestHelpers
 {
 public:
+    /**
+     * Runs one statement against a storage file, past Storage, and hands back
+     * the first value of the first row. An invalid QVariant means the file would
+     * not open, the statement failed, or it returned no row.
+     *
+     * It reaches what Storage offers no way to ask: what a column holds after a
+     * write, and what a table carries that nothing has read yet.
+     */
+    static QVariant storageScalar(const QString &file, const QString &key, const QString &statement)
+    {
+        auto value = QVariant();
+        const auto connectionName = QStringLiteral("TestHelpersDirect");
+
+        {
+            auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"), connectionName);
+            database.setDatabaseName(file);
+
+            if (database.open()) {
+                auto quotedKey = key;
+                quotedKey.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+                QSqlQuery query(database);
+                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(quotedKey))
+                    && query.exec(statement) && query.next()) {
+                    value = query.value(0);
+                }
+
+                database.close();
+            }
+        }
+        QSqlDatabase::removeDatabase(connectionName);
+
+        return value;
+    }
+
+    /**
+     * Puts transactions into a storage past Storage, hung on the identifier the
+     * institution assigns. This epic fetches none from a bank, so whoever reads
+     * them has to write them first.
+     *
+     * They all share their account_id and differ in unique_account_id. That is
+     * what tells a read over the right column from one over the wrong one.
+     */
+    static bool putTransactions(const QString &file,
+                                const QString &key,
+                                quint32 uniqueAccountId,
+                                int count,
+                                const QString &purpose)
+    {
+        return storageScalar(file,
+                             key,
+                             QStringLiteral(
+                                 "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM "
+                                 "seq WHERE n < %2) INSERT INTO transactions (account_id, "
+                                 "unique_account_id, purpose) SELECT 1, %1, '%3 ' || n FROM seq "
+                                 "RETURNING unique_account_id;")
+                                 .arg(uniqueAccountId)
+                                 .arg(count)
+                                 .arg(purpose))
+            .isValid();
+    }
+
     static std::shared_ptr<Account> createFakeAccount(const int accountType = 1)
     {
         return Account::fromMap(createFakeAccountMap(accountType));
