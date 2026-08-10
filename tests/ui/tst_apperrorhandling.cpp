@@ -55,6 +55,7 @@ private Q_SLOTS:
     void everyErrorCodeHasAUserMessage();
     void userMessageCarriesNoTechnicalDetail();
     void storageErrorReachesTheWindow();
+    void anEmptyReadDoesNotReachTheStatusBar();
     void windowShowsItselfAndCarriesTheAboutEntry();
 };
 
@@ -130,6 +131,32 @@ void AppErrorHandlingTest::storageErrorReachesTheWindow()
     QCOMPARE(shown, userMessage(ErrorCode::PermissionDenied));
     QVERIFY(!shown.contains(QStringLiteral("PRAGMA")));
     QVERIFY(!shown.contains(QStringLiteral("/home/")));
+}
+
+/**
+ * The other side of that path. A read that found no record travels through the
+ * same signal as a failure, with the code for "nothing found", and it must not
+ * end up in the status bar: a storage without accounts and an account without
+ * transactions each have a notice of their own, and a message would say instead
+ * that something went wrong.
+ */
+void AppErrorHandlingTest::anEmptyReadDoesNotReachTheStatusBar()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    App app(&logger, &storage);
+
+    Q_EMIT storage.errorOccurred(ErrorCode::NotFound,
+                                 QStringLiteral("No items found in the table accounts"));
+
+    QCOMPARE(app.statusBar()->currentMessage(), QString());
+
+    // Every other code still gets there.
+    Q_EMIT storage.errorOccurred(ErrorCode::DatabaseFailure,
+                                 QStringLiteral("No open storage connection"));
+
+    QCOMPARE(app.statusBar()->currentMessage(), userMessage(ErrorCode::DatabaseFailure));
 }
 
 /**

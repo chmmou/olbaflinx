@@ -17,13 +17,26 @@
 
 #include "ui/Models/TransactionTableModel.h"
 
+#include "core/ApplicationInfo.h"
 #include "core/Banking/Account/Account.h"
+#include "core/Storage/Storage.h"
+
+#include "TestHelpers.h"
 
 #include <QtTest/QtTest>
 
+#include <QtCore/QTemporaryDir>
+
+#include <QtSql/QSqlDatabase>
+
+#include <memory>
+
+using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::account;
 using namespace olbaflinx::core::banking::transaction;
+using namespace olbaflinx::core::storage;
+using namespace olbaflinx::core::tests;
 using namespace olbaflinx::ui::models;
 
 namespace olbaflinx::ui::models::tests {
@@ -68,7 +81,56 @@ private:
         return model.data(model.index(0, column), Qt::DisplayRole).toString();
     }
 
+    std::unique_ptr<QTemporaryDir> workingDirectory;
+
+    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+
+    /**
+     * The upper bound a wait may take before the test counts as failed. It is
+     * not a wait: every use returns the moment the condition holds.
+     */
+    static constexpr int workerTimeoutMs = 30000;
+
+    static constexpr quint32 firstAccount = 815;
+    static constexpr quint32 secondAccount = 4711;
+    static constexpr quint32 thirdAccount = 2026;
+
+    [[nodiscard]] QString storageFile() const
+    {
+        return workingDirectory->filePath(QStringLiteral("storage.obfx"));
+    }
+
+    static ApplicationInfo applicationInfo()
+    {
+        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
+                QStringLiteral("OlbaFlinxTransactionTableModelTest"),
+                QStringLiteral("1.0.0")};
+    }
+
+    [[nodiscard]] bool openStorage(Storage &storage) const
+    {
+        if (storage.setKey(password()).isError()) {
+            return false;
+        }
+
+        storage.setStorageFile(storageFile());
+
+        return !storage.initialize(true).isError();
+    }
+
+    [[nodiscard]] bool putTransactions(quint32 uniqueAccountId, int count) const
+    {
+        return TestHelpers::putTransactions(storageFile(),
+                                            password(),
+                                            uniqueAccountId,
+                                            count,
+                                            QStringLiteral("Buchung"));
+    }
+
 private Q_SLOTS:
+    void init();
+    void cleanup();
+
     void emptyModelHasNoRows();
     void setItemsCountsOnlyTransactions();
     void setItemsWithEmptyListClearsTheModel();
@@ -79,7 +141,23 @@ private Q_SLOTS:
     void theModelCarriesFourColumnsEachWithAHeader();
     void everyColumnShowsWhatItsHeaderPromises();
     void anAmountInDebitCarriesItsSignInTheText();
+
+    void aChangeOfAccountReplacesTheContentCompletely();
+    void aChangeOfAccountReturnsBeforeTheTransactionsArrive();
+    void manyChangesOfAccountLeaveNoConnectionBehind();
+    void aChangeDuringARunningReadRaisesNoErrorAndTheLastOneWins();
 };
+
+void TransactionTableModelTest::init()
+{
+    workingDirectory = std::make_unique<QTemporaryDir>();
+    QVERIFY(workingDirectory->isValid());
+}
+
+void TransactionTableModelTest::cleanup()
+{
+    workingDirectory.reset();
+}
 
 void TransactionTableModelTest::emptyModelHasNoRows()
 {
@@ -228,6 +306,137 @@ void TransactionTableModelTest::anAmountInDebitCarriesItsSignInTheText()
     QVERIFY(!shownAt(credit, 3).contains(negativeSign));
 
     QVERIFY(shownAt(debit, 3) != shownAt(credit, 3));
+}
+
+/**
+ * A change of account swaps the content, it does not add to it. The rows of the
+ * account that was shown go at once, before the new ones are anywhere near, so
+ * that a holding never stands under the wrong name.
+ */
+void TransactionTableModelTest::aChangeOfAccountReplacesTheContentCompletely()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putTransactions(firstAccount, 3));
+    QVERIFY(putTransactions(secondAccount, 5));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 3, workerTimeoutMs);
+
+    model.setAccountId(secondAccount);
+
+    // Straight after the call, before anything was read.
+    QCOMPARE(model.rowCount(), 0);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 5, workerTimeoutMs);
+    QCOMPARE(model.accountId(), secondAccount);
+
+    storage.close();
+}
+
+/**
+ * The change hands the reading to a thread of its own. The call comes back
+ * before the transactions are there, and they arrive in the thread that asked,
+ * which is the only one allowed to touch a view.
+ */
+void TransactionTableModelTest::aChangeOfAccountReturnsBeforeTheTransactionsArrive()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    // More than one window holds, so that the read has work to do.
+    QVERIFY(putTransactions(firstAccount, 500));
+    QVERIFY(putTransactions(secondAccount, 500));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    QThread *const callingThread = QThread::currentThread();
+    QThread *deliveryThread = nullptr;
+
+    connect(&model, &QAbstractItemModel::modelReset, &model, [&] {
+        if (model.rowCount() > 0) {
+            deliveryThread = QThread::currentThread();
+        }
+    });
+
+    model.setAccountId(firstAccount);
+    QCOMPARE(model.rowCount(), 0);
+    QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, workerTimeoutMs);
+
+    model.setAccountId(secondAccount);
+    QCOMPARE(model.rowCount(), 0);
+    QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, workerTimeoutMs);
+
+    QCOMPARE(deliveryThread, callingThread);
+
+    storage.close();
+}
+
+/**
+ * A change does not only drop the result of the run that was going, it lets that
+ * run end. The second connection it reads on is closed and unregistered, so a
+ * hundred changes leave as many connections behind as none.
+ */
+void TransactionTableModelTest::manyChangesOfAccountLeaveNoConnectionBehind()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putTransactions(firstAccount, 3));
+    QVERIFY(putTransactions(secondAccount, 3));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    const auto connectionsWithoutARead = QSqlDatabase::connectionNames().size();
+
+    for (int i = 0; i < 20; ++i) {
+        model.setAccountId(i % 2 == 0 ? firstAccount : secondAccount);
+    }
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 3, workerTimeoutMs);
+    QTRY_COMPARE_WITH_TIMEOUT(QSqlDatabase::connectionNames().size(),
+                              connectionsWithoutARead,
+                              workerTimeoutMs);
+
+    storage.close();
+}
+
+/**
+ * Changing the account while a read is running is an everyday move and not a
+ * failure. The storage takes no second read, so the request waits for the end of
+ * the one that is going; of three changes made in a row the last one is what the
+ * user gets to see, and no message reaches the status bar.
+ */
+void TransactionTableModelTest::aChangeDuringARunningReadRaisesNoErrorAndTheLastOneWins()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putTransactions(firstAccount, 3));
+    QVERIFY(putTransactions(secondAccount, 5));
+    QVERIFY(putTransactions(thirdAccount, 7));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+
+    // Three in a row, none of them waiting for the one before.
+    model.setAccountId(firstAccount);
+    model.setAccountId(secondAccount);
+    model.setAccountId(thirdAccount);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 7, workerTimeoutMs);
+    QCOMPARE(model.accountId(), thirdAccount);
+    QCOMPARE(errorSpy.count(), 0);
+
+    storage.close();
 }
 
 } // namespace olbaflinx::ui::models::tests

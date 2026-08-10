@@ -45,6 +45,7 @@ public:
         ui->tableViewTransactions->setAccessibleName(AppCentralWidget::tr("Transactions"));
 
         applyAccountNotice();
+        applyTransactionNotice();
     }
 
     // The generated form is created with new above and belongs to nobody else.
@@ -82,6 +83,72 @@ public:
         applyAccountNotice();
     }
 
+    void setTransactionModel(QAbstractItemModel *model)
+    {
+        if (transactionModel) {
+            QObject::disconnect(transactionModel, nullptr, q_ptr, nullptr);
+        }
+
+        transactionModel = model;
+        ui->tableViewTransactions->setModel(model);
+
+        if (transactionModel) {
+            const auto refresh = [this] { applyTransactionNotice(); };
+
+            QObject::connect(transactionModel, &QAbstractItemModel::modelReset, q_ptr, refresh);
+            QObject::connect(transactionModel, &QAbstractItemModel::rowsInserted, q_ptr, refresh);
+            QObject::connect(transactionModel, &QAbstractItemModel::rowsRemoved, q_ptr, refresh);
+        }
+
+        applyTransactionNotice();
+    }
+
+    void setTransactionNotice(AppCentralWidget::TransactionNotice notice)
+    {
+        transactionNotice = notice;
+
+        applyTransactionNotice();
+    }
+
+    /**
+     * Decides between the table and the notice that stands in for it, and puts
+     * the words of the current state into that notice.
+     */
+    void applyTransactionNotice()
+    {
+        if (transactionModel != nullptr && transactionModel->rowCount() > 0) {
+            ui->stackedWidgetTransactions->setCurrentWidget(ui->pageTransactionTable);
+            return;
+        }
+
+        // Choosing a bank is no choice of an account, so it shares the headline
+        // of the state where nothing is chosen at all.
+        const bool withoutAnAccount
+            = transactionNotice != AppCentralWidget::TransactionNotice::AccountWithoutTransactions;
+
+        ui->labelTransactionsHeadline->setText(withoutAnAccount
+                                                   ? AppCentralWidget::tr("No account selected")
+                                                   : AppCentralWidget::tr("No transactions"));
+
+        switch (transactionNotice) {
+        case AppCentralWidget::TransactionNotice::NoAccountSelected:
+            ui->labelTransactionsNotice->setText(
+                AppCentralWidget::tr("Choose an account on the left to see its transactions."));
+            break;
+        case AppCentralWidget::TransactionNotice::BankSelected:
+            ui->labelTransactionsNotice->setText(
+                AppCentralWidget::tr("A bank only groups the accounts it keeps. Choose one of them "
+                                     "to see its transactions."));
+            break;
+        case AppCentralWidget::TransactionNotice::AccountWithoutTransactions:
+            ui->labelTransactionsNotice->setText(
+                AppCentralWidget::tr("This account holds no transactions yet."));
+            break;
+        }
+
+        ui->stackedWidgetTransactions->setCurrentWidget(ui->pageTransactionsNotice);
+    }
+
     /**
      * Decides between the tree and the notice that stands in for it.
      *
@@ -109,6 +176,9 @@ public:
 
 private:
     QAbstractItemModel *accountModel;
+    QAbstractItemModel *transactionModel = nullptr;
+    AppCentralWidget::TransactionNotice transactionNotice
+        = AppCentralWidget::TransactionNotice::NoAccountSelected;
     QString unreadable;
     App *app;
     AppCentralWidget *q_ptr;
@@ -142,6 +212,16 @@ void AppCentralWidget::setAccountModel(QAbstractItemModel *model)
 void AppCentralWidget::showAccountsUnreadable(const QString &message)
 {
     d_ptr->showAccountsUnreadable(message);
+}
+
+void AppCentralWidget::setTransactionModel(QAbstractItemModel *model)
+{
+    d_ptr->setTransactionModel(model);
+}
+
+void AppCentralWidget::setTransactionNotice(TransactionNotice notice)
+{
+    d_ptr->setTransactionNotice(notice);
 }
 
 void AppCentralWidget::setPage(Page page)

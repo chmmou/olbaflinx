@@ -19,6 +19,7 @@
 
 #include "core/Banking/BankingItem.h"
 #include "core/Banking/Transaction/Transaction.h"
+#include "core/Storage/Storage.h"
 
 #include <QtCore/QAbstractTableModel>
 
@@ -84,6 +85,33 @@ public:
                                       int role = Qt::DisplayRole) const override;
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
+    /**
+     * @brief The storage the model reads from.
+     *
+     * Externally owned and has to outlive the model. Passing nullptr detaches
+     * it; the model then keeps what it holds and asks for nothing.
+     */
+    void setStorage(olbaflinx::core::storage::Storage *storage);
+
+    /**
+     * @brief Shows the transactions of one account.
+     *
+     * The rows of the account that was shown before are dropped at once. They do
+     * not belong under the account that is chosen now, and leaving them standing
+     * while the new ones are on their way shows a holding to the wrong name.
+     *
+     * A change while a read is running does not reach the storage right away.
+     * The storage refuses a second read, and a change of account is an everyday
+     * move rather than a failure, so the request waits for the end of the run.
+     * Only the latest one waits: three changes during one run make one request.
+     *
+     * @param accountId The identifier the institution assigns. 0 stands for no
+     *  account and empties the model without asking for anything.
+     */
+    void setAccountId(quint32 accountId);
+
+    [[nodiscard]] quint32 accountId() const;
+
 public Q_SLOTS:
     /**
      * @brief Takes over the reported records.
@@ -93,7 +121,25 @@ public Q_SLOTS:
     void setItems(const olbaflinx::core::banking::BankingItems &items);
 
 private:
+    void requestItems();
+    void takeResult(const olbaflinx::core::banking::BankingItems &items);
+    void runEnded();
+
     QList<std::shared_ptr<olbaflinx::core::banking::transaction::Transaction>> m_transactions;
+
+    olbaflinx::core::storage::Storage *m_storage = nullptr;
+    quint32 m_accountId = 0;
+
+    /**
+     * Tells the request that is running from the one the user has since asked
+     * for. A result that comes back under an older number belongs to an account
+     * nobody is looking at any more.
+     */
+    quint64 m_generation = 0;
+    quint64 m_requestGeneration = 0;
+
+    bool m_pending = false;
+    bool m_queued = false;
 };
 
 } // namespace olbaflinx::ui::models

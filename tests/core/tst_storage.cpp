@@ -113,28 +113,12 @@ private:
         return value;
     }
 
-    /**
-     * Puts transactions into the store past Storage, hung on the identifier the
-     * institution assigns. Epic 1 fetches none from a bank, so whoever reads
-     * them has to write them first.
-     *
-     * They all share their account_id and differ in unique_account_id. That is
-     * what tells a read over the right column from one over the wrong one.
-     */
     static bool putTransactions(const QString &file,
                                 quint32 uniqueAccountId,
                                 int count,
                                 const QString &purpose)
     {
-        return scalarOf(file,
-                        QStringLiteral("WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 "
-                                       "FROM seq WHERE n < %2) INSERT INTO transactions "
-                                       "(account_id, unique_account_id, purpose) SELECT 1, %1, "
-                                       "'%3 ' || n FROM seq RETURNING unique_account_id;")
-                            .arg(uniqueAccountId)
-                            .arg(count)
-                            .arg(purpose))
-            .isValid();
+        return TestHelpers::putTransactions(file, password(), uniqueAccountId, count, purpose);
     }
 
     /**

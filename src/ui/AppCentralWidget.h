@@ -46,6 +46,23 @@ public:
     enum class Page { Storages = 0, Banking = 1 };
     Q_ENUM(Page)
 
+    /**
+     * @brief Why the transaction view has nothing to show.
+     *
+     * Three states, and the view names the one it is in rather than leaving the
+     * area blank. A blank area could as well be a failure.
+     *
+     * BankSelected shares its headline with NoAccountSelected: choosing a bank
+     * is no choice of an account. What it carries of its own is the explanation,
+     * that a bank groups its accounts and that one of them is what to pick.
+     */
+    enum class TransactionNotice {
+        NoAccountSelected,
+        BankSelected,
+        AccountWithoutTransactions,
+    };
+    Q_ENUM(TransactionNotice)
+
     explicit AppCentralWidget(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
     ~AppCentralWidget() override;
 
@@ -103,6 +120,26 @@ public:
      *  statement.
      */
     void showAccountsUnreadable(const QString &message);
+
+    /**
+     * @brief Hands the transactions to the view and takes over the empty states.
+     *
+     * As long as the model reports no row, the notice for the state set through
+     * setTransactionNotice() stands in place of the table.
+     *
+     * @param model Externally owned model, has to outlive this widget. Passing
+     *  nullptr detaches the view.
+     */
+    void setTransactionModel(QAbstractItemModel *model);
+
+    /**
+     * @brief Says why the transaction view is empty.
+     *
+     * Only read while the model reports no row. Whoever changes the selection
+     * sets it along with the account, so that the right text is in place by the
+     * time the read comes back empty.
+     */
+    void setTransactionNotice(TransactionNotice notice);
 
 private:
     class Private;

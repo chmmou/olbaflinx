@@ -146,13 +146,63 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QTableView" name="tableViewTransactions">
-             <property name="selectionBehavior">
-              <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+            <widget class="QStackedWidget" name="stackedWidgetTransactions">
+             <property name="currentIndex">
+              <number>0</number>
              </property>
-             <property name="alternatingRowColors">
-              <bool>true</bool>
-             </property>
+             <widget class="QWidget" name="pageTransactionTable">
+              <layout class="QVBoxLayout" name="transactionTableLayout">
+               <property name="spacing">
+                <number>0</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QTableView" name="tableViewTransactions">
+                 <property name="selectionBehavior">
+                  <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+                 </property>
+                 <property name="alternatingRowColors">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+             <widget class="QWidget" name="pageTransactionsNotice">
+              <layout class="QVBoxLayout" name="transactionsNoticeLayout">
+               <item>
+                <widget class="QLabel" name="labelTransactionsHeadline">
+                 <property name="alignment">
+                  <set>Qt::AlignmentFlag::AlignCenter</set>
+                 </property>
+                 <property name="wordWrap">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="labelTransactionsNotice">
+                 <property name="alignment">
+                  <set>Qt::AlignmentFlag::AlignCenter</set>
+                 </property>
+                 <property name="wordWrap">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
             </widget>
            </item>
           </layout>
