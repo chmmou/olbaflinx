@@ -21,10 +21,39 @@
 #include "ui_AppCentralWidget.h"
 
 #include <QtCore/QAbstractItemModel>
+#include <QtCore/QTimer>
+
+#include <QtGui/QAccessible>
 
 #include <QtWidgets/QBoxLayout>
+#include <QtWidgets/QComboBox>
 #include <QtWidgets/QLabel>
+#include <QtWidgets/QLineEdit>
+#include <QtWidgets/QPushButton>
 #include <QtWidgets/QStackedWidget>
+
+using namespace olbaflinx::core::storage;
+using namespace olbaflinx::ui::models;
+
+namespace {
+
+/**
+ * How long the search field waits after the last keystroke before it asks.
+ *
+ * Every ask runs a query over the whole holding of the account, so a request per
+ * keystroke would put three thousand rows through the storage for a word of ten
+ * letters. Short enough that a user who stops typing sees the result at once.
+ */
+constexpr int SearchDelayMs = 300;
+
+/**
+ * The periods the bar offers, as the number of days they reach back. Zero stands
+ * for the whole holding, which is what the bar opens with: a narrower default
+ * would hide bookings without saying so.
+ */
+constexpr int WholePeriod = 0;
+
+} // namespace
 
 using namespace olbaflinx::ui;
 
@@ -44,8 +73,128 @@ public:
         ui->treeViewBankingAccounts->setAccessibleName(AppCentralWidget::tr("Accounts"));
         ui->tableViewTransactions->setAccessibleName(AppCentralWidget::tr("Transactions"));
 
+        setUpTransactionFilter();
+
         applyAccountNotice();
         applyTransactionNotice();
+    }
+
+    /**
+     * Builds the bar above the transactions and wires it to the model.
+     *
+     * Five parts and no sixth: a field for the text, the period, the direction, a
+     * reset, and the number of transactions the filter leaves. The number is no
+     * control, it is what tells the user what he is looking at.
+     */
+    void setUpTransactionFilter()
+    {
+        auto *const search = ui->lineEditTransactionSearch;
+        auto *const period = ui->comboBoxTransactionPeriod;
+        auto *const direction = ui->comboBoxTransactionDirection;
+        auto *const reset = ui->pushButtonTransactionFilterReset;
+
+        // The placeholder names both fields that are searched. Without it the
+        // user has to guess whether the name of the other party counts.
+        search->setPlaceholderText(AppCentralWidget::tr("Search counterparty and purpose"));
+
+        period->addItem(AppCentralWidget::tr("All dates"), WholePeriod);
+        period->addItem(AppCentralWidget::tr("Last 30 days"), 30);
+        period->addItem(AppCentralWidget::tr("Last 90 days"), 90);
+        period->addItem(AppCentralWidget::tr("Last 365 days"), 365);
+
+        // All three values, not two and an unnamed rest.
+        direction->addItem(AppCentralWidget::tr("All bookings"),
+                           QVariant::fromValue(Storage::Direction::Any));
+        direction->addItem(AppCentralWidget::tr("Incoming"),
+                           QVariant::fromValue(Storage::Direction::Incoming));
+        direction->addItem(AppCentralWidget::tr("Outgoing"),
+                           QVariant::fromValue(Storage::Direction::Outgoing));
+
+        reset->setText(AppCentralWidget::tr("Reset"));
+        ui->pushButtonTransactionsNoticeReset->setText(AppCentralWidget::tr("Reset the filter"));
+
+        // Neither carries a visible label of its own, so each says what it is to
+        // an assistive tool.
+        search->setAccessibleName(AppCentralWidget::tr("Search transactions"));
+        period->setAccessibleName(AppCentralWidget::tr("Period"));
+        direction->setAccessibleName(AppCentralWidget::tr("Direction of the booking"));
+        reset->setAccessibleName(AppCentralWidget::tr("Reset the filter"));
+        ui->labelTransactionCount->setAccessibleName(AppCentralWidget::tr("Transactions found"));
+
+        searchTimer = new QTimer(q_ptr);
+        searchTimer->setSingleShot(true);
+        searchTimer->setInterval(SearchDelayMs);
+
+        QObject::connect(searchTimer, &QTimer::timeout, q_ptr, [this] { applyTransactionFilter(); });
+
+        // Typing restarts the wait rather than asking. The other three take
+        // effect at once: they change in one step, not letter by letter.
+        QObject::connect(search, &QLineEdit::textChanged, q_ptr, [this] { searchTimer->start(); });
+
+        QObject::connect(period, &QComboBox::currentIndexChanged, q_ptr, [this] {
+            applyTransactionFilter();
+        });
+
+        QObject::connect(direction, &QComboBox::currentIndexChanged, q_ptr, [this] {
+            applyTransactionFilter();
+        });
+
+        QObject::connect(reset, &QPushButton::clicked, q_ptr, [this] { resetTransactionFilter(); });
+
+        QObject::connect(ui->pushButtonTransactionsNoticeReset,
+                         &QPushButton::clicked,
+                         q_ptr,
+                         [this] { resetTransactionFilter(); });
+
+        applyTransactionCount(0);
+    }
+
+    /**
+     * Reads the bar and hands the restriction to the model.
+     */
+    void applyTransactionFilter()
+    {
+        searchTimer->stop();
+
+        if (transactionModel == nullptr) {
+            return;
+        }
+
+        auto filter = TransactionTableModel::Filter();
+        filter.text = ui->lineEditTransactionSearch->text().trimmed();
+
+        const int days = ui->comboBoxTransactionPeriod->currentData().toInt();
+        if (days > WholePeriod) {
+            // Inclusive of today, so a span of thirty days covers thirty and not
+            // thirty-one.
+            filter.from = QDate::currentDate().addDays(-(days - 1));
+        }
+
+        filter.direction = ui->comboBoxTransactionDirection->currentData()
+                               .value<Storage::Direction>();
+
+        transactionModel->setFilter(filter);
+        applyTransactionNotice();
+    }
+
+    void resetTransactionFilter()
+    {
+        const QSignalBlocker searchBlocker(ui->lineEditTransactionSearch);
+        const QSignalBlocker periodBlocker(ui->comboBoxTransactionPeriod);
+        const QSignalBlocker directionBlocker(ui->comboBoxTransactionDirection);
+
+        ui->lineEditTransactionSearch->clear();
+        ui->comboBoxTransactionPeriod->setCurrentIndex(0);
+        ui->comboBoxTransactionDirection->setCurrentIndex(0);
+
+        // Blocked above so that three changes do not make three requests. One
+        // request carries the whole reset.
+        applyTransactionFilter();
+    }
+
+    void applyTransactionCount(int count)
+    {
+        ui->labelTransactionCount->setText(AppCentralWidget::tr("%n transaction(s)", "", count));
     }
 
     // The generated form is created with new above and belongs to nobody else.
@@ -83,7 +232,7 @@ public:
         applyAccountNotice();
     }
 
-    void setTransactionModel(QAbstractItemModel *model)
+    void setTransactionModel(TransactionTableModel *model)
     {
         if (transactionModel) {
             QObject::disconnect(transactionModel, nullptr, q_ptr, nullptr);
@@ -98,6 +247,13 @@ public:
             QObject::connect(transactionModel, &QAbstractItemModel::modelReset, q_ptr, refresh);
             QObject::connect(transactionModel, &QAbstractItemModel::rowsInserted, q_ptr, refresh);
             QObject::connect(transactionModel, &QAbstractItemModel::rowsRemoved, q_ptr, refresh);
+
+            QObject::connect(transactionModel,
+                             &TransactionTableModel::totalRowsChanged,
+                             q_ptr,
+                             [this](int count) { applyTransactionCount(count); });
+
+            applyTransactionCount(transactionModel->totalRows());
         }
 
         applyTransactionNotice();
@@ -116,37 +272,73 @@ public:
      */
     void applyTransactionNotice()
     {
+        const bool accountChosen
+            = transactionNotice == AppCentralWidget::TransactionNotice::AccountWithoutTransactions;
+
+        // Visible without an account, and not operable. A bar that comes and
+        // goes moves what stands below it, and an assistive tool can only say
+        // that a control exists while it is there.
+        ui->widgetTransactionFilter->setEnabled(accountChosen);
+
         if (transactionModel != nullptr && transactionModel->rowCount() > 0) {
             ui->stackedWidgetTransactions->setCurrentWidget(ui->pageTransactionTable);
             return;
         }
 
+        // The fourth state: an account that holds transactions of which none
+        // meets the filter. It is the only one the user can undo where he stands,
+        // so it is the only one with a button.
+        const bool filterTookThemAway = accountChosen && transactionModel != nullptr
+                                        && transactionModel->filter().isSet();
+
         // Choosing a bank is no choice of an account, so it shares the headline
         // of the state where nothing is chosen at all.
-        const bool withoutAnAccount
-            = transactionNotice != AppCentralWidget::TransactionNotice::AccountWithoutTransactions;
+        const bool withoutAnAccount = !accountChosen;
 
-        ui->labelTransactionsHeadline->setText(withoutAnAccount
-                                                   ? AppCentralWidget::tr("No account selected")
-                                                   : AppCentralWidget::tr("No transactions"));
+        if (filterTookThemAway) {
+            ui->labelTransactionsHeadline->setText(AppCentralWidget::tr("No transaction matches"));
+            ui->labelTransactionsNotice->setText(
+                AppCentralWidget::tr("This account holds transactions, but none of them meets the "
+                                     "filter above."));
+        } else {
+            ui->labelTransactionsHeadline->setText(withoutAnAccount
+                                                       ? AppCentralWidget::tr("No account selected")
+                                                       : AppCentralWidget::tr("No transactions"));
 
-        switch (transactionNotice) {
-        case AppCentralWidget::TransactionNotice::NoAccountSelected:
-            ui->labelTransactionsNotice->setText(
-                AppCentralWidget::tr("Choose an account on the left to see its transactions."));
-            break;
-        case AppCentralWidget::TransactionNotice::BankSelected:
-            ui->labelTransactionsNotice->setText(
-                AppCentralWidget::tr("A bank only groups the accounts it keeps. Choose one of them "
-                                     "to see its transactions."));
-            break;
-        case AppCentralWidget::TransactionNotice::AccountWithoutTransactions:
-            ui->labelTransactionsNotice->setText(
-                AppCentralWidget::tr("This account holds no transactions yet."));
-            break;
+            switch (transactionNotice) {
+            case AppCentralWidget::TransactionNotice::NoAccountSelected:
+                ui->labelTransactionsNotice->setText(
+                    AppCentralWidget::tr("Choose an account on the left to see its transactions."));
+                break;
+            case AppCentralWidget::TransactionNotice::BankSelected:
+                ui->labelTransactionsNotice->setText(
+                    AppCentralWidget::tr("A bank only groups the accounts it keeps. Choose one of "
+                                         "them to see its transactions."));
+                break;
+            case AppCentralWidget::TransactionNotice::AccountWithoutTransactions:
+                ui->labelTransactionsNotice->setText(
+                    AppCentralWidget::tr("This account holds no transactions yet."));
+                break;
+            }
         }
 
+        ui->pushButtonTransactionsNoticeReset->setVisible(filterTookThemAway);
         ui->stackedWidgetTransactions->setCurrentWidget(ui->pageTransactionsNotice);
+
+        announceTransactionNotice();
+    }
+
+    /**
+     * Tells the assistive tools that the area now says something else.
+     *
+     * A label that changes its text raises no event of its own and reaches
+     * nobody who is not looking at it. Alert is the event Qt offers for a
+     * message the user is meant to take note of without the focus moving.
+     */
+    void announceTransactionNotice()
+    {
+        QAccessibleEvent event(ui->labelTransactionsHeadline, QAccessible::Alert);
+        QAccessible::updateAccessibility(&event);
     }
 
     /**
@@ -176,7 +368,8 @@ public:
 
 private:
     QAbstractItemModel *accountModel;
-    QAbstractItemModel *transactionModel = nullptr;
+    TransactionTableModel *transactionModel = nullptr;
+    QTimer *searchTimer = nullptr;
     AppCentralWidget::TransactionNotice transactionNotice
         = AppCentralWidget::TransactionNotice::NoAccountSelected;
     QString unreadable;
@@ -214,9 +407,14 @@ void AppCentralWidget::showAccountsUnreadable(const QString &message)
     d_ptr->showAccountsUnreadable(message);
 }
 
-void AppCentralWidget::setTransactionModel(QAbstractItemModel *model)
+void AppCentralWidget::setTransactionModel(TransactionTableModel *model)
 {
     d_ptr->setTransactionModel(model);
+}
+
+void AppCentralWidget::resetTransactionFilter()
+{
+    d_ptr->resetTransactionFilter();
 }
 
 void AppCentralWidget::setTransactionNotice(TransactionNotice notice)

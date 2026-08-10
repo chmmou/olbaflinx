@@ -136,6 +136,25 @@ QString keyLiteral(const QString &key)
  * The tables the storage reads from. A table name cannot be bound, so a name is
  * checked against this list before it reaches a statement.
  */
+/**
+ * Escapes what LIKE reads as a pattern, so that the search text is looked for as
+ * it was typed. A percent sign a user enters is a character to him, not a
+ * placeholder for anything.
+ *
+ * The backslash goes first, otherwise it would escape the escapes added after
+ * it. It is the character the statements name in their ESCAPE clause.
+ */
+QString escapedForLike(const QString &text)
+{
+    auto escaped = text;
+
+    escaped.replace(QLatin1Char('\\'), QLatin1StringView("\\\\"));
+    escaped.replace(QLatin1Char('%'), QLatin1StringView("\\%"));
+    escaped.replace(QLatin1Char('_'), QLatin1StringView("\\_"));
+
+    return escaped;
+}
+
 bool isKnownTable(const QString &table)
 {
     static const QSet<QString> knownTables = {
@@ -774,10 +793,47 @@ public:
     static ReadCondition conditionOf(const Storage::ItemQuery &query)
     {
         auto condition = ReadCondition();
+        auto parts = QStringList();
 
         if (query.accountId != 0) {
-            condition.where = QStringLiteral(" WHERE unique_account_id = :accountId");
+            parts << QStringLiteral("unique_account_id = :accountId");
             condition.bindings[QStringLiteral(":accountId")] = query.accountId;
+        }
+
+        if (!query.text.isEmpty()) {
+            parts << QStringLiteral(
+                "(remote_name LIKE :text ESCAPE '\\' OR purpose LIKE :text ESCAPE '\\')");
+            condition.bindings[QStringLiteral(":text")] = QStringLiteral("%%%1%%").arg(
+                escapedForLike(query.text));
+        }
+
+        // Both bounds are inclusive. An invalid date leaves its side open rather
+        // than standing for today or for the beginning of time.
+        if (query.from.isValid()) {
+            parts << QStringLiteral("date >= :from");
+            condition.bindings[QStringLiteral(":from")] = query.from;
+        }
+
+        if (query.to.isValid()) {
+            parts << QStringLiteral("date <= :to");
+            condition.bindings[QStringLiteral(":to")] = query.to;
+        }
+
+        // The sign of the value is what tells the direction. A booking of nought
+        // is neither, and neither restriction lets it through.
+        switch (query.direction) {
+        case Storage::Direction::Incoming:
+            parts << QStringLiteral("value > 0");
+            break;
+        case Storage::Direction::Outgoing:
+            parts << QStringLiteral("value < 0");
+            break;
+        case Storage::Direction::Any:
+            break;
+        }
+
+        if (!parts.isEmpty()) {
+            condition.where = QStringLiteral(" WHERE ") + parts.join(QStringLiteral(" AND "));
         }
 
         return condition;
@@ -1933,14 +1989,21 @@ void Storage::receiveItems(const ItemQuery &query)
         return;
     }
 
-    // The filter goes over transactions.unique_account_id, the identifier the
+    // The account goes over transactions.unique_account_id, the identifier the
     // institution assigns. No other table carries that column: a reference
     // account hangs on the row id of accounts, which no type of the core hands
     // out. Both identifiers are quint32, so a filter on another type would be a
     // mix-up nothing else could catch.
-    if (query.accountId != 0 && query.type != StorageTransaction) {
+    //
+    // The three of the filter bar go over columns of the transactions table as
+    // well, and are refused on another type for the same reason: silently
+    // dropping them would answer a narrower question with the wider holding.
+    const bool filtered = query.accountId != 0 || !query.text.isEmpty() || query.from.isValid()
+                          || query.to.isValid() || query.direction != Direction::Any;
+
+    if (filtered && query.type != StorageTransaction) {
         reportError(ErrorCode::InvalidInput,
-                    QStringLiteral("An account filter is defined for transactions only, not for %1")
+                    QStringLiteral("A filter is defined for transactions only, not for %1")
                         .arg(QString::fromUtf8(
                             QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
         return;

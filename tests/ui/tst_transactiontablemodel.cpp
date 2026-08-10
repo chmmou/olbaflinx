@@ -118,13 +118,27 @@ private:
         return !storage.initialize(true).isError();
     }
 
-    [[nodiscard]] bool putTransactions(quint32 uniqueAccountId, int count) const
+    [[nodiscard]] bool putTransactions(quint32 uniqueAccountId,
+                                       int count,
+                                       const QString &purpose = QStringLiteral("Buchung")) const
     {
         return TestHelpers::putTransactions(storageFile(),
                                             password(),
                                             uniqueAccountId,
                                             count,
-                                            QStringLiteral("Buchung"));
+                                            purpose);
+    }
+
+    static QStringList purposesOf(const TransactionTableModel &model)
+    {
+        auto purposes = QStringList();
+
+        for (int row = 0; row < model.rowCount(); ++row) {
+            purposes << model.data(model.index(row, 0), TransactionTableModel::PurposeRole)
+                            .toString();
+        }
+
+        return purposes;
     }
 
 private Q_SLOTS:
@@ -146,6 +160,9 @@ private Q_SLOTS:
     void aChangeOfAccountReturnsBeforeTheTransactionsArrive();
     void manyChangesOfAccountLeaveNoConnectionBehind();
     void aChangeDuringARunningReadRaisesNoErrorAndTheLastOneWins();
+    void aChangeOfFilterDropsTheRowsAndStartsOver();
+    void aFilterOutlivesAChangeOfAccountAndAppliesToTheNextOne();
+    void theCountUnderTheFilterIsTheOneOfTheWholeHolding();
 };
 
 void TransactionTableModelTest::init()
@@ -435,6 +452,110 @@ void TransactionTableModelTest::aChangeDuringARunningReadRaisesNoErrorAndTheLast
     QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 7, workerTimeoutMs);
     QCOMPARE(model.accountId(), thirdAccount);
     QCOMPARE(errorSpy.count(), 0);
+
+    storage.close();
+}
+
+/**
+ * The filter is the third thing that makes a running request stale, next to the
+ * account and the order. It drops what stands and asks again, so that the list
+ * never mixes two conditions.
+ */
+void TransactionTableModelTest::aChangeOfFilterDropsTheRowsAndStartsOver()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putTransactions(firstAccount, 5, QStringLiteral("Miete")));
+    QVERIFY(putTransactions(firstAccount, 3, QStringLiteral("Gehalt")));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 8, workerTimeoutMs);
+
+    model.setFilter({.text = QStringLiteral("Gehalt")});
+
+    // Straight after the call, before the narrower read has run.
+    QCOMPARE(model.rowCount(), 0);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 3, workerTimeoutMs);
+
+    for (const auto &purpose : purposesOf(model)) {
+        QVERIFY(purpose.startsWith(QStringLiteral("Gehalt")));
+    }
+
+    storage.close();
+}
+
+/**
+ * A user who is looking for something keeps looking for it when he changes the
+ * account. The filter therefore stays and applies to the account he picks next.
+ */
+void TransactionTableModelTest::aFilterOutlivesAChangeOfAccountAndAppliesToTheNextOne()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putTransactions(firstAccount, 5, QStringLiteral("Miete")));
+    QVERIFY(putTransactions(firstAccount, 3, QStringLiteral("Gehalt")));
+    QVERIFY(putTransactions(secondAccount, 4, QStringLiteral("Miete")));
+    QVERIFY(putTransactions(secondAccount, 2, QStringLiteral("Gehalt")));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    model.setFilter({.text = QStringLiteral("Gehalt")});
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 3, workerTimeoutMs);
+
+    model.setAccountId(secondAccount);
+
+    QCOMPARE(model.filter().text, QStringLiteral("Gehalt"));
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 2, workerTimeoutMs);
+
+    for (const auto &purpose : purposesOf(model)) {
+        QVERIFY(purpose.startsWith(QStringLiteral("Gehalt")));
+    }
+
+    storage.close();
+}
+
+/**
+ * The number stands for the whole holding under the filter, not for the page
+ * that was read. A holding larger than one window is what tells the two apart.
+ */
+void TransactionTableModelTest::theCountUnderTheFilterIsTheOneOfTheWholeHolding()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putTransactions(firstAccount, 120, QStringLiteral("Miete")));
+    QVERIFY(putTransactions(firstAccount, 80, QStringLiteral("Gehalt")));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    QSignalSpy totalSpy(&model, &TransactionTableModel::totalRowsChanged);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 200, workerTimeoutMs);
+
+    // A window holds fifty, so the loaded rows say nothing about the number.
+    QCOMPARE(model.rowCount(), 50);
+    QVERIFY(!totalSpy.isEmpty());
+
+    model.setFilter({.text = QStringLiteral("Gehalt")});
+    QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 80, workerTimeoutMs);
+    QCOMPARE(model.rowCount(), 50);
+
+    // A filter that leaves nothing answers with nought rather than with the
+    // number of the account.
+    model.setFilter({.text = QStringLiteral("Versicherung")});
+    QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 0, workerTimeoutMs);
+    QCOMPARE(model.rowCount(), 0);
 
     storage.close();
 }

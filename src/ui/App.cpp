@@ -378,8 +378,10 @@ void App::closeStorage()
 
     // A choice of account does not outlive the storage it was made in. Emptying
     // the tree takes the selection with it, and the transactions of the account
-    // that was shown go with it as well.
+    // that was shown go with it as well. Neither does the filter: it survives a
+    // change of account, not the storage it was set in.
     d_ptr->transactionTableModel->setAccountId(0);
+    d_ptr->ui->appCentralWidget->resetTransactionFilter();
 
     // Building the overview is the moment an entry whose file went away leaves
     // the list, so the way back is a good moment to build it.

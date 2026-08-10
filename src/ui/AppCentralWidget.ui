@@ -146,6 +146,31 @@
             <number>0</number>
            </property>
            <item>
+            <widget class="QWidget" name="widgetTransactionFilter" native="true">
+             <layout class="QHBoxLayout" name="transactionFilterLayout">
+              <item>
+               <widget class="QLineEdit" name="lineEditTransactionSearch">
+                <property name="clearButtonEnabled">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="comboBoxTransactionPeriod"/>
+              </item>
+              <item>
+               <widget class="QComboBox" name="comboBoxTransactionDirection"/>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButtonTransactionFilterReset"/>
+              </item>
+              <item>
+               <widget class="QLabel" name="labelTransactionCount"/>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
             <widget class="QStackedWidget" name="stackedWidgetTransactions">
              <property name="currentIndex">
               <number>0</number>
@@ -200,6 +225,39 @@
                   <bool>true</bool>
                  </property>
                 </widget>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="transactionsNoticeButtonLayout">
+                 <item>
+                  <spacer name="transactionsNoticeSpacerLeft">
+                   <property name="orientation">
+                    <enum>Qt::Orientation::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="pushButtonTransactionsNoticeReset"/>
+                 </item>
+                 <item>
+                  <spacer name="transactionsNoticeSpacerRight">
+                   <property name="orientation">
+                    <enum>Qt::Orientation::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
                </item>
               </layout>
              </widget>

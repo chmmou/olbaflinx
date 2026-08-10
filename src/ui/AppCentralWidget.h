@@ -16,6 +16,8 @@
  */
 #pragma once
 
+#include "ui/Models/TransactionTableModel.h"
+
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QTreeView>
 #include <QtWidgets/QWidget>
@@ -62,6 +64,14 @@ public:
         AccountWithoutTransactions,
     };
     Q_ENUM(TransactionNotice)
+
+    /**
+     * @brief Clears the filter bar and with it the restriction on the model.
+     *
+     * The filter outlives a change of account, so that a user who is looking for
+     * something keeps looking for it. It does not outlive the storage.
+     */
+    void resetTransactionFilter();
 
     explicit AppCentralWidget(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
     ~AppCentralWidget() override;
@@ -127,10 +137,13 @@ public:
      * As long as the model reports no row, the notice for the state set through
      * setTransactionNotice() stands in place of the table.
      *
+     * The concrete type, not the interface: the filter bar of this widget sets
+     * the restriction on the model and reads the number the model was told.
+     *
      * @param model Externally owned model, has to outlive this widget. Passing
      *  nullptr detaches the view.
      */
-    void setTransactionModel(QAbstractItemModel *model);
+    void setTransactionModel(olbaflinx::ui::models::TransactionTableModel *model);
 
     /**
      * @brief Says why the transaction view is empty.

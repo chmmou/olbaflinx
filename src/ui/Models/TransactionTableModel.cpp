@@ -172,6 +172,8 @@ void TransactionTableModel::setStorage(Storage *storage)
         takeResult(items);
     });
 
+    connect(m_storage, &Storage::itemsCounted, this, [this](int count) { takeCount(count); });
+
     // finished arrives on every path, after a failure as well. It is what frees
     // the storage for the next read, so it is what a waiting request waits for.
     connect(m_storage, &Storage::finished, this, [this] { runEnded(); });
@@ -184,15 +186,45 @@ void TransactionTableModel::setAccountId(quint32 accountId)
     }
 
     m_accountId = accountId;
-    ++m_generation;
-
-    setItems({});
-    requestItems();
+    startOver();
 }
 
 quint32 TransactionTableModel::accountId() const
 {
     return m_accountId;
+}
+
+void TransactionTableModel::setFilter(const Filter &filter)
+{
+    if (m_filter == filter) {
+        return;
+    }
+
+    m_filter = filter;
+    startOver();
+}
+
+TransactionTableModel::Filter TransactionTableModel::filter() const
+{
+    return m_filter;
+}
+
+int TransactionTableModel::totalRows() const
+{
+    return m_totalRows;
+}
+
+/**
+ * What the account and the filter have in common: both make a running request
+ * stale, both drop what is on screen, and both ask again from the top.
+ */
+void TransactionTableModel::startOver()
+{
+    ++m_generation;
+
+    setItems({});
+    setTotalRows(0);
+    requestItems();
 }
 
 void TransactionTableModel::requestItems()
@@ -210,7 +242,12 @@ void TransactionTableModel::requestItems()
     m_queued = false;
     m_requestGeneration = m_generation;
 
-    m_storage->receiveItems({.type = Storage::StorageTransaction, .accountId = m_accountId});
+    m_storage->receiveItems({.type = Storage::StorageTransaction,
+                             .accountId = m_accountId,
+                             .text = m_filter.text,
+                             .from = m_filter.from,
+                             .to = m_filter.to,
+                             .direction = m_filter.direction});
 }
 
 void TransactionTableModel::takeResult(const BankingItems &items)
@@ -223,6 +260,28 @@ void TransactionTableModel::takeResult(const BankingItems &items)
     }
 
     setItems(items);
+}
+
+void TransactionTableModel::takeCount(int count)
+{
+    // Under the same conditions as the records: it belongs to the run this model
+    // started, and only while that run still asks what is on screen.
+    if (!m_pending || m_requestGeneration != m_generation) {
+        return;
+    }
+
+    setTotalRows(count);
+}
+
+void TransactionTableModel::setTotalRows(int totalRows)
+{
+    if (m_totalRows == totalRows) {
+        return;
+    }
+
+    m_totalRows = totalRows;
+
+    Q_EMIT totalRowsChanged(m_totalRows);
 }
 
 void TransactionTableModel::runEnded()

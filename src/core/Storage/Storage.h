@@ -23,6 +23,7 @@
 #include "core/Banking/BankingItem.h"
 #include "core/Error.h"
 
+#include <QtCore/QDate>
 #include <QtCore/QObject>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QVariant>
@@ -83,9 +84,18 @@ public:
     Q_ENUM(SortColumn)
 
     /**
+     * @brief Which way a booking goes.
+     *
+     * The value of a transaction carries the sign, so a booking of nought is
+     * neither of the two and no restriction lets it through.
+     */
+    enum class Direction { Any, Incoming, Outgoing };
+    Q_ENUM(Direction)
+
+    /**
      * @brief What a single read asks for.
      *
-     * The three parameters receiveItems used to take grew to six, four of them
+     * The three parameters receiveItems used to take grew to ten, four of them
      * integral. A swapped pair would have compiled.
      */
     struct ItemQuery
@@ -102,6 +112,20 @@ public:
         Qt::SortOrder order = Qt::AscendingOrder;
         int offset = 0;
         int limit = 50;
+
+        // The filter above the transaction list. Every field is optional; an
+        // empty text and an invalid date leave that condition out of the
+        // statement. Like accountId, all four are meaningful for
+        // StorageTransaction alone.
+        //
+        // The text is looked for in the name of the other party and in the
+        // purpose. It is bound rather than written into the statement, and its
+        // own wildcards are escaped, so a percent sign is searched for as a
+        // character.
+        QString text = {};
+        QDate from = {};
+        QDate to = {};
+        Direction direction = Direction::Any;
     };
 
     /**

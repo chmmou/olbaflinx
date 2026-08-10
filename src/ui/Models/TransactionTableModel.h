@@ -94,6 +94,55 @@ public:
     void setStorage(olbaflinx::core::storage::Storage *storage);
 
     /**
+     * @brief What the filter bar restricts the transactions by.
+     *
+     * Every field is optional. The text is looked for in the name of the other
+     * party and in the purpose, the dates are inclusive bounds, and a booking of
+     * nought counts as neither direction.
+     */
+    struct Filter
+    {
+        QString text = {};
+        QDate from = {};
+        QDate to = {};
+        olbaflinx::core::storage::Storage::Direction direction
+            = olbaflinx::core::storage::Storage::Direction::Any;
+
+        /**
+         * @brief Whether the filter takes anything away at all.
+         *
+         * It is what tells an account without transactions from an account whose
+         * transactions the filter leaves out. The two need different words.
+         */
+        [[nodiscard]] bool isSet() const
+        {
+            return !text.isEmpty() || from.isValid() || to.isValid()
+                   || direction != olbaflinx::core::storage::Storage::Direction::Any;
+        }
+
+        bool operator==(const Filter &other) const = default;
+    };
+
+    /**
+     * @brief Restricts the transactions that are shown.
+     *
+     * Like a change of account it drops the rows that stand and starts over: the
+     * rows of one condition must not be read under another. A filter outlives a
+     * change of account and applies to the next one.
+     */
+    void setFilter(const Filter &filter);
+
+    [[nodiscard]] Filter filter() const;
+
+    /**
+     * @brief How many transactions satisfy the condition.
+     *
+     * The whole holding of the account under the filter, not the rows that are
+     * loaded. It comes from the storage with the result of the read.
+     */
+    [[nodiscard]] int totalRows() const;
+
+    /**
      * @brief Shows the transactions of one account.
      *
      * The rows of the account that was shown before are dropped at once. They do
@@ -120,15 +169,28 @@ public Q_SLOTS:
      */
     void setItems(const olbaflinx::core::banking::BankingItems &items);
 
+Q_SIGNALS:
+    /**
+     * @brief This signal is emitted when the number under the condition changed.
+     *
+     * @param totalRows What totalRows() answers from now on.
+     */
+    void totalRowsChanged(int totalRows);
+
 private:
+    void startOver();
     void requestItems();
     void takeResult(const olbaflinx::core::banking::BankingItems &items);
+    void takeCount(int count);
+    void setTotalRows(int totalRows);
     void runEnded();
 
     QList<std::shared_ptr<olbaflinx::core::banking::transaction::Transaction>> m_transactions;
 
     olbaflinx::core::storage::Storage *m_storage = nullptr;
     quint32 m_accountId = 0;
+    Filter m_filter = {};
+    int m_totalRows = 0;
 
     /**
      * Tells the request that is running from the one the user has since asked
