@@ -313,7 +313,7 @@ void AppCentralWidgetTest::aReadThatOutlivesItsStorageReachesNoView()
     Q_EMIT overview->storageOpened();
 
     QSignalSpy finishedSpy(&storage, &Storage::finished);
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     app.closeStorage();
 

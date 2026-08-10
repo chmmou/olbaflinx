@@ -470,7 +470,7 @@ private:
                         app->setAccounts(items);
                     });
 
-                    storage->receiveItems(Storage::StorageAccount);
+                    storage->receiveItems({.type = Storage::StorageAccount});
 
                     // Last, and only on the way that got through. The window turns
                     // to the page with the accounts on it when it sees this.

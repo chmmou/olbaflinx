@@ -17,6 +17,7 @@
 
 #include "core/ApplicationInfo.h"
 #include "core/Banking/Account/Account.h"
+#include "core/Banking/Transaction/Transaction.h"
 #include "core/Error.h"
 #include "core/Storage/Storage.h"
 
@@ -33,6 +34,7 @@
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::account;
+using namespace olbaflinx::core::banking::transaction;
 using namespace olbaflinx::core::storage;
 
 namespace olbaflinx::core::storage::tests {
@@ -112,6 +114,30 @@ private:
     }
 
     /**
+     * Puts transactions into the store past Storage, hung on the identifier the
+     * institution assigns. Epic 1 fetches none from a bank, so whoever reads
+     * them has to write them first.
+     *
+     * They all share their account_id and differ in unique_account_id. That is
+     * what tells a read over the right column from one over the wrong one.
+     */
+    static bool putTransactions(const QString &file,
+                                quint32 uniqueAccountId,
+                                int count,
+                                const QString &purpose)
+    {
+        return scalarOf(file,
+                        QStringLiteral("WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 "
+                                       "FROM seq WHERE n < %2) INSERT INTO transactions "
+                                       "(account_id, unique_account_id, purpose) SELECT 1, %1, "
+                                       "'%3 ' || n FROM seq RETURNING unique_account_id;")
+                            .arg(uniqueAccountId)
+                            .arg(count)
+                            .arg(purpose))
+            .isValid();
+    }
+
+    /**
      * The schema version a file carries, read the way Storage reads it: the
      * number in the first four characters of the highest applied migration.
      */
@@ -146,6 +172,10 @@ private Q_SLOTS:
     void receiveItemsReturnsBeforeTheItemsArrive();
     void receiveItemsSignalsArriveInOrderAndInTheCallingThread();
     void receiveItemsRefusesASecondRunWhileOneIsGoing();
+    void aReadForOneAccountLeavesTheTransactionsOfAnotherOut();
+    void aReadForOneAccountReturnsBeforeItsItemsAndSignalsInTheCallingThread();
+    void aReadReportsHowManyRecordsMatchBeforeItReportsTheRecords();
+    void aReadWithoutAMatchReportsZeroBeforeItReportsThatNothingWasFound();
     void closingWhileAReadIsGoingDropsItsResult();
     void storeItemsReturnsBeforeTheAccountsAreWritten();
     void storeItemsSignalsArriveInOrderAndInTheCallingThread();
@@ -352,7 +382,7 @@ void StorageTest::storeItemPersistsAccountAndEmitsFinished()
     // three emissions come from.
     QCOMPARE(finishedSpy.count(), 2);
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
@@ -393,7 +423,7 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
 
     QVERIFY(!storage.storeItem(account.get()).isError());
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
@@ -443,7 +473,7 @@ void StorageTest::anAccountSurvivesAReopenWithEveryVisibleProperty()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
     QVERIFY(itemsSpy.wait(workerTimeout));
 
     const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
@@ -685,7 +715,7 @@ void StorageTest::receiveItemsReturnsBeforeTheItemsArrive()
 
     const int finishedBefore = finishedSpy.count();
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     // Straight after the call. No event has been processed yet, so nothing can
     // have been delivered even if the worker were already done.
@@ -739,7 +769,7 @@ void StorageTest::receiveItemsSignalsArriveInOrderAndInTheCallingThread()
         threads << QThread::currentThread();
     });
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     QVERIFY(finishedSpy.wait(workerTimeout));
 
@@ -776,11 +806,11 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
     QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     // The first run is still going, this thread has not processed an event since
     // it started. The refusal comes back in this thread, before any waiting.
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     QCOMPARE(errorSpy.count(), 1);
     QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
@@ -788,6 +818,209 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
     // The first run is unaffected and still delivers.
     QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
+
+    storage.close();
+}
+
+/**
+ * The filter goes over the identifier the institution assigns, not over the row
+ * id of the accounts table. Every transaction below carries the same account_id
+ * and they differ in unique_account_id alone, so a read over the wrong column
+ * brings all of them back.
+ */
+void StorageTest::aReadForOneAccountLeavesTheTransactionsOfAnotherOut()
+{
+    const auto file = storageFile();
+
+    constexpr quint32 ownAccount = 815;
+    constexpr quint32 otherAccount = 4711;
+
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    QVERIFY(putTransactions(file, ownAccount, 2, QStringLiteral("Miete")));
+    QVERIFY(putTransactions(file, otherAccount, 3, QStringLiteral("Gehalt")));
+
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+
+    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount});
+
+    QVERIFY(itemsSpy.wait(workerTimeout));
+
+    const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
+    QCOMPARE(items.size(), 2);
+
+    for (const auto &item : std::as_const(items)) {
+        const auto transaction = std::dynamic_pointer_cast<Transaction>(item);
+        QVERIFY(transaction != nullptr);
+        QCOMPARE(transaction->uniqueAccountId(), ownAccount);
+    }
+
+    storage.close();
+}
+
+/**
+ * What the read owes its caller does not change because the query grew a filter.
+ * The call comes back before anything has arrived, and every signal reaches the
+ * thread that called, in the order a receiver may rely on.
+ */
+void StorageTest::aReadForOneAccountReturnsBeforeItsItemsAndSignalsInTheCallingThread()
+{
+    const auto file = storageFile();
+
+    constexpr quint32 ownAccount = 815;
+
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    QVERIFY(putTransactions(file, ownAccount, 60, QStringLiteral("Miete")));
+
+    QThread *const callingThread = QThread::currentThread();
+    QStringList order;
+    QList<QThread *> threads;
+
+    connect(&storage, &Storage::progressChanged, &storage, [&](int) {
+        if (order.isEmpty() || order.last() != QStringLiteral("progress")) {
+            order << QStringLiteral("progress");
+        }
+        threads << QThread::currentThread();
+    });
+
+    connect(&storage, &Storage::itemsCounted, &storage, [&](int) {
+        order << QStringLiteral("count");
+        threads << QThread::currentThread();
+    });
+
+    connect(&storage, &Storage::itemsReceived, &storage, [&](const BankingItems &) {
+        order << QStringLiteral("items");
+        threads << QThread::currentThread();
+    });
+
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    connect(&storage, &Storage::finished, &storage, [&]() {
+        order << QStringLiteral("finished");
+        threads << QThread::currentThread();
+    });
+
+    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount});
+
+    // Straight after the call. No event has been processed yet, so nothing can
+    // have been delivered even if the worker were already done.
+    QVERIFY(order.isEmpty());
+
+    QVERIFY(finishedSpy.wait(workerTimeout));
+
+    QCOMPARE(order,
+             QStringList{} << QStringLiteral("progress") << QStringLiteral("count")
+                           << QStringLiteral("items") << QStringLiteral("finished"));
+
+    QVERIFY(!threads.isEmpty());
+    for (QThread *const thread : std::as_const(threads)) {
+        QCOMPARE(thread, callingThread);
+    }
+
+    storage.close();
+}
+
+/**
+ * The number the filter bar shows counts the whole holding under the condition,
+ * not the window that was read. The account below holds more transactions than
+ * one window carries, so a count taken from the window would answer the size of
+ * the window instead.
+ */
+void StorageTest::aReadReportsHowManyRecordsMatchBeforeItReportsTheRecords()
+{
+    const auto file = storageFile();
+
+    constexpr quint32 ownAccount = 815;
+    constexpr quint32 otherAccount = 4711;
+    constexpr int ownTransactions = 120;
+    constexpr int window = 50;
+
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    QVERIFY(putTransactions(file, ownAccount, ownTransactions, QStringLiteral("Miete")));
+    QVERIFY(putTransactions(file, otherAccount, 30, QStringLiteral("Gehalt")));
+
+    QStringList order;
+
+    connect(&storage, &Storage::itemsCounted, &storage, [&](int) {
+        order << QStringLiteral("count");
+    });
+
+    connect(&storage, &Storage::itemsReceived, &storage, [&](const BankingItems &) {
+        order << QStringLiteral("items");
+    });
+
+    QSignalSpy countSpy(&storage, &Storage::itemsCounted);
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+
+    storage.receiveItems(
+        {.type = Storage::StorageTransaction, .accountId = ownAccount, .limit = window});
+
+    QVERIFY(itemsSpy.wait(workerTimeout));
+
+    QCOMPARE(countSpy.count(), 1);
+    QCOMPARE(countSpy.takeFirst().at(0).toInt(), ownTransactions);
+    QCOMPARE(qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0)).size(), window);
+
+    QCOMPARE(order, QStringList{} << QStringLiteral("count") << QStringLiteral("items"));
+
+    storage.close();
+}
+
+/**
+ * A condition that no record satisfies is not a failure of the count. It reports
+ * zero, and it does so before the storage reports that it found nothing, so that
+ * whoever picks the empty state to show already holds the number.
+ */
+void StorageTest::aReadWithoutAMatchReportsZeroBeforeItReportsThatNothingWasFound()
+{
+    const auto file = storageFile();
+
+    constexpr quint32 ownAccount = 815;
+    constexpr quint32 otherAccount = 4711;
+
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    QVERIFY(putTransactions(file, otherAccount, 30, QStringLiteral("Gehalt")));
+
+    QStringList order;
+
+    connect(&storage, &Storage::itemsCounted, &storage, [&](int) {
+        order << QStringLiteral("count");
+    });
+
+    connect(&storage, &Storage::errorOccurred, &storage, [&](ErrorCode, const QString &) {
+        order << QStringLiteral("error");
+    });
+
+    QSignalSpy countSpy(&storage, &Storage::itemsCounted);
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+
+    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount});
+
+    QVERIFY(errorSpy.wait(workerTimeout));
+
+    QCOMPARE(countSpy.count(), 1);
+    QCOMPARE(countSpy.takeFirst().at(0).toInt(), 0);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::NotFound);
+
+    QCOMPARE(order, QStringList{} << QStringLiteral("count") << QStringLiteral("error"));
 
     storage.close();
 }
@@ -817,7 +1050,7 @@ void StorageTest::closingWhileAReadIsGoingDropsItsResult()
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
     QSignalSpy finishedSpy(&storage, &Storage::finished);
 
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     // Nothing has been delivered yet, this thread has not processed an event
     // since the run started.

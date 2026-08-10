@@ -260,7 +260,7 @@ void StorageKeyTest::changeKeyPreservesData()
     QVERIFY(storage.isValid());
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
-    storage.receiveItems(Storage::StorageAccount);
+    storage.receiveItems({.type = Storage::StorageAccount});
 
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
@@ -316,7 +316,7 @@ void StorageKeyTest::receiveItemsRejectsInvalidWindow()
 
     QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
 
-    storage.receiveItems(Storage::StorageAccount, offset, limit);
+    storage.receiveItems({.type = Storage::StorageAccount, .offset = offset, .limit = limit});
 
     QCOMPARE(errorSpy.count(), 1);
     QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
