@@ -392,20 +392,24 @@ void App::closeStorage()
 
 void App::showError(ErrorCode code, const QString &reason)
 {
-    // The technical message can name a file or a statement, and one out of a
-    // foreign library is not translated either. It goes to the log, never to the
-    // screen; what the user reads is made from the code alone.
-    qCWarning(lcUi) << "error from core:" << reason;
-
     // A read that found no record is not a failure. The storage reports it
     // through the same signal as one, with the code for "nothing found", and
     // taken as a failure it would hold the views away from the very notices that
     // are meant for the case: a storage without accounts, an account without
-    // transactions, and later a filter without a match. The models are empty at
-    // this point, which is all those notices need.
+    // transactions, and a filter without a match. The models are empty at this
+    // point, which is all those notices need.
+    //
+    // It is noted rather than reported, and not as a warning: a log that calls
+    // it an error says the opposite of what happened.
     if (code == ErrorCode::NotFound) {
+        qCDebug(lcUi) << "a read came back empty:" << reason;
         return;
     }
+
+    // The technical message can name a file or a statement, and one out of a
+    // foreign library is not translated either. It goes to the log, never to the
+    // screen; what the user reads is made from the code alone.
+    qCWarning(lcUi) << "error from core:" << reason;
 
     const QString message = userMessage(code);
     if (message.isEmpty()) {
