@@ -33,12 +33,15 @@ class TransactionTableModelTest final : public QObject
     Q_OBJECT
 
 private:
+    static QDate bookingDate() { return QDate(2026, 2, 17); }
+
     static QMap<QString, QVariant> transactionMap(const QString &purpose, double value)
     {
         QMap<QString, QVariant> map = {};
 
         map[QStringLiteral("type")] = 1;
         map[QStringLiteral("unique_id")] = 4711;
+        map[QStringLiteral("date")] = bookingDate();
         map[QStringLiteral("purpose")] = purpose;
         map[QStringLiteral("value")] = value;
         map[QStringLiteral("currency")] = QStringLiteral("EUR");
@@ -46,6 +49,23 @@ private:
         map[QStringLiteral("remote_iban")] = QStringLiteral("DE02120300000000202051");
 
         return map;
+    }
+
+    /**
+     * A model holding a single transaction, so that a column can be asked what
+     * it shows.
+     */
+    static void fill(TransactionTableModel &model, const QString &purpose, double value)
+    {
+        BankingItems items;
+        items << Transaction::fromMap(transactionMap(purpose, value));
+
+        model.setItems(items);
+    }
+
+    static QString shownAt(const TransactionTableModel &model, int column)
+    {
+        return model.data(model.index(0, column), Qt::DisplayRole).toString();
     }
 
 private Q_SLOTS:
@@ -56,6 +76,9 @@ private Q_SLOTS:
     void dataReturnsTheMappedRoles_data();
     void dataOutsideTheModelIsInvalid();
     void roleNamesCoverEveryRole();
+    void theModelCarriesFourColumnsEachWithAHeader();
+    void everyColumnShowsWhatItsHeaderPromises();
+    void anAmountInDebitCarriesItsSignInTheText();
 };
 
 void TransactionTableModelTest::emptyModelHasNoRows()
@@ -141,6 +164,70 @@ void TransactionTableModelTest::roleNamesCoverEveryRole()
     QCOMPARE(roles.value(TransactionTableModel::UniqueIdRole), QByteArrayLiteral("uniqueId"));
     QCOMPARE(roles.value(TransactionTableModel::PurposeRole), QByteArrayLiteral("purpose"));
     QCOMPARE(roles.size(), 9);
+}
+
+/**
+ * Four columns, no more. A fifth would be one the view has no place for, and
+ * every one of them names itself in the header.
+ */
+void TransactionTableModelTest::theModelCarriesFourColumnsEachWithAHeader()
+{
+    TransactionTableModel model;
+    fill(model, QStringLiteral("Miete"), -750.0);
+
+    QCOMPARE(model.columnCount(), 4);
+
+    auto headers = QStringList();
+    for (int column = 0; column < model.columnCount(); ++column) {
+        const auto header = model.headerData(column, Qt::Horizontal, Qt::DisplayRole).toString();
+        QVERIFY(!header.isEmpty());
+        headers << header;
+    }
+
+    // Four distinct names. Two columns under one heading would leave the reader
+    // guessing which is which.
+    QCOMPARE(QSet<QString>(headers.cbegin(), headers.cend()).size(), 4);
+
+    // A row has no more columns than the header does.
+    QVERIFY(!model.index(0, 4).isValid());
+}
+
+/**
+ * The order is fixed: date, the other party, purpose, amount. The amount carries
+ * its currency, because a number without one says nothing.
+ */
+void TransactionTableModelTest::everyColumnShowsWhatItsHeaderPromises()
+{
+    TransactionTableModel model;
+    fill(model, QStringLiteral("Rückzahlung Möbelkauf"), 42.5);
+
+    QCOMPARE(shownAt(model, 0), QLocale().toString(bookingDate(), QLocale::ShortFormat));
+    QCOMPARE(shownAt(model, 1), QStringLiteral("Erika Musterfrau"));
+    QCOMPARE(shownAt(model, 2), QStringLiteral("Rückzahlung Möbelkauf"));
+    QVERIFY(shownAt(model, 3).contains(QStringLiteral("EUR")));
+}
+
+/**
+ * A debit is told from a credit by the text, not by a colour. Whoever cannot
+ * make out the colour still reads the sign.
+ *
+ * The sign, not a bracket: QLocale::toCurrencyString writes a negative amount in
+ * accounting style in several locales, and this pins down that the column does
+ * not take that route.
+ */
+void TransactionTableModelTest::anAmountInDebitCarriesItsSignInTheText()
+{
+    const auto negativeSign = QLocale().negativeSign();
+
+    TransactionTableModel debit;
+    fill(debit, QStringLiteral("Miete"), -750.0);
+    QVERIFY(shownAt(debit, 3).contains(negativeSign));
+
+    TransactionTableModel credit;
+    fill(credit, QStringLiteral("Gehalt"), 2500.0);
+    QVERIFY(!shownAt(credit, 3).contains(negativeSign));
+
+    QVERIFY(shownAt(debit, 3) != shownAt(credit, 3));
 }
 
 } // namespace olbaflinx::ui::models::tests

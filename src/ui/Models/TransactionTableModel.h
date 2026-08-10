@@ -20,24 +20,47 @@
 #include "core/Banking/BankingItem.h"
 #include "core/Banking/Transaction/Transaction.h"
 
-#include <QtCore/QAbstractListModel>
+#include <QtCore/QAbstractTableModel>
 
 #include <memory>
 
 namespace olbaflinx::ui::models {
 
 /**
- * @brief Maps the transactions reported by core onto display roles.
+ * @brief Maps the transactions reported by core onto columns and display roles.
  *
  * Ownership: the model holds the records it receives through setItems. That is
  * not a second copy of the truth, because Storage lets go of them once the
  * signal is emitted and holds none of them itself.
  */
-class TransactionTableModel final : public QAbstractListModel
+class TransactionTableModel final : public QAbstractTableModel
 {
     Q_OBJECT
 
 public:
+    /**
+     * @brief The columns of the view, in the order it shows them.
+     *
+     * The other party is one column and not two: the record names it in
+     * remote_name whichever way the booking goes, while the own account stands
+     * in the fields with the local prefix.
+     */
+    enum Column : int {
+        DateColumn = 0,
+        RemoteNameColumn,
+        PurposeColumn,
+        ValueColumn,
+    };
+    Q_ENUM(Column)
+
+    static constexpr int ColumnCount = ValueColumn + 1;
+
+    /**
+     * @brief Every field of a transaction, whether a column shows it or not.
+     *
+     * The view shows four of them. The rest stay reachable so that a later view
+     * can offer them without the model being rebuilt for it.
+     */
     enum Role {
         UniqueIdRole = Qt::UserRole + 1,
         DateRole,
@@ -54,7 +77,11 @@ public:
     explicit TransactionTableModel(QObject *parent = nullptr);
 
     [[nodiscard]] int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    [[nodiscard]] int columnCount(const QModelIndex &parent = QModelIndex()) const override;
     [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    [[nodiscard]] QVariant headerData(int section,
+                                      Qt::Orientation orientation,
+                                      int role = Qt::DisplayRole) const override;
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
 public Q_SLOTS:
