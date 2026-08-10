@@ -24,6 +24,7 @@
 #include <QtCore/QTimer>
 
 #include <QtGui/QAccessible>
+#include <QtGui/QAccessibleEvent>
 
 #include <QtWidgets/QBoxLayout>
 #include <QtWidgets/QComboBox>
@@ -113,13 +114,12 @@ public:
         reset->setText(AppCentralWidget::tr("Reset"));
         ui->pushButtonTransactionsNoticeReset->setText(AppCentralWidget::tr("Reset the filter"));
 
-        // Neither carries a visible label of its own, so each says what it is to
-        // an assistive tool.
+        // The three that carry no visible label of their own. The button and the
+        // counter say what they are through their text, and a name of their own
+        // would be that text a second time.
         search->setAccessibleName(AppCentralWidget::tr("Search transactions"));
         period->setAccessibleName(AppCentralWidget::tr("Period"));
         direction->setAccessibleName(AppCentralWidget::tr("Direction of the booking"));
-        reset->setAccessibleName(AppCentralWidget::tr("Reset the filter"));
-        ui->labelTransactionCount->setAccessibleName(AppCentralWidget::tr("Transactions found"));
 
         searchTimer = new QTimer(q_ptr);
         searchTimer->setSingleShot(true);
@@ -329,15 +329,24 @@ public:
     }
 
     /**
-     * Tells the assistive tools that the area now says something else.
+     * Has the assistive tools read out what the area now says.
      *
      * A label that changes its text raises no event of its own and reaches
-     * nobody who is not looking at it. Alert is the event Qt offers for a
-     * message the user is meant to take note of without the focus moving.
+     * nobody who is not looking at it. An announcement asks for the words
+     * themselves to be spoken, which a state change would not do, and it does
+     * so without taking the focus away from wherever it is.
+     *
+     * Politely: the user is not to be interrupted mid-sentence for a view that
+     * has nothing in it.
      */
     void announceTransactionNotice()
     {
-        QAccessibleEvent event(ui->labelTransactionsHeadline, QAccessible::Alert);
+        const auto message = QStringLiteral("%1. %2").arg(ui->labelTransactionsHeadline->text(),
+                                                          ui->labelTransactionsNotice->text());
+
+        QAccessibleAnnouncementEvent event(ui->labelTransactionsHeadline, message);
+        event.setPoliteness(QAccessible::AnnouncementPoliteness::Polite);
+
         QAccessible::updateAccessibility(&event);
     }
 
