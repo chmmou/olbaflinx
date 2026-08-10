@@ -61,7 +61,7 @@ olbaflinx_add_test(tst_logger core/tst_logger.cpp OlbaFlinxCore::OlbaFlinxCore)
 # The ui targets need Widgets. They run without a display.
 olbaflinx_add_test(tst_accounttreemodel ui/tst_accounttreemodel.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
-olbaflinx_add_test(tst_transactionlistmodel ui/tst_transactionlistmodel.cpp
+olbaflinx_add_test(tst_transactiontablemodel ui/tst_transactiontablemodel.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_storagedialog ui/tst_storagedialog.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)

@@ -15,18 +15,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "ui/Models/TransactionListModel.h"
+#include "ui/Models/TransactionTableModel.h"
 
 using namespace olbaflinx::ui::models;
 
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::transaction;
 
-TransactionListModel::TransactionListModel(QObject *parent)
+TransactionTableModel::TransactionTableModel(QObject *parent)
     : QAbstractListModel(parent)
 {}
 
-int TransactionListModel::rowCount(const QModelIndex &parent) const
+int TransactionTableModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid()) {
         return 0;
@@ -35,7 +35,7 @@ int TransactionListModel::rowCount(const QModelIndex &parent) const
     return static_cast<int>(m_transactions.size());
 }
 
-QVariant TransactionListModel::data(const QModelIndex &index, int role) const
+QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
 {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_transactions.size()) {
         return {};
@@ -69,7 +69,7 @@ QVariant TransactionListModel::data(const QModelIndex &index, int role) const
     }
 }
 
-QHash<int, QByteArray> TransactionListModel::roleNames() const
+QHash<int, QByteArray> TransactionTableModel::roleNames() const
 {
     return {
         {UniqueIdRole, QByteArrayLiteral("uniqueId")},
@@ -84,7 +84,7 @@ QHash<int, QByteArray> TransactionListModel::roleNames() const
     };
 }
 
-void TransactionListModel::setItems(const BankingItems &items)
+void TransactionTableModel::setItems(const BankingItems &items)
 {
     beginResetModel();
 

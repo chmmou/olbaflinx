@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "ui/Models/TransactionListModel.h"
+#include "ui/Models/TransactionTableModel.h"
 
 #include "core/Banking/Account/Account.h"
 
@@ -28,7 +28,7 @@ using namespace olbaflinx::ui::models;
 
 namespace olbaflinx::ui::models::tests {
 
-class TransactionListModelTest final : public QObject
+class TransactionTableModelTest final : public QObject
 {
     Q_OBJECT
 
@@ -58,16 +58,16 @@ private Q_SLOTS:
     void roleNamesCoverEveryRole();
 };
 
-void TransactionListModelTest::emptyModelHasNoRows()
+void TransactionTableModelTest::emptyModelHasNoRows()
 {
-    const TransactionListModel model;
+    const TransactionTableModel model;
 
     QCOMPARE(model.rowCount(), 0);
 }
 
-void TransactionListModelTest::setItemsCountsOnlyTransactions()
+void TransactionTableModelTest::setItemsCountsOnlyTransactions()
 {
-    TransactionListModel model;
+    TransactionTableModel model;
 
     BankingItems items;
     items << Transaction::fromMap(transactionMap("Miete", -750.0));
@@ -81,9 +81,9 @@ void TransactionListModelTest::setItemsCountsOnlyTransactions()
     QCOMPARE(model.rowCount(), 2);
 }
 
-void TransactionListModelTest::setItemsWithEmptyListClearsTheModel()
+void TransactionTableModelTest::setItemsWithEmptyListClearsTheModel()
 {
-    TransactionListModel model;
+    TransactionTableModel model;
 
     BankingItems items;
     items << Transaction::fromMap(transactionMap("Miete", -750.0));
@@ -95,7 +95,7 @@ void TransactionListModelTest::setItemsWithEmptyListClearsTheModel()
     QCOMPARE(model.rowCount(), 0);
 }
 
-void TransactionListModelTest::dataReturnsTheMappedRoles_data()
+void TransactionTableModelTest::dataReturnsTheMappedRoles_data()
 {
     QTest::addColumn<QString>("purpose");
     QTest::addColumn<double>("value");
@@ -105,12 +105,12 @@ void TransactionListModelTest::dataReturnsTheMappedRoles_data()
     QTest::newRow("nicht-latin") << QStringLiteral("振込 テスト") << 1.0;
 }
 
-void TransactionListModelTest::dataReturnsTheMappedRoles()
+void TransactionTableModelTest::dataReturnsTheMappedRoles()
 {
     QFETCH(QString, purpose);
     QFETCH(double, value);
 
-    TransactionListModel model;
+    TransactionTableModel model;
 
     BankingItems items;
     items << Transaction::fromMap(transactionMap(purpose, value));
@@ -118,33 +118,33 @@ void TransactionListModelTest::dataReturnsTheMappedRoles()
 
     const QModelIndex index = model.index(0, 0);
 
-    QCOMPARE(model.data(index, TransactionListModel::PurposeRole).toString(), purpose);
-    QCOMPARE(model.data(index, TransactionListModel::ValueRole).toDouble(), value);
-    QCOMPARE(model.data(index, TransactionListModel::RemoteNameRole).toString(),
+    QCOMPARE(model.data(index, TransactionTableModel::PurposeRole).toString(), purpose);
+    QCOMPARE(model.data(index, TransactionTableModel::ValueRole).toDouble(), value);
+    QCOMPARE(model.data(index, TransactionTableModel::RemoteNameRole).toString(),
              QStringLiteral("Erika Musterfrau"));
     QVERIFY(!model.data(index, Qt::DisplayRole).toString().isEmpty());
 }
 
-void TransactionListModelTest::dataOutsideTheModelIsInvalid()
+void TransactionTableModelTest::dataOutsideTheModelIsInvalid()
 {
-    TransactionListModel model;
+    TransactionTableModel model;
 
-    QVERIFY(!model.data(model.index(0, 0), TransactionListModel::PurposeRole).isValid());
-    QVERIFY(!model.data(QModelIndex(), TransactionListModel::PurposeRole).isValid());
+    QVERIFY(!model.data(model.index(0, 0), TransactionTableModel::PurposeRole).isValid());
+    QVERIFY(!model.data(QModelIndex(), TransactionTableModel::PurposeRole).isValid());
 }
 
-void TransactionListModelTest::roleNamesCoverEveryRole()
+void TransactionTableModelTest::roleNamesCoverEveryRole()
 {
-    const TransactionListModel model;
+    const TransactionTableModel model;
     const auto roles = model.roleNames();
 
-    QCOMPARE(roles.value(TransactionListModel::UniqueIdRole), QByteArrayLiteral("uniqueId"));
-    QCOMPARE(roles.value(TransactionListModel::PurposeRole), QByteArrayLiteral("purpose"));
+    QCOMPARE(roles.value(TransactionTableModel::UniqueIdRole), QByteArrayLiteral("uniqueId"));
+    QCOMPARE(roles.value(TransactionTableModel::PurposeRole), QByteArrayLiteral("purpose"));
     QCOMPARE(roles.size(), 9);
 }
 
 } // namespace olbaflinx::ui::models::tests
 
-QTEST_MAIN(olbaflinx::ui::models::tests::TransactionListModelTest)
+QTEST_MAIN(olbaflinx::ui::models::tests::TransactionTableModelTest)
 
-#include "tst_transactionlistmodel.moc"
+#include "tst_transactiontablemodel.moc"

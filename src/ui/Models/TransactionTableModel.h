@@ -33,7 +33,7 @@ namespace olbaflinx::ui::models {
  * not a second copy of the truth, because Storage lets go of them once the
  * signal is emitted and holds none of them itself.
  */
-class TransactionListModel final : public QAbstractListModel
+class TransactionTableModel final : public QAbstractListModel
 {
     Q_OBJECT
 
@@ -51,7 +51,7 @@ public:
     };
     Q_ENUM(Role)
 
-    explicit TransactionListModel(QObject *parent = nullptr);
+    explicit TransactionTableModel(QObject *parent = nullptr);
 
     [[nodiscard]] int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
