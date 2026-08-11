@@ -59,3 +59,30 @@ Der Treiber bindet SQLCipher ein. SQLCipher selbst steht unter einer BSD-artigen
 Verwendet wird Version 5.0.0.
 
 Die Lizenzangabe `LGPL-2.1-or-later` stammt aus den Metadaten des installierten Distributionspakets. Das Upstream-Repository nennt LGPL-2.1.
+
+## Werkzeuge des Nachweises
+
+Diese Komponenten stehen im CI-Abbild und treiben die Anwendung beim Lauf von
+aussen. Sie werden weder gegen die Anwendung gelinkt noch mit ihr ausgeliefert,
+und sie sind zum Bauen nicht nötig. Erfasst sind sie trotzdem, denn erfasst
+wird jede Drittanbieterkomponente, nicht nur die des Bauens.
+
+| Komponente | Version im Abbild | SPDX | Bezugsquelle |
+|---|---|---|---|
+| at-spi2-core | 2.60.4 | `LGPL-2.0-or-later` | https://gitlab.gnome.org/GNOME/at-spi2-core |
+| Xvfb | 21.1.22 | `MIT` | https://www.x.org/ |
+| matchbox-window-manager | 1.2.3 | `GPL-2.0-only` | https://www.yoctoproject.org/software-item/matchbox/ |
+| dogtail | 1.0.7 | `GPL-2.0-or-later` | https://gitlab.com/dogtail/dogtail |
+| glib2 (gsettings) | 2.88.0 | `LGPL-2.1-or-later` | https://gitlab.gnome.org/GNOME/glib |
+| dconf | 0.49.0 | `LGPL-2.0-or-later` | https://gitlab.gnome.org/GNOME/dconf |
+
+Die Bezeichner geben wieder, was die Datei `copyright` des jeweiligen
+Distributionspakets nennt. Bei matchbox-window-manager steht dort "version 2
+dated June, 1991" ohne die Formel "or any later version", daher `GPL-2.0-only`.
+Bei Xvfb nennt die Datei die Fassung der X.Org Foundation, eine Abwandlung der
+MIT-Lizenz.
+
+Die beiden GPL-Komponenten berühren die Lizenz der Anwendung nicht. Sie werden
+als eigenständige Programme aufgerufen, matchbox als Fensterverwalter und
+dogtail aus einem Python-Prozess neben der Anwendung; kein Code von ihnen wird
+gebunden.
