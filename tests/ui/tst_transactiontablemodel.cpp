@@ -269,6 +269,7 @@ private Q_SLOTS:
 
     void pagingDeliversEveryTransactionExactlyOnce();
     void aChangeOfOrderDuringARunningRequestDiscardsItsResult();
+    void fetchingMoreReturnsBeforeTheRowsArrive();
     void aHoldingThatFitsOnePageEndsWithIt();
     void aHoldingThatFitsOnePageEndsWithIt_data();
     void aFailureWhileLoadingMoreLeavesTheRowsAndStopsAsking();
@@ -902,6 +903,45 @@ void TransactionTableModelTest::aChangeOfOrderDuringARunningRequestDiscardsItsRe
 
     // Changing while a read is running is an everyday move, not a failure.
     QCOMPARE(errorSpy.count(), 0);
+
+    storage.close();
+}
+
+/**
+ * Fetching does not hold up the thread that draws. The call comes back before
+ * the rows are there, and further instructions run between the asking and the
+ * answer. Measured that way rather than against a time: a limit in milliseconds
+ * would say more about the machine than about the code.
+ */
+void TransactionTableModelTest::fetchingMoreReturnsBeforeTheRowsArrive()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 500));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), pageSize, workerTimeoutMs);
+    QTRY_VERIFY_WITH_TIMEOUT(model.canFetchMore(QModelIndex()), workerTimeoutMs);
+
+    model.fetchMore(QModelIndex());
+
+    // Straight after the call. The rows of the second page are on their way and
+    // the model already knows that it is waiting for them.
+    QCOMPARE(model.rowCount(), pageSize);
+    QVERIFY(model.isReading());
+
+    // And the thread carries on rather than sitting on the request.
+    int counted = 0;
+    for (int step = 0; step < 1000; ++step) {
+        counted += model.rowCount();
+    }
+    QCOMPARE(counted, pageSize * 1000);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 2 * pageSize, workerTimeoutMs);
 
     storage.close();
 }

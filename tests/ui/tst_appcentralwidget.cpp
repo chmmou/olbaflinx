@@ -662,15 +662,21 @@ void AppCentralWidgetTest::theCounterNamesWhatTheFilterLeaves()
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->totalRows(), 200, workerTimeoutMs);
     QVERIFY(counter->text().contains(QStringLiteral("200")));
 
-    // One page holds a hundred of the two hundred, and the counter names both:
-    // the number that is loaded and the number the filter leaves.
+    // One page holds a hundred of the two hundred, and while rows are missing
+    // the counter names both numbers: what is loaded and what the filter leaves.
     QCOMPARE(transactionModel->rowCount(), 100);
+    QVERIFY(!transactionModel->atEnd());
     QVERIFY(counter->text().contains(QStringLiteral("100")));
 
+    // Eighty fit on one page, so the holding is through and the counter drops
+    // back to the one number. Checked on the text and on no pixel.
     search->setText(QStringLiteral("Gehalt"));
 
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->totalRows(), 80, workerTimeoutMs);
+    QTRY_VERIFY_WITH_TIMEOUT(transactionModel->atEnd(), workerTimeoutMs);
     QVERIFY(counter->text().contains(QStringLiteral("80")));
+    QVERIFY(!counter->text().contains(QStringLiteral("100")));
+    QVERIFY(!counter->text().contains(QStringLiteral("200")));
 }
 
 /**
