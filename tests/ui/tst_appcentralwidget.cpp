@@ -1009,13 +1009,18 @@ void AppCentralWidgetTest::theCommandsThatNeedAStorageWaitForOne()
     auto *assistantAction = actionOf(app, QStringLiteral("appSetupAssistantAction"));
     auto *newAction = actionOf(app, QStringLiteral("appNewStorageAction"));
 
+    // The areas it puts back only stand on the second page.
+    auto *resetAction = actionOf(app, QStringLiteral("appResetLayoutAction"));
+
     QVERIFY(closeAction != nullptr);
     QVERIFY(assistantAction != nullptr);
     QVERIFY(newAction != nullptr);
+    QVERIFY(resetAction != nullptr);
 
     QVERIFY(!toolBar->isVisibleTo(&app));
     QVERIFY(!closeAction->isEnabled());
     QVERIFY(!assistantAction->isEnabled());
+    QVERIFY(!resetAction->isEnabled());
 
     // Creating a storage is the one command the first page is there for.
     QVERIFY(newAction->isEnabled());
@@ -1029,21 +1034,24 @@ void AppCentralWidgetTest::theCommandsThatNeedAStorageWaitForOne()
     QVERIFY(closeAction->isEnabled());
     QVERIFY(assistantAction->isEnabled());
     QVERIFY(newAction->isEnabled());
+    QVERIFY(resetAction->isEnabled());
 
     app.closeStorage();
 
     QVERIFY(!toolBar->isVisibleTo(&app));
     QVERIFY(!closeAction->isEnabled());
     QVERIFY(!assistantAction->isEnabled());
+    QVERIFY(!resetAction->isEnabled());
 }
 
 /**
- * Two entries belong to stories that are not built yet. They exist so that the
- * menu keeps its shape once they are switched on, and they stay disabled until
- * then rather than doing nothing when pressed.
+ * One entry belongs to a story that is not built yet. It exists so that the menu
+ * keeps its shape once it is switched on, and it stays disabled until then rather
+ * than doing nothing when pressed.
  *
- * A third one used to stand here and is gone: it hid the accounts side, which is
- * part of the arrangement and not something to put away.
+ * Two used to stand here. One hid the accounts side, which is part of the
+ * arrangement and not something to put away, and it is gone. The other puts the
+ * arrangement back and belongs to the commands that wait for an open storage.
  */
 void AppCentralWidgetTest::theEntriesWithoutTheirStoryStayDisabled()
 {
@@ -1053,8 +1061,7 @@ void AppCentralWidgetTest::theEntriesWithoutTheirStoryStayDisabled()
     App app(&logger, &storage);
     app.initialize();
 
-    const auto names = QStringList{QStringLiteral("appFetchTransactionsAction"),
-                                   QStringLiteral("appResetLayoutAction")};
+    const auto names = QStringList{QStringLiteral("appFetchTransactionsAction")};
 
     for (const auto &name : names) {
         auto *action = actionOf(app, name);

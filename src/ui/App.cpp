@@ -52,6 +52,26 @@ namespace {
 constexpr auto TransactionDockName = QLatin1StringView("transactionDock");
 constexpr auto AccountDockName = QLatin1StringView("accountDock");
 
+/**
+ * Where the window keeps what it remembers between two runs.
+ *
+ * The arrangement of the areas sits beside the position and the size of the
+ * window, in plain settings and not in the encrypted storage: a layout is no
+ * secret, and it has to be readable before any storage is opened.
+ */
+constexpr auto WindowGroup = QLatin1StringView("App");
+constexpr auto DockLayoutKey = QLatin1StringView("DockLayout");
+
+/**
+ * The number a saved arrangement carries along.
+ *
+ * The dock manager compares it on restore and refuses a state that carries a
+ * different one. Raising it is how a rework of the areas retires the layouts of
+ * every earlier run at once, instead of applying them to areas they were never
+ * written for.
+ */
+constexpr int DockLayoutVersion = 1;
+
 } // namespace
 
 using namespace olbaflinx::core;
@@ -105,6 +125,11 @@ public:
 
     ~Private()
     {
+        // Here and not in a close event: the entry for quitting ends the program
+        // without one, and an arrangement that only survives the window button
+        // would be lost on the other way out.
+        saveDockLayout();
+
         // Logger and Storage belong to whoever created the window. The logger is
         // only shut down here, neither of the two is released.
         logger->disable();
@@ -127,10 +152,9 @@ public:
     /**
      * Wires the menu and fills the tool bar.
      *
-     * Two entries have no story behind them yet and stay disabled: fetching
-     * transactions belongs to the next epic, resetting the layout to the step
-     * that makes a layout outlive the window. They are created here so that the
-     * menu keeps its shape once they are switched on.
+     * One entry has no story behind it yet and stays disabled: fetching
+     * transactions belongs to the next epic. It is created here so that the menu
+     * keeps its shape once it is switched on.
      */
     void setUpActions()
     {
@@ -161,8 +185,11 @@ public:
 
         QObject::connect(overview, &StorageDialog::message, q_ptr, &App::showMessage);
 
+        QObject::connect(ui->appResetLayoutAction, &QAction::triggered, q_ptr, [this] {
+            resetDockLayout();
+        });
+
         ui->appFetchTransactionsAction->setEnabled(false);
-        ui->appResetLayoutAction->setEnabled(false);
 
         ui->appToolBar->addAction(ui->appSetupAssistantAction);
         ui->appToolBar->addAction(ui->appFetchTransactionsAction);
@@ -192,6 +219,21 @@ public:
         ui->appToolBar->setVisible(storageIsOpen);
         ui->appCloseStorageAction->setEnabled(storageIsOpen);
         ui->appSetupAssistantAction->setEnabled(storageIsOpen);
+
+        // The areas only stand on the second page, so there is nothing to put
+        // back on the first.
+        ui->appResetLayoutAction->setEnabled(storageIsOpen);
+
+        // Held back from the start until the areas are on screen, and said once.
+        // Repeating it every time a storage is opened would nag about something
+        // that was over with the first arrangement that got saved.
+        if (storageIsOpen && dockLayoutFellBack) {
+            dockLayoutFellBack = false;
+
+            q_ptr->statusBar()->showMessage(
+                App::tr("Your arrangement of the areas could not be restored. The standard "
+                        "arrangement is in place, and there is nothing you need to do."));
+        }
     }
 
     /**
@@ -304,6 +346,94 @@ public:
         // page. Handing the manager over before that would have put it beside
         // the very widgets it has just taken.
         page->layout()->addWidget(dockManager);
+
+        // What the user gets back when he asks for the grouping again. Taken
+        // here, so that the way to it is the arrangement just built and not a
+        // second description of it that could drift away.
+        defaultDockLayout = dockManager->saveState(DockLayoutVersion);
+    }
+
+    /**
+     * Puts the accounts side back where a restore may have taken it from.
+     *
+     * The feature that marks an area as not closable takes the close button on
+     * its tab and nothing besides. A restore applies the saved open state
+     * without asking the area about it, and an area the saved state does not
+     * know at all is closed and taken out of its dock area. Both count as a
+     * successful restore, so falling back to the default arrangement never
+     * catches them, and without the accounts there is nothing left to choose an
+     * account with.
+     */
+    void ensureAccountsVisible()
+    {
+        if (accountDockWidget == nullptr) {
+            return;
+        }
+
+        if (accountDockWidget->dockAreaWidget() == nullptr) {
+            dockManager->addDockWidget(LeftDockWidgetArea,
+                                       accountDockWidget,
+                                       centralDockWidget->dockAreaWidget());
+        }
+
+        if (accountDockWidget->isClosed()) {
+            accountDockWidget->toggleView(true);
+        }
+    }
+
+    void saveDockLayout() const
+    {
+        if (dockManager == nullptr) {
+            return;
+        }
+
+        storage->storeSetting(DockLayoutKey, dockManager->saveState(DockLayoutVersion), WindowGroup);
+    }
+
+    /**
+     * Brings the arrangement of the last run back, or leaves the default one.
+     *
+     * Whether a saved arrangement still fits is what the restore answers; there
+     * is no check of our own beside it. It refuses an empty or unreadable state,
+     * one from a format or a version it does not know, and one that misses an
+     * area the window carries, and it tries the whole state before it changes
+     * anything, so nothing is ever applied in halves.
+     */
+    void restoreDockLayout()
+    {
+        const QByteArray state = storage->setting(DockLayoutKey, WindowGroup, QByteArray())
+                                     .toByteArray();
+
+        if (state.isEmpty()) {
+            return;
+        }
+
+        if (!dockManager->restoreState(state, DockLayoutVersion)) {
+            qCWarning(lcUi) << "the saved dock layout was refused, the default one stands";
+
+            // Told, not shown. The window opens on the overview, and a word about
+            // areas the user cannot see yet would be cleared by the very step that
+            // brings them up.
+            dockLayoutFellBack = true;
+        }
+
+        ensureAccountsVisible();
+    }
+
+    /**
+     * Puts the grouping back the way the window opens with it.
+     *
+     * The way out of an arrangement the user can no longer undo. Falling back to
+     * the default only catches a state the restore refuses, and an arrangement
+     * can be perfectly valid and still leave him stuck. Saved right away, so that
+     * the next start does not hand him back what he has just left.
+     */
+    void resetDockLayout()
+    {
+        dockManager->restoreState(defaultDockLayout, DockLayoutVersion);
+
+        ensureAccountsVisible();
+        saveDockLayout();
     }
 
     void initialize()
@@ -326,6 +456,10 @@ public:
         setUpActions();
         setUpDockAreas();
         applyPage(AppCentralWidget::Page::Storages);
+
+        // After the areas stand. There is nothing to restore an arrangement onto
+        // before that.
+        restoreDockLayout();
     }
 
     Logger *logger;
@@ -340,6 +474,8 @@ public:
     CDockManager *dockManager;
     CDockWidget *centralDockWidget;
     CDockWidget *accountDockWidget;
+    QByteArray defaultDockLayout;
+    bool dockLayoutFellBack = false;
 
     // The first page of the central area. Owned by the window through the widget
     // hierarchy; kept here because the menu reaches into it.
