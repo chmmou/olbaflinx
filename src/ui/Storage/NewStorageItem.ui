@@ -213,10 +213,6 @@
    </item>
   </layout>
  </widget>
- <tabstops>
-  <tabstop>leStoragePassword</tabstop>
-  <tabstop>btnStorageMenu</tabstop>
- </tabstops>
  <resources>
   <include location="../../../res/app.qrc"/>
  </resources>

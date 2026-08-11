@@ -393,13 +393,6 @@
    </item>
   </layout>
  </widget>
- <tabstops>
-  <tabstop>lineEditStorageName</tabstop>
-  <tabstop>lineEditPassword</tabstop>
-  <tabstop>lineEditPasswordConfirm</tabstop>
-  <tabstop>pushButtonOk</tabstop>
-  <tabstop>pushButtonCancel</tabstop>
- </tabstops>
  <resources>
   <include location="../../../res/app.qrc"/>
  </resources>

@@ -108,6 +108,8 @@ private Q_SLOTS:
     void everyFieldIsReachedThroughItsLabel_data();
     void everyFieldIsReachedThroughItsLabel();
     void theDialogCarriesATitle();
+    void theDialogOpensWithTheFocusOnTheNameField();
+    void theFieldsFollowTheArrangementOfTheForm();
 };
 
 void NewStorageDialogTest::initTestCase()
@@ -336,6 +338,60 @@ void NewStorageDialogTest::theDialogCarriesATitle()
 
     QVERIFY(!dialog.windowTitle().isEmpty());
     QVERIFY(dialog.windowTitle() != QStringLiteral("Dialog"));
+}
+
+/**
+ * The name is what the user starts with. A tab order cannot say so: it orders
+ * the stops and leaves the first one to whatever the build order produced.
+ */
+void NewStorageDialogTest::theDialogOpensWithTheFocusOnTheNameField()
+{
+    Storage storage(applicationInfo());
+    NewStorageDialog dialog(&storage);
+
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+
+    QCOMPARE(dialog.focusWidget(), nameFieldOf(dialog));
+}
+
+/**
+ * The form carried a tab order of its own that put Ok in front of Cancel, while
+ * the buttons stand the other way round on the screen. The order comes from the
+ * arrangement now, and the list that said otherwise is gone.
+ */
+void NewStorageDialogTest::theFieldsFollowTheArrangementOfTheForm()
+{
+    Storage storage(applicationInfo());
+    NewStorageDialog dialog(&storage);
+
+    // Ok stands greyed out until the input can carry a storage, and a disabled
+    // button is no stop of the chain.
+    enter(dialog, QStringLiteral("Privat"), validPassword(), validPassword());
+
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+
+    const QStringList expected{QStringLiteral("lineEditStorageName"),
+                               QStringLiteral("lineEditPassword"),
+                               QStringLiteral("lineEditPasswordConfirm"),
+                               QStringLiteral("pushButtonCancel"),
+                               QStringLiteral("pushButtonOk")};
+
+    QWidget *const start = nameFieldOf(dialog);
+    QVERIFY(start != nullptr);
+
+    QStringList reached{start->objectName()};
+    for (QWidget *widget = start->nextInFocusChain(); widget != start;
+         widget = widget->nextInFocusChain()) {
+        if (widget->isEnabled() && widget->isVisible()
+            && (widget->focusPolicy() & Qt::TabFocus) == Qt::TabFocus
+            && expected.contains(widget->objectName())) {
+            reached.append(widget->objectName());
+        }
+    }
+
+    QCOMPARE(reached, expected);
 }
 
 } // namespace olbaflinx::ui::storage::tests

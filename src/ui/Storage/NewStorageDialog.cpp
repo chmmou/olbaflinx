@@ -141,6 +141,12 @@ NewStorageDialog::NewStorageDialog(Storage *storage, QWidget *parent, Qt::Window
     }
 
     d_ptr->validate();
+
+    // Where the focus starts is said here and not left to the arrangement. The
+    // name field happens to be the first stop of the chain today, so this
+    // changes nothing on screen; what it changes is that a field put above it
+    // later does not take the start of the chain with it.
+    d_ptr->ui->lineEditStorageName->setFocus();
 }
 
 NewStorageDialog::~NewStorageDialog()

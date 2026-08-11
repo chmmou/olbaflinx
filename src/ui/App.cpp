@@ -229,6 +229,17 @@ public:
         // back on the first.
         ui->appResetLayoutAction->setEnabled(storageIsOpen);
 
+        // Where the keyboard starts on this page. The focus chain is a ring, so
+        // which of the two areas comes first is decided by where the walk
+        // begins, not by their order in the chain: without this it begins at the
+        // area the dock manager built first, and that has to be the central one
+        // because the library refuses any other as the first. The accounts stand
+        // left of the transactions and are what a user picks from, so the walk
+        // starts there and reaches the transactions next.
+        if (storageIsOpen) {
+            ui->appCentralWidget->accountWidget()->setFocus(Qt::OtherFocusReason);
+        }
+
         // Held back from the start until the areas are on screen, and said once.
         // Repeating it every time a storage is opened would nag about something
         // that was over with the first arrangement that got saved.
