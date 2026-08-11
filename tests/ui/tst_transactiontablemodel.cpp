@@ -91,6 +91,12 @@ private:
      */
     static constexpr int workerTimeoutMs = 30000;
 
+    /**
+     * How many rows the view asks for in one go. The tests name it because the
+     * end of a page is where a record falls out or turns up twice.
+     */
+    static constexpr int pageSize = 100;
+
     static constexpr quint32 firstAccount = 815;
     static constexpr quint32 secondAccount = 4711;
     static constexpr quint32 thirdAccount = 2026;
@@ -132,13 +138,47 @@ private:
     [[nodiscard]] bool putOrderedTransactions(
         quint32 uniqueAccountId,
         int count,
-        const QString &firstDate = QStringLiteral("2026-01-01")) const
+        const QString &firstDate = QStringLiteral("2026-01-01"),
+        int dayStep = 1) const
     {
         return TestHelpers::putOrderedTransactions(storageFile(),
                                                    password(),
                                                    uniqueAccountId,
                                                    count,
-                                                   firstDate);
+                                                   firstDate,
+                                                   dayStep);
+    }
+
+    /**
+     * Fetches page after page until the model says there is nothing left. Every
+     * round waits for the request to come back; without a view nobody else asks.
+     */
+    static void loadEverything(TransactionTableModel &model)
+    {
+        // Nothing can be fetched while a request is running, so the first one
+        // has to be through before the paging starts.
+        QTRY_VERIFY_WITH_TIMEOUT(!model.isReading(), workerTimeoutMs);
+
+        while (model.canFetchMore(QModelIndex())) {
+            const int before = model.rowCount();
+
+            model.fetchMore(QModelIndex());
+
+            QTRY_VERIFY_WITH_TIMEOUT(!model.isReading(), workerTimeoutMs);
+            QVERIFY(model.rowCount() > before || model.atEnd());
+        }
+    }
+
+    static QSet<quint32> identifiersOf(const TransactionTableModel &model)
+    {
+        auto identifiers = QSet<quint32>();
+
+        for (int row = 0; row < model.rowCount(); ++row) {
+            identifiers.insert(
+                model.data(model.index(row, 0), TransactionTableModel::UniqueIdRole).toUInt());
+        }
+
+        return identifiers;
     }
 
     static QStringList purposesOf(const TransactionTableModel &model)
@@ -226,6 +266,12 @@ private Q_SLOTS:
     void amountsOrderNumericallyAndDatesChronologically();
     void theOrderReachesTheWholeHoldingAndNotTheLoadedPage();
     void theOrderOutlivesAChangeOfAccountButNotTheStorage();
+
+    void pagingDeliversEveryTransactionExactlyOnce();
+    void aChangeOfOrderDuringARunningRequestDiscardsItsResult();
+    void aHoldingThatFitsOnePageEndsWithIt();
+    void aHoldingThatFitsOnePageEndsWithIt_data();
+    void aFailureWhileLoadingMoreLeavesTheRowsAndStopsAsking();
 };
 
 void TransactionTableModelTest::init()
@@ -438,10 +484,10 @@ void TransactionTableModelTest::aChangeOfAccountReturnsBeforeTheTransactionsArri
     QThread *const callingThread = QThread::currentThread();
     QThread *deliveryThread = nullptr;
 
-    connect(&model, &QAbstractItemModel::modelReset, &model, [&] {
-        if (model.rowCount() > 0) {
-            deliveryThread = QThread::currentThread();
-        }
+    // The rows are appended, so their arrival is an insert and not a reset. The
+    // reset is what empties the model when the account changes.
+    connect(&model, &QAbstractItemModel::rowsInserted, &model, [&] {
+        deliveryThread = QThread::currentThread();
     });
 
     model.setAccountId(firstAccount);
@@ -606,13 +652,14 @@ void TransactionTableModelTest::theCountUnderTheFilterIsTheOneOfTheWholeHolding(
     model.setAccountId(firstAccount);
     QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 200, workerTimeoutMs);
 
-    // A window holds fifty, so the loaded rows say nothing about the number.
-    QCOMPARE(model.rowCount(), 50);
+    // One page holds a hundred, so the loaded rows say nothing about the number.
+    QCOMPARE(model.rowCount(), pageSize);
     QVERIFY(!totalSpy.isEmpty());
 
+    // Eighty fit on one page, and there the two numbers do meet.
     model.setFilter({.text = QStringLiteral("Gehalt")});
     QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 80, workerTimeoutMs);
-    QCOMPARE(model.rowCount(), 50);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 80, workerTimeoutMs);
 
     // A filter that leaves nothing answers with nought rather than with the
     // number of the account.
@@ -789,6 +836,178 @@ void TransactionTableModelTest::theOrderOutlivesAChangeOfAccountButNotTheStorage
     const auto dates = valuesOf(model, TransactionTableModel::DateRole);
     QVERIFY(isOrdered(dates, Qt::DescendingOrder));
     QCOMPARE(dates.first().toDate(), QDate(2026, 1, 12));
+
+    storage.close();
+}
+
+/**
+ * Paging through three thousand records delivers each of them once. Checked over
+ * the set of identifiers and not over their number: a record that went missing
+ * and one that came twice cancel each other out in a count.
+ */
+void TransactionTableModelTest::pagingDeliversEveryTransactionExactlyOnce()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    // All of them on one day. The chosen column cannot tell two records apart
+    // then, so the order rests on the second criterion alone, and that is where
+    // a page boundary loses one.
+    QVERIFY(putOrderedTransactions(firstAccount, 3000, QStringLiteral("2026-01-01"), 0));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 3000, workerTimeoutMs);
+
+    loadEverything(model);
+
+    QCOMPARE(model.rowCount(), 3000);
+    QVERIFY(model.atEnd());
+
+    auto expected = QSet<quint32>();
+    for (quint32 identifier = 1; identifier <= 3000; ++identifier) {
+        expected.insert(identifier);
+    }
+
+    QCOMPARE(identifiersOf(model), expected);
+
+    storage.close();
+}
+
+/**
+ * The order changes while the first read is still going. Its rows belong to the
+ * order that was, and they must not turn up under the one that is.
+ */
+void TransactionTableModelTest::aChangeOfOrderDuringARunningRequestDiscardsItsResult()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 300));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+
+    model.setAccountId(firstAccount);
+    model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), pageSize, workerTimeoutMs);
+
+    QVERIFY(isOrdered(valuesOf(model, TransactionTableModel::ValueRole), Qt::AscendingOrder));
+    QCOMPARE(model.data(model.index(0, 0), TransactionTableModel::ValueRole).toDouble(), 1.0);
+
+    // Changing while a read is running is an everyday move, not a failure.
+    QCOMPARE(errorSpy.count(), 0);
+
+    storage.close();
+}
+
+void TransactionTableModelTest::aHoldingThatFitsOnePageEndsWithIt_data()
+{
+    QTest::addColumn<int>("count");
+
+    // Exactly one full page. The loaded number reaches the counted one, and no
+    // second request is needed to find that out.
+    QTest::newRow("one full page") << pageSize;
+    // Short of a page. This is what answers when the count did not come through
+    // and the first way has no number to compare against.
+    QTest::newRow("less than a page") << 40;
+    // Nothing at all. The storage reports that as "nothing found", which ends
+    // the paging and is no failure.
+    QTest::newRow("nothing") << 0;
+}
+
+/**
+ * The holding is through without an empty page behind it. Whichever of the three
+ * ways gets there, the view is told that there is nothing left to ask for.
+ */
+void TransactionTableModelTest::aHoldingThatFitsOnePageEndsWithIt()
+{
+    QFETCH(int, count);
+
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    if (count > 0) {
+        QVERIFY(putOrderedTransactions(firstAccount, count));
+    }
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(finishedSpy.count(), 1, workerTimeoutMs);
+
+    QCOMPARE(model.rowCount(), count);
+    QCOMPARE(model.totalRows(), count);
+    QVERIFY(model.atEnd());
+    QVERIFY(!model.canFetchMore(QModelIndex()));
+
+    storage.close();
+}
+
+/**
+ * A failure while loading further rows leaves what stands and stops the asking.
+ * Without the block the view would ask again at once, meet the same failure and
+ * report it once more for as long as the cause lasts.
+ *
+ * The holding does not count as complete either. Told as an end, a part of it
+ * would read as the whole.
+ */
+void TransactionTableModelTest::aFailureWhileLoadingMoreLeavesTheRowsAndStopsAsking()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 500));
+    QVERIFY(putOrderedTransactions(secondAccount, 30));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    // Ordered by amount, so the read names that column. Taking the column away
+    // is what makes the next page fail and nothing else.
+    model.setAccountId(firstAccount);
+    model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), pageSize, workerTimeoutMs);
+    QCOMPARE(model.totalRows(), 500);
+    QVERIFY(model.canFetchMore(QModelIndex()));
+
+    QVERIFY(TestHelpers::runStatement(storageFile(),
+                                      password(),
+                                      QStringLiteral("ALTER TABLE transactions RENAME COLUMN "
+                                                     "`value` TO amount;")));
+
+    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    model.fetchMore(QModelIndex());
+    QTRY_COMPARE_WITH_TIMEOUT(finishedSpy.count(), 1, workerTimeoutMs);
+
+    QCOMPARE(model.rowCount(), pageSize);
+    QVERIFY(!model.canFetchMore(QModelIndex()));
+
+    // A failure is not an end. An implementation that reads every error as the
+    // end of the holding would answer the line above just the same.
+    QVERIFY(!model.atEnd());
+    QVERIFY(model.rowCount() < model.totalRows());
+
+    QVERIFY(TestHelpers::runStatement(storageFile(),
+                                      password(),
+                                      QStringLiteral("ALTER TABLE transactions RENAME COLUMN "
+                                                     "amount TO `value`;")));
+
+    // A change of account lifts the block, and so do a change of order and of
+    // filter: all three start over.
+    model.setAccountId(secondAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 30, workerTimeoutMs);
+    QCOMPARE(model.totalRows(), 30);
+    QVERIFY(model.atEnd());
 
     storage.close();
 }

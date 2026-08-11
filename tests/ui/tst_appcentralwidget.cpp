@@ -662,9 +662,10 @@ void AppCentralWidgetTest::theCounterNamesWhatTheFilterLeaves()
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->totalRows(), 200, workerTimeoutMs);
     QVERIFY(counter->text().contains(QStringLiteral("200")));
 
-    // A window holds fifty, and the counter must not say so.
-    QCOMPARE(transactionModel->rowCount(), 50);
-    QVERIFY(!counter->text().contains(QStringLiteral("50 ")));
+    // One page holds a hundred of the two hundred, and the counter names both:
+    // the number that is loaded and the number the filter leaves.
+    QCOMPARE(transactionModel->rowCount(), 100);
+    QVERIFY(counter->text().contains(QStringLiteral("100")));
 
     search->setText(QStringLiteral("Gehalt"));
 

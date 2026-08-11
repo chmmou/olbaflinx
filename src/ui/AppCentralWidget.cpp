@@ -28,6 +28,7 @@
 
 #include <QtWidgets/QBoxLayout>
 #include <QtWidgets/QComboBox>
+#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPushButton>
@@ -146,7 +147,7 @@ public:
                          q_ptr,
                          [this] { resetTransactionFilter(); });
 
-        applyTransactionCount(0);
+        applyTransactionCount();
     }
 
     /**
@@ -192,9 +193,28 @@ public:
         applyTransactionFilter();
     }
 
-    void applyTransactionCount(int count)
+    /**
+     * Puts the number of transactions under the filter into the counter, and
+     * with it how far the loading has come.
+     *
+     * One place for both. While rows are still missing the counter names the
+     * loaded number beside the whole one, and once the holding is through it
+     * names the one. A second element beside it would say the same thing twice,
+     * and a progress bar that started over with every page would say nothing
+     * about the holding at all.
+     */
+    void applyTransactionCount()
     {
-        ui->labelTransactionCount->setText(AppCentralWidget::tr("%n transaction(s)", "", count));
+        const int total = transactionModel == nullptr ? 0 : transactionModel->totalRows();
+
+        if (transactionModel == nullptr || transactionModel->atEnd()) {
+            ui->labelTransactionCount->setText(AppCentralWidget::tr("%n transaction(s)", "", total));
+            return;
+        }
+
+        //: %1 is the number of transactions loaded so far, %n the whole holding
+        ui->labelTransactionCount->setText(AppCentralWidget::tr("%1 of %n transaction(s)", "", total)
+                                               .arg(transactionModel->rowCount()));
     }
 
     // The generated form is created with new above and belongs to nobody else.
@@ -241,8 +261,16 @@ public:
         transactionModel = model;
         ui->tableViewTransactions->setModel(model);
 
+        // Without a model there is nothing to order. The indicator is set before
+        // sorting is switched on, because switching it on orders by whatever the
+        // indicator says at that moment.
+        ui->tableViewTransactions->setSortingEnabled(false);
+
         if (transactionModel) {
-            const auto refresh = [this] { applyTransactionNotice(); };
+            const auto refresh = [this] {
+                applyTransactionCount();
+                applyTransactionNotice();
+            };
 
             QObject::connect(transactionModel, &QAbstractItemModel::modelReset, q_ptr, refresh);
             QObject::connect(transactionModel, &QAbstractItemModel::rowsInserted, q_ptr, refresh);
@@ -251,9 +279,13 @@ public:
             QObject::connect(transactionModel,
                              &TransactionTableModel::totalRowsChanged,
                              q_ptr,
-                             [this](int count) { applyTransactionCount(count); });
+                             [this] { applyTransactionCount(); });
 
-            applyTransactionCount(transactionModel->totalRows());
+            ui->tableViewTransactions->horizontalHeader()
+                ->setSortIndicator(transactionModel->sortColumn(), transactionModel->sortOrder());
+            ui->tableViewTransactions->setSortingEnabled(true);
+
+            applyTransactionCount();
         }
 
         applyTransactionNotice();

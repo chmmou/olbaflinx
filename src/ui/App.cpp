@@ -419,9 +419,14 @@ void App::showError(ErrorCode code, const QString &reason)
     statusBar()->showMessage(message);
 
     // A failed read is not an empty storage, and the views must not fall into
-    // the notice that says nothing is there. Every error core reports while the
-    // accounts are on screen is one about what that page shows.
-    if (d_ptr->ui->appCentralWidget->page() == AppCentralWidget::Page::Banking) {
+    // the notice that says nothing is there.
+    //
+    // Which view it belongs to is what the transaction model answers: while it
+    // is reading, the failure is about the transactions, and the accounts on the
+    // left are readable. A notice at that view would point at a holding that is
+    // in order and hide the tree that shows it.
+    if (d_ptr->ui->appCentralWidget->page() == AppCentralWidget::Page::Banking
+        && !d_ptr->transactionTableModel->isReading()) {
         d_ptr->ui->appCentralWidget->showAccountsUnreadable(message);
     }
 }

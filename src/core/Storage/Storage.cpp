@@ -992,15 +992,17 @@ public:
         // of StorageConnection already carries a random number.
         const auto workerConnectionName = sourceConnectionName + QStringLiteral("_reader");
 
-        // Scoped, because removeDatabase below must not run while a QSqlQuery or
-        // a QSqlDatabase still refers to the connection. Qt warns and leaks it.
-        {
+        // Called rather than written out, so that every way out of it releases
+        // the query and the handle before removeDatabase runs below. Qt warns
+        // and leaks the connection while either still refers to it, and a plain
+        // block could not do it: a return inside one leaves the function and
+        // skips what follows the block.
+        [&] {
             QSqlDatabase database = QSqlDatabase::cloneDatabase(sourceConnectionName,
                                                                 workerConnectionName);
             if (!database.isValid() || !database.open()) {
                 fail(ErrorCode::DatabaseFailure,
                      QStringLiteral("Could not open a second connection to %1").arg(fileName));
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -1008,7 +1010,6 @@ public:
             if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
                 fail(error.code(), error.message());
                 database.close();
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -1042,7 +1043,6 @@ public:
                      QStringLiteral("Could not prepare the read of %1: %2")
                          .arg(table, query.lastError().text()));
                 database.close();
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -1058,7 +1058,6 @@ public:
                      QStringLiteral("Could not read the table %1: %2")
                          .arg(table, query.lastError().text()));
                 database.close();
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -1145,7 +1144,7 @@ public:
             }
 
             database.close();
-        }
+        }();
 
         QSqlDatabase::removeDatabase(workerConnectionName);
     }
