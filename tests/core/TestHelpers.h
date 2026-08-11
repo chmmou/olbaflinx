@@ -95,6 +95,48 @@ public:
             .isValid();
     }
 
+    /**
+     * Puts transactions that carry a date, an amount and a counterparty, each of
+     * them one step apart from the record before it.
+     *
+     * putTransactions writes none of the three, so a read over it has no expected
+     * order in any column but the purpose. Ordering by a column needs values that
+     * differ, and it needs them to differ the same way in every column, so that
+     * one answer is right for all four.
+     *
+     * The rows go in even numbers first and odd numbers after, so that the order
+     * of the row ids is neither the order of the values nor its reverse. Written
+     * in the plain order, a read that ignores the chosen column and falls back on
+     * the row id would answer exactly as one that honours it, and a test over it
+     * would pass against an implementation that does not order at all.
+     *
+     * @param firstDate The day of the record that carries the smallest amount, in
+     *  ISO form. Every further record moves one day on, so a span that crosses a
+     *  month or a year is a matter of choosing the day.
+     */
+    static bool putOrderedTransactions(const QString &file,
+                                       const QString &key,
+                                       quint32 uniqueAccountId,
+                                       int count,
+                                       const QString &firstDate = QStringLiteral("2026-01-01"))
+    {
+        return storageScalar(file,
+                             key,
+                             QStringLiteral(
+                                 "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM "
+                                 "seq WHERE n < %2) INSERT INTO transactions (account_id, "
+                                 "unique_account_id, purpose, remote_name, `date`, `value`) "
+                                 "SELECT 1, %1, 'Buchung ' || v, 'Partner ' || v, "
+                                 "date('%3', '+' || (v - 1) || ' days'), v * 1.0 FROM "
+                                 "(SELECT CASE WHEN n <= %2 / 2 THEN n * 2 "
+                                 "ELSE (n - %2 / 2) * 2 - 1 END AS v FROM seq) "
+                                 "RETURNING unique_account_id;")
+                                 .arg(uniqueAccountId)
+                                 .arg(count)
+                                 .arg(firstDate))
+            .isValid();
+    }
+
     static std::shared_ptr<Account> createFakeAccount(const int accountType = 1)
     {
         return Account::fromMap(createFakeAccountMap(accountType));

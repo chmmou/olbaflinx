@@ -129,6 +129,18 @@ private:
                                             purpose);
     }
 
+    [[nodiscard]] bool putOrderedTransactions(
+        quint32 uniqueAccountId,
+        int count,
+        const QString &firstDate = QStringLiteral("2026-01-01")) const
+    {
+        return TestHelpers::putOrderedTransactions(storageFile(),
+                                                   password(),
+                                                   uniqueAccountId,
+                                                   count,
+                                                   firstDate);
+    }
+
     static QStringList purposesOf(const TransactionTableModel &model)
     {
         auto purposes = QStringList();
@@ -139,6 +151,51 @@ private:
         }
 
         return purposes;
+    }
+
+    static QVariantList valuesOf(const TransactionTableModel &model, int role)
+    {
+        auto values = QVariantList();
+
+        for (int row = 0; row < model.rowCount(); ++row) {
+            values << model.data(model.index(row, 0), role);
+        }
+
+        return values;
+    }
+
+    /**
+     * Whether the left value may stand above the right one. Compared in the type
+     * the role carries and not in the text the column shows: an amount orders
+     * numerically, a date chronologically, a name by its characters.
+     */
+    static bool notAfter(const QVariant &left, const QVariant &right)
+    {
+        if (left.typeId() == QMetaType::QDate) {
+            return left.toDate() <= right.toDate();
+        }
+
+        if (left.typeId() == QMetaType::Double) {
+            return left.toDouble() <= right.toDouble();
+        }
+
+        return left.toString() <= right.toString();
+    }
+
+    static bool isOrdered(const QVariantList &values, Qt::SortOrder order)
+    {
+        for (int index = 1; index < values.size(); ++index) {
+            const auto &previous = values.at(index - 1);
+            const auto &current = values.at(index);
+
+            const bool inOrder = order == Qt::AscendingOrder ? notAfter(previous, current)
+                                                             : notAfter(current, previous);
+            if (!inOrder) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
 private Q_SLOTS:
@@ -163,6 +220,12 @@ private Q_SLOTS:
     void aChangeOfFilterDropsTheRowsAndStartsOver();
     void aFilterOutlivesAChangeOfAccountAndAppliesToTheNextOne();
     void theCountUnderTheFilterIsTheOneOfTheWholeHolding();
+
+    void everyColumnOrdersUpAndDown();
+    void everyColumnOrdersUpAndDown_data();
+    void amountsOrderNumericallyAndDatesChronologically();
+    void theOrderReachesTheWholeHoldingAndNotTheLoadedPage();
+    void theOrderOutlivesAChangeOfAccountButNotTheStorage();
 };
 
 void TransactionTableModelTest::init()
@@ -556,6 +619,176 @@ void TransactionTableModelTest::theCountUnderTheFilterIsTheOneOfTheWholeHolding(
     model.setFilter({.text = QStringLiteral("Versicherung")});
     QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 0, workerTimeoutMs);
     QCOMPARE(model.rowCount(), 0);
+
+    storage.close();
+}
+
+void TransactionTableModelTest::everyColumnOrdersUpAndDown_data()
+{
+    QTest::addColumn<int>("column");
+    QTest::addColumn<int>("role");
+
+    QTest::newRow("date") << static_cast<int>(TransactionTableModel::DateColumn)
+                          << static_cast<int>(TransactionTableModel::DateRole);
+    QTest::newRow("counterparty") << static_cast<int>(TransactionTableModel::RemoteNameColumn)
+                                  << static_cast<int>(TransactionTableModel::RemoteNameRole);
+    QTest::newRow("purpose") << static_cast<int>(TransactionTableModel::PurposeColumn)
+                             << static_cast<int>(TransactionTableModel::PurposeRole);
+    QTest::newRow("amount") << static_cast<int>(TransactionTableModel::ValueColumn)
+                            << static_cast<int>(TransactionTableModel::ValueRole);
+}
+
+/**
+ * Every column of the view orders, and it orders both ways. Ordering drops what
+ * stands and reads again, so the rows are gone the moment the order changes and
+ * come back under the new one.
+ */
+void TransactionTableModelTest::everyColumnOrdersUpAndDown()
+{
+    QFETCH(int, column);
+    QFETCH(int, role);
+
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 12));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+
+    model.sort(column, Qt::AscendingOrder);
+    QCOMPARE(model.rowCount(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+    QVERIFY(isOrdered(valuesOf(model, role), Qt::AscendingOrder));
+
+    model.sort(column, Qt::DescendingOrder);
+    QCOMPARE(model.rowCount(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+    QVERIFY(isOrdered(valuesOf(model, role), Qt::DescendingOrder));
+
+    storage.close();
+}
+
+/**
+ * The order follows the value, not the text that is made of it. Nine before ten
+ * is what tells the two apart, because as text ten stands first. The dates cross
+ * a turn of the year for the same reason.
+ */
+void TransactionTableModelTest::amountsOrderNumericallyAndDatesChronologically()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 12, QStringLiteral("2025-12-27")));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+
+    model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+
+    const auto amounts = valuesOf(model, TransactionTableModel::ValueRole);
+    QCOMPARE(amounts.at(8).toDouble(), 9.0);
+    QCOMPARE(amounts.at(9).toDouble(), 10.0);
+    QCOMPARE(amounts.last().toDouble(), 12.0);
+
+    model.sort(TransactionTableModel::DateColumn, Qt::AscendingOrder);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+
+    const auto dates = valuesOf(model, TransactionTableModel::DateRole);
+    QCOMPARE(dates.first().toDate(), QDate(2025, 12, 27));
+    QCOMPARE(dates.last().toDate(), QDate(2026, 1, 7));
+
+    storage.close();
+}
+
+/**
+ * The order reaches the whole holding of the account and not the page that was
+ * read. Three thousand records, of which one page stands: after ordering by
+ * amount the largest of all three thousand is at the top, not the largest of the
+ * page.
+ */
+void TransactionTableModelTest::theOrderReachesTheWholeHoldingAndNotTheLoadedPage()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 3000));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 3000, workerTimeoutMs);
+
+    // One page of them, whatever a page holds. Far short of the holding is what
+    // the test needs, not a particular number.
+    QVERIFY(model.rowCount() > 0);
+    QVERIFY(model.rowCount() < model.totalRows());
+
+    model.sort(TransactionTableModel::ValueColumn, Qt::DescendingOrder);
+    QCOMPARE(model.rowCount(), 0);
+    QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, workerTimeoutMs);
+
+    QCOMPARE(model.data(model.index(0, 0), TransactionTableModel::ValueRole).toDouble(), 3000.0);
+
+    // The other way round as well. The largest amount stands at the top of the
+    // order the view opens with, so descending alone would also be answered by a
+    // view that never ordered.
+    model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+    QCOMPARE(model.rowCount(), 0);
+    QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, workerTimeoutMs);
+
+    QCOMPARE(model.data(model.index(0, 0), TransactionTableModel::ValueRole).toDouble(), 1.0);
+
+    storage.close();
+}
+
+/**
+ * Whoever ordered by amount is still after the largest one when he picks the
+ * next account, so the order outlives the change. It does not outlive the
+ * storage: giving up the account is how the window says that the storage was
+ * closed, and what comes next opens under the order the view starts with.
+ */
+void TransactionTableModelTest::theOrderOutlivesAChangeOfAccountButNotTheStorage()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 12));
+    QVERIFY(putOrderedTransactions(secondAccount, 12));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+
+    model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+    QVERIFY(isOrdered(valuesOf(model, TransactionTableModel::ValueRole), Qt::AscendingOrder));
+
+    model.setAccountId(secondAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+    QVERIFY(isOrdered(valuesOf(model, TransactionTableModel::ValueRole), Qt::AscendingOrder));
+    QCOMPARE(model.data(model.index(0, 0), TransactionTableModel::ValueRole).toDouble(), 1.0);
+
+    model.setAccountId(0);
+    QCOMPARE(model.rowCount(), 0);
+
+    model.setAccountId(firstAccount);
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+
+    // The order the view opens with: the youngest booking at the top.
+    const auto dates = valuesOf(model, TransactionTableModel::DateRole);
+    QVERIFY(isOrdered(dates, Qt::DescendingOrder));
+    QCOMPARE(dates.first().toDate(), QDate(2026, 1, 12));
 
     storage.close();
 }

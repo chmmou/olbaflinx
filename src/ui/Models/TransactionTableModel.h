@@ -86,6 +86,19 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     /**
+     * @brief Orders the whole holding of the account by one column.
+     *
+     * The order lies in the query and not above the rows that are loaded, so it
+     * reaches every transaction of the account and not only the page on screen.
+     * Like a change of account it drops what stands and starts over; a result of
+     * the previous order that arrives afterwards is discarded.
+     *
+     * @param column One of Column. Anything outside that range is ignored.
+     * @param order Ascending or descending.
+     */
+    void sort(int column, Qt::SortOrder order = Qt::AscendingOrder) override;
+
+    /**
      * @brief The storage the model reads from.
      *
      * Externally owned and has to outlive the model. Passing nullptr detaches
@@ -178,6 +191,14 @@ Q_SIGNALS:
     void totalRowsChanged(int totalRows);
 
 private:
+    /**
+     * What the view opens with, and what it returns to once no account is shown.
+     * The booking a user looks for first is the one that came in last, so the
+     * newest stands at the top until he says otherwise.
+     */
+    static constexpr Column DefaultSortColumn = DateColumn;
+    static constexpr Qt::SortOrder DefaultSortOrder = Qt::DescendingOrder;
+
     void startOver();
     void requestItems();
     void takeResult(const olbaflinx::core::banking::BankingItems &items);
@@ -191,6 +212,9 @@ private:
     quint32 m_accountId = 0;
     Filter m_filter = {};
     int m_totalRows = 0;
+
+    Column m_sortColumn = DefaultSortColumn;
+    Qt::SortOrder m_sortOrder = DefaultSortOrder;
 
     /**
      * Tells the request that is running from the one the user has since asked

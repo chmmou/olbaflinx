@@ -155,6 +155,33 @@ QString escapedForLike(const QString &text)
     return escaped;
 }
 
+/**
+ * The column a value of the enumeration stands for. SQL binds no identifier, so
+ * a column name reaches a statement by interpolation and by nothing else; the
+ * closed enumeration is what keeps anything but these four out of it, the same
+ * way the list of known tables does for a table name.
+ *
+ * None answers with nothing. A read without a chosen column orders by the row id
+ * alone.
+ */
+QString sortColumnName(const Storage::SortColumn column)
+{
+    switch (column) {
+    case Storage::SortColumn::None:
+        break;
+    case Storage::SortColumn::Date:
+        return QStringLiteral("`date`");
+    case Storage::SortColumn::Value:
+        return QStringLiteral("`value`");
+    case Storage::SortColumn::RemoteName:
+        return QStringLiteral("remote_name");
+    case Storage::SortColumn::Purpose:
+        return QStringLiteral("purpose");
+    }
+
+    return {};
+}
+
 bool isKnownTable(const QString &table)
 {
     static const QSet<QString> knownTables = {
@@ -985,17 +1012,30 @@ public:
                 return;
             }
 
-            // The table name is interpolated because SQL knows no binding for an
-            // identifier. It comes from the switch in receiveItems and has passed
-            // the list in tableColumns, which answers empty for a name it does
-            // not know. The window and the condition are bound.
-            //
             // The order by the row id is not a preference. Without it SQLite is
             // free to hand two windows back in an order of its own, and a record
-            // could then fall between them or appear in both.
-            const auto statement
-                = QStringLiteral("SELECT * FROM %1%2 ORDER BY id ASC LIMIT :limit OFFSET :offset;")
-                      .arg(table, condition.where);
+            // could then fall between them or appear in both. A chosen column
+            // stands in front of it and never in its place, because two records
+            // may well carry the same date or the same amount.
+            const auto sortName = sortColumnName(itemQuery.sort);
+            const auto orderBy = sortName.isEmpty()
+                                     ? QStringLiteral("ORDER BY id ASC")
+                                     : QStringLiteral("ORDER BY %1 %2, id ASC")
+                                           .arg(sortName,
+                                                itemQuery.order == Qt::DescendingOrder
+                                                    ? QStringLiteral("DESC")
+                                                    : QStringLiteral("ASC"));
+
+            // Three identifiers are interpolated because SQL knows no binding for
+            // one: the table, the column that is ordered by, and the direction.
+            // The table comes from the switch in receiveItems and has passed the
+            // list in tableColumns, which answers empty for a name it does not
+            // know. The other two come from sortColumnName and from a comparison
+            // against one value of Qt::SortOrder, so neither can carry anything a
+            // caller wrote. The window and the condition are bound.
+            const auto statement = QStringLiteral(
+                                       "SELECT * FROM %1%2 %3 LIMIT :limit OFFSET :offset;")
+                                       .arg(table, condition.where, orderBy);
 
             if (!query.prepare(statement)) {
                 fail(ErrorCode::DatabaseFailure,

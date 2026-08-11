@@ -33,6 +33,27 @@ namespace {
  */
 constexpr int AmountDecimals = 2;
 
+/**
+ * The column of the storage a column of the view orders by. Two enumerations
+ * rather than one, because the view may drop a column or move it without the
+ * storage learning of it.
+ */
+Storage::SortColumn sortColumnOf(const TransactionTableModel::Column column)
+{
+    switch (column) {
+    case TransactionTableModel::DateColumn:
+        return Storage::SortColumn::Date;
+    case TransactionTableModel::RemoteNameColumn:
+        return Storage::SortColumn::RemoteName;
+    case TransactionTableModel::PurposeColumn:
+        return Storage::SortColumn::Purpose;
+    case TransactionTableModel::ValueColumn:
+        return Storage::SortColumn::Value;
+    }
+
+    return Storage::SortColumn::None;
+}
+
 } // namespace
 
 TransactionTableModel::TransactionTableModel(QObject *parent)
@@ -186,6 +207,32 @@ void TransactionTableModel::setAccountId(quint32 accountId)
     }
 
     m_accountId = accountId;
+
+    // Giving up the account is how the window says that the storage was closed.
+    // The order belongs to the storage it was chosen in: it outlives a change of
+    // account, it does not outlive the file.
+    if (m_accountId == 0) {
+        m_sortColumn = DefaultSortColumn;
+        m_sortOrder = DefaultSortOrder;
+    }
+
+    startOver();
+}
+
+void TransactionTableModel::sort(int column, Qt::SortOrder order)
+{
+    if (column < 0 || column >= ColumnCount) {
+        return;
+    }
+
+    const auto sortColumn = static_cast<Column>(column);
+    if (m_sortColumn == sortColumn && m_sortOrder == order) {
+        return;
+    }
+
+    m_sortColumn = sortColumn;
+    m_sortOrder = order;
+
     startOver();
 }
 
@@ -215,8 +262,8 @@ int TransactionTableModel::totalRows() const
 }
 
 /**
- * What the account and the filter have in common: both make a running request
- * stale, both drop what is on screen, and both ask again from the top.
+ * What the account, the order and the filter have in common: each of them makes
+ * a running request stale, drops what is on screen, and asks again from the top.
  */
 void TransactionTableModel::startOver()
 {
@@ -244,6 +291,8 @@ void TransactionTableModel::requestItems()
 
     m_storage->receiveItems({.type = Storage::StorageTransaction,
                              .accountId = m_accountId,
+                             .sort = sortColumnOf(m_sortColumn),
+                             .order = m_sortOrder,
                              .text = m_filter.text,
                              .from = m_filter.from,
                              .to = m_filter.to,
