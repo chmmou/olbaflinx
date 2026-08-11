@@ -31,13 +31,50 @@
 #include <QtCore/QDir>
 
 #include <QtWidgets/QApplication>
+#include <QtWidgets/QLayout>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QStatusBar>
 
-#include <qtadvanceddocking-qt6/AutoHideDockContainer.h>
 #include <qtadvanceddocking-qt6/DockAreaWidget.h>
 #include <qtadvanceddocking-qt6/DockManager.h>
 #include <qtadvanceddocking-qt6/DockWidget.h>
+
+namespace {
+
+/**
+ * The names under which a saved layout finds its areas again.
+ *
+ * The dock manager takes the object name of an area as the key of the saved
+ * state, and it takes the title for it unless one is set. A title is
+ * translatable, so a layout saved in one language would no longer be found in
+ * another. These names are set apart from the titles and never change.
+ */
+const QString TransactionDockName = QStringLiteral("transactionDock");
+const QString AccountDockName = QStringLiteral("accountDock");
+
+/**
+ * Where the window keeps what it remembers between two runs.
+ *
+ * The arrangement of the areas sits beside the position and the size of the
+ * window, in plain settings and not in the encrypted storage: a layout is no
+ * secret, and it has to be readable before any storage is opened.
+ */
+const QString WindowGroup = QStringLiteral("App");
+const QString PositionKey = QStringLiteral("Position");
+const QString SizeKey = QStringLiteral("Size");
+const QString DockLayoutKey = QStringLiteral("DockLayout");
+
+/**
+ * The number a saved arrangement carries along.
+ *
+ * The dock manager compares it on restore and refuses a state that carries a
+ * different one. Raising it is how a rework of the areas retires the layouts of
+ * every earlier run at once, instead of applying them to areas they were never
+ * written for.
+ */
+constexpr int DockLayoutVersion = 1;
+
+} // namespace
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::ui;
@@ -62,7 +99,7 @@ public:
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
-        , logWidgetContainer(nullptr)
+        , accountDockWidget(nullptr)
         , overview(nullptr)
         , q_ptr(app)
     {
@@ -90,13 +127,14 @@ public:
 
     ~Private()
     {
+        // Here and not in a close event: the entry for quitting ends the program
+        // without one, and an arrangement that only survives the window button
+        // would be lost on the other way out.
+        saveDockLayout();
+
         // Logger and Storage belong to whoever created the window. The logger is
         // only shut down here, neither of the two is released.
         logger->disable();
-
-        if (dockManager) {
-            dockManager->deleteLater();
-        }
 
         delete ui;
     }
@@ -116,10 +154,9 @@ public:
     /**
      * Wires the menu and fills the tool bar.
      *
-     * Three entries have no story behind them yet and stay disabled: fetching
-     * transactions belongs to the next epic, the two under View to the one that
-     * builds the dock areas. They are created here so that the menu keeps its
-     * shape once they are switched on.
+     * One entry has no story behind it yet and stays disabled: fetching
+     * transactions belongs to the next epic. It is created here so that the menu
+     * keeps its shape once it is switched on.
      */
     void setUpActions()
     {
@@ -150,9 +187,11 @@ public:
 
         QObject::connect(overview, &StorageDialog::message, q_ptr, &App::showMessage);
 
+        QObject::connect(ui->appResetLayoutAction, &QAction::triggered, q_ptr, [this] {
+            resetDockLayout();
+        });
+
         ui->appFetchTransactionsAction->setEnabled(false);
-        ui->appAccountsViewAction->setEnabled(false);
-        ui->appResetLayoutAction->setEnabled(false);
 
         ui->appToolBar->addAction(ui->appSetupAssistantAction);
         ui->appToolBar->addAction(ui->appFetchTransactionsAction);
@@ -182,6 +221,21 @@ public:
         ui->appToolBar->setVisible(storageIsOpen);
         ui->appCloseStorageAction->setEnabled(storageIsOpen);
         ui->appSetupAssistantAction->setEnabled(storageIsOpen);
+
+        // The areas only stand on the second page, so there is nothing to put
+        // back on the first.
+        ui->appResetLayoutAction->setEnabled(storageIsOpen);
+
+        // Held back from the start until the areas are on screen, and said once.
+        // Repeating it every time a storage is opened would nag about something
+        // that was over with the first arrangement that got saved.
+        if (storageIsOpen && dockLayoutFellBack) {
+            dockLayoutFellBack = false;
+
+            q_ptr->statusBar()->showMessage(
+                App::tr("Your arrangement of the areas could not be restored. The standard "
+                        "arrangement is in place, and there is nothing you need to do."));
+        }
     }
 
     /**
@@ -241,6 +295,149 @@ public:
         });
     }
 
+    /**
+     * Builds the two dock areas of the second page.
+     *
+     * The manager gets the page as its parent and not the window. With a
+     * QMainWindow as parent it makes itself the central widget, and that would
+     * push out the stack which carries the overview on its first page.
+     *
+     * Two things about the order. The configuration flags are static and only
+     * reach a manager that is built after them. And a central area has to be the
+     * first area the manager is given; the library refuses it once another one
+     * stands.
+     *
+     * The log area of the earlier draft is not built here. It belongs to a later
+     * epic, and an area that shows nothing would take room from the two that do.
+     */
+    void setUpDockAreas()
+    {
+        CDockManager::setConfigFlags(CDockManager::DefaultBaseConfig);
+        CDockManager::setConfigFlag(CDockManager::OpaqueSplitterResize, true);
+        CDockManager::setConfigFlag(CDockManager::XmlCompressionEnabled, false);
+        CDockManager::setConfigFlag(CDockManager::FocusHighlighting, true);
+        CDockManager::setConfigFlag(CDockManager::DockAreaHasCloseButton, false);
+        CDockManager::setConfigFlag(CDockManager::MiddleMouseButtonClosesTab, false);
+        CDockManager::setConfigFlag(CDockManager::AllTabsHaveCloseButton, false);
+        CDockManager::setConfigFlag(CDockManager::DockAreaHideDisabledButtons, true);
+
+        auto *const page = ui->appCentralWidget->bankingPage();
+        dockManager = new CDockManager(page);
+
+        centralDockWidget = new CDockWidget(dockManager, App::tr("Transactions"));
+        centralDockWidget->setObjectName(TransactionDockName);
+        centralDockWidget->setWidget(ui->appCentralWidget->transactionPanel());
+
+        auto *const centralArea = dockManager->setCentralWidget(centralDockWidget);
+        centralArea->setAllowedAreas(OuterDockAreas);
+
+        // Dragging an area is a matter for the mouse; the library offers no key
+        // for it. It stays a convenience: every function of the window is
+        // reachable without it, and whoever loses his way in a layout gets the
+        // grouping back through the menu.
+        accountDockWidget = new CDockWidget(dockManager, App::tr("Accounts"));
+        accountDockWidget->setObjectName(AccountDockName);
+        accountDockWidget->setFeature(CDockWidget::DockWidgetClosable, false);
+        accountDockWidget->setFeature(CDockWidget::DockWidgetFloatable, false);
+        accountDockWidget->setWidget(ui->appCentralWidget->accountPanel(),
+                                     CDockWidget::ForceNoScrollArea);
+
+        dockManager->addDockWidget(LeftDockWidgetArea, accountDockWidget, centralArea);
+
+        // Last, because taking the two panels over emptied the layout of the
+        // page. Handing the manager over before that would have put it beside
+        // the very widgets it has just taken.
+        page->layout()->addWidget(dockManager);
+
+        // What the user gets back when he asks for the grouping again. Taken
+        // here, so that the way to it is the arrangement just built and not a
+        // second description of it that could drift away.
+        defaultDockLayout = dockManager->saveState(DockLayoutVersion);
+    }
+
+    /**
+     * Puts the accounts side back where a restore may have taken it from.
+     *
+     * The feature that marks an area as not closable takes the close button on
+     * its tab and nothing besides. A restore applies the saved open state
+     * without asking the area about it, and an area the saved state does not
+     * know at all is closed and taken out of its dock area. Both count as a
+     * successful restore, so falling back to the default arrangement never
+     * catches them, and without the accounts there is nothing left to choose an
+     * account with.
+     */
+    void ensureAccountsVisible()
+    {
+        if (accountDockWidget == nullptr) {
+            return;
+        }
+
+        if (accountDockWidget->dockAreaWidget() == nullptr) {
+            dockManager->addDockWidget(LeftDockWidgetArea,
+                                       accountDockWidget,
+                                       centralDockWidget->dockAreaWidget());
+        }
+
+        if (accountDockWidget->isClosed()) {
+            accountDockWidget->toggleView(true);
+        }
+    }
+
+    void saveDockLayout() const
+    {
+        if (dockManager == nullptr) {
+            return;
+        }
+
+        storage->storeSetting(DockLayoutKey, dockManager->saveState(DockLayoutVersion), WindowGroup);
+    }
+
+    /**
+     * Brings the arrangement of the last run back, or leaves the default one.
+     *
+     * Whether a saved arrangement still fits is what the restore answers; there
+     * is no check of our own beside it. It refuses an empty or unreadable state,
+     * one from a format or a version it does not know, and one that misses an
+     * area the window carries, and it tries the whole state before it changes
+     * anything, so nothing is ever applied in halves.
+     */
+    void restoreDockLayout()
+    {
+        const QByteArray state = storage->setting(DockLayoutKey, WindowGroup, QByteArray())
+                                     .toByteArray();
+
+        if (state.isEmpty()) {
+            return;
+        }
+
+        if (!dockManager->restoreState(state, DockLayoutVersion)) {
+            qCWarning(lcUi) << "the saved dock layout was refused, the default one stands";
+
+            // Told, not shown. The window opens on the overview, and a word about
+            // areas the user cannot see yet would be cleared by the very step that
+            // brings them up.
+            dockLayoutFellBack = true;
+        }
+
+        ensureAccountsVisible();
+    }
+
+    /**
+     * Puts the grouping back the way the window opens with it.
+     *
+     * The way out of an arrangement the user can no longer undo. Falling back to
+     * the default only catches a state the restore refuses, and an arrangement
+     * can be perfectly valid and still leave him stuck. Saved right away, so that
+     * the next start does not hand him back what he has just left.
+     */
+    void resetDockLayout()
+    {
+        dockManager->restoreState(defaultDockLayout, DockLayoutVersion);
+
+        ensureAccountsVisible();
+        saveDockLayout();
+    }
+
     void initialize()
     {
         ui->appCentralWidget->initialize(q_ptr);
@@ -259,58 +456,12 @@ public:
         overview->initialize(q_ptr);
 
         setUpActions();
+        setUpDockAreas();
         applyPage(AppCentralWidget::Page::Storages);
 
-        // Kept on purpose as the reference for the pending docking rework. The
-        // accounts sit on the second page of the central area until it is done,
-        // and taking the view out of that page here would leave the page empty.
-        /*CDockManager::setConfigFlags(CDockManager::DefaultBaseConfig);
-        CDockManager::setConfigFlag(CDockManager::OpaqueSplitterResize, true);
-        CDockManager::setConfigFlag(CDockManager::XmlCompressionEnabled, false);
-        CDockManager::setConfigFlag(CDockManager::FocusHighlighting, true);
-        CDockManager::setConfigFlag(CDockManager::DockAreaHasCloseButton, false);
-        CDockManager::setConfigFlag(CDockManager::MiddleMouseButtonClosesTab, false);
-        CDockManager::setConfigFlag(CDockManager::AllTabsHaveCloseButton, false);
-        CDockManager::setConfigFlag(CDockManager::DockAreaHideDisabledButtons, true);
-
-        CDockManager::setAutoHideConfigFlags(CDockManager::DefaultAutoHideConfig);
-        CDockManager::setAutoHideConfigFlag(CDockManager::AutoHideShowOnMouseOver, true);
-
-        dockManager = new CDockManager(q_ptr);
-
-        centralDockWidget = new CDockWidget("centralDockWidget", q_ptr);
-        centralDockWidget->setWidget(ui->appCentralWidget);
-
-        auto centralWidgetArea = dockManager->setCentralWidget(centralDockWidget);
-        centralWidgetArea->setAllowedAreas(OuterDockAreas);
-
-        auto w = new QPlainTextEdit();
-        w->setPlaceholderText("Log entries ...");
-        w->setReadOnly(true);
-
-        auto logDockWidget = new CDockWidget("Logs");
-        logDockWidget->setFeature(CDockWidget::DockWidgetClosable, false);
-        logDockWidget->setFeature(CDockWidget::DockWidgetFloatable, false);
-        logDockWidget->setWidget(w);
-        logDockWidget->setMinimumSizeHintMode(CDockWidget::MinimumSizeHintFromDockWidget);
-
-        logWidgetContainer = dockManager->addAutoHideDockWidget(SideBarBottom, logDockWidget);
-
-        auto accountDockWidget = new CDockWidget("Accounts");
-        accountDockWidget->setFeature(CDockWidget::DockWidgetClosable, false);
-        accountDockWidget->setFeature(CDockWidget::DockWidgetFloatable, false);
-
-        auto aw = ui->appCentralWidget->accountWidget();
-        aw->setHeaderHidden(true);
-        aw->setFrameShape(QFrame::NoFrame);
-
-        accountDockWidget->setWidget(aw, CDockWidget::ForceNoScrollArea);
-        accountDockWidget->setSizePolicy(aw->sizePolicy());
-        accountDockWidget->setMinimumSizeHintMode(
-            CDockWidget::MinimumSizeHintFromContentMinimumSize);
-        accountDockWidget->setMaximumSize(aw->maximumSize());
-
-        dockManager->addDockWidget(LeftDockWidgetArea, accountDockWidget, centralWidgetArea);*/
+        // After the areas stand. There is nothing to restore an arrangement onto
+        // before that.
+        restoreDockLayout();
     }
 
     Logger *logger;
@@ -319,9 +470,14 @@ public:
     TransactionTableModel *transactionTableModel;
     Ui::UiApp *ui;
 
+    // Owned by the second page through the widget hierarchy. The two areas are
+    // owned by the manager once they are docked; they are kept here because the
+    // restore of a saved layout has to reach the accounts side again.
     CDockManager *dockManager;
     CDockWidget *centralDockWidget;
-    CAutoHideDockContainer *logWidgetContainer;
+    CDockWidget *accountDockWidget;
+    QByteArray defaultDockLayout;
+    bool dockLayoutFellBack = false;
 
     // The first page of the central area. Owned by the window through the widget
     // hierarchy; kept here because the menu reaches into it.
@@ -343,15 +499,12 @@ App::~App()
 
 void App::initialize()
 {
-    const QPoint pos = d_ptr->storage
-                           ->setting(QStringLiteral("Position"), QStringLiteral("App"), QPoint())
-                           .toPoint();
+    const QPoint pos = d_ptr->storage->setting(PositionKey, WindowGroup, QPoint()).toPoint();
     if (!pos.isNull()) {
         move(pos);
     }
 
-    const QSize size
-        = d_ptr->storage->setting(QStringLiteral("Size"), QStringLiteral("App"), QSize()).toSize();
+    const QSize size = d_ptr->storage->setting(SizeKey, WindowGroup, QSize()).toSize();
     if (!size.isNull() && size.isValid()) {
         resize(size);
     }
@@ -443,12 +596,12 @@ bool App::event(QEvent *event)
 
 void App::moveEvent(QMoveEvent *event)
 {
-    d_ptr->storage->storeSetting(QStringLiteral("Position"), event->pos(), QStringLiteral("App"));
+    d_ptr->storage->storeSetting(PositionKey, event->pos(), WindowGroup);
     QMainWindow::moveEvent(event);
 }
 
 void App::resizeEvent(QResizeEvent *event)
 {
-    d_ptr->storage->storeSetting(QStringLiteral("Size"), event->size(), QStringLiteral("App"));
+    d_ptr->storage->storeSetting(SizeKey, event->size(), WindowGroup);
     QMainWindow::resizeEvent(event);
 }

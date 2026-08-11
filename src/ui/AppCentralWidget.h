@@ -107,6 +107,36 @@ public:
     [[nodiscard]] QTreeView *accountWidget() const;
 
     /**
+     * @brief The second page, the one that carries the dock areas.
+     *
+     * The dock manager is built by the window and needs a parent that is not the
+     * window itself: a dock manager whose parent is a QMainWindow makes itself
+     * the central widget and would push out the stack that holds both pages.
+     *
+     * @return The page. Its layout is empty once the two panels below have been
+     *  taken over by dock widgets.
+     */
+    [[nodiscard]] QWidget *bankingPage() const;
+
+    /**
+     * @brief Everything the accounts side shows: the tree and its notice.
+     *
+     * Not the tree alone. The notice about accounts that are missing or could
+     * not be read stands in the same place, and a dock area that held only the
+     * tree would lose it.
+     *
+     * @return The panel. Never null once the widget is built.
+     */
+    [[nodiscard]] QWidget *accountPanel() const;
+
+    /**
+     * @brief Everything the transactions side shows, with its tabs.
+     *
+     * @return The panel. Never null once the widget is built.
+     */
+    [[nodiscard]] QWidget *transactionPanel() const;
+
+    /**
      * @brief Hands the accounts to the view and takes over showing the notices.
      *
      * The view keeps no records of its own, so an empty tree and a tree that was
