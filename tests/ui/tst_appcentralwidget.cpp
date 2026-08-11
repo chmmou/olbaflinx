@@ -1038,9 +1038,12 @@ void AppCentralWidgetTest::theCommandsThatNeedAStorageWaitForOne()
 }
 
 /**
- * Three entries belong to stories that are not built yet. They exist so that the
+ * Two entries belong to stories that are not built yet. They exist so that the
  * menu keeps its shape once they are switched on, and they stay disabled until
  * then rather than doing nothing when pressed.
+ *
+ * A third one used to stand here and is gone: it hid the accounts side, which is
+ * part of the arrangement and not something to put away.
  */
 void AppCentralWidgetTest::theEntriesWithoutTheirStoryStayDisabled()
 {
@@ -1051,7 +1054,6 @@ void AppCentralWidgetTest::theEntriesWithoutTheirStoryStayDisabled()
     app.initialize();
 
     const auto names = QStringList{QStringLiteral("appFetchTransactionsAction"),
-                                   QStringLiteral("appAccountsViewAction"),
                                    QStringLiteral("appResetLayoutAction")};
 
     for (const auto &name : names) {

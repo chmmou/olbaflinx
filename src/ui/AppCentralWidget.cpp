@@ -438,6 +438,21 @@ QTreeView *AppCentralWidget::accountWidget() const
     return d_ptr->ui->treeViewBankingAccounts;
 }
 
+QWidget *AppCentralWidget::bankingPage() const
+{
+    return d_ptr->ui->pageBanking;
+}
+
+QWidget *AppCentralWidget::accountPanel() const
+{
+    return d_ptr->ui->stackedWidgetAccounts;
+}
+
+QWidget *AppCentralWidget::transactionPanel() const
+{
+    return d_ptr->ui->tabWidgetBanking;
+}
+
 void AppCentralWidget::setAccountModel(QAbstractItemModel *model)
 {
     d_ptr->setAccountModel(model);
