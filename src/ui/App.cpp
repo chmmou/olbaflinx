@@ -49,8 +49,8 @@ namespace {
  * translatable, so a layout saved in one language would no longer be found in
  * another. These names are set apart from the titles and never change.
  */
-constexpr auto TransactionDockName = QLatin1StringView("transactionDock");
-constexpr auto AccountDockName = QLatin1StringView("accountDock");
+const QString TransactionDockName = QStringLiteral("transactionDock");
+const QString AccountDockName = QStringLiteral("accountDock");
 
 /**
  * Where the window keeps what it remembers between two runs.
@@ -59,8 +59,10 @@ constexpr auto AccountDockName = QLatin1StringView("accountDock");
  * window, in plain settings and not in the encrypted storage: a layout is no
  * secret, and it has to be readable before any storage is opened.
  */
-constexpr auto WindowGroup = QLatin1StringView("App");
-constexpr auto DockLayoutKey = QLatin1StringView("DockLayout");
+const QString WindowGroup = QStringLiteral("App");
+const QString PositionKey = QStringLiteral("Position");
+const QString SizeKey = QStringLiteral("Size");
+const QString DockLayoutKey = QStringLiteral("DockLayout");
 
 /**
  * The number a saved arrangement carries along.
@@ -497,15 +499,12 @@ App::~App()
 
 void App::initialize()
 {
-    const QPoint pos = d_ptr->storage
-                           ->setting(QStringLiteral("Position"), QStringLiteral("App"), QPoint())
-                           .toPoint();
+    const QPoint pos = d_ptr->storage->setting(PositionKey, WindowGroup, QPoint()).toPoint();
     if (!pos.isNull()) {
         move(pos);
     }
 
-    const QSize size
-        = d_ptr->storage->setting(QStringLiteral("Size"), QStringLiteral("App"), QSize()).toSize();
+    const QSize size = d_ptr->storage->setting(SizeKey, WindowGroup, QSize()).toSize();
     if (!size.isNull() && size.isValid()) {
         resize(size);
     }
@@ -597,12 +596,12 @@ bool App::event(QEvent *event)
 
 void App::moveEvent(QMoveEvent *event)
 {
-    d_ptr->storage->storeSetting(QStringLiteral("Position"), event->pos(), QStringLiteral("App"));
+    d_ptr->storage->storeSetting(PositionKey, event->pos(), WindowGroup);
     QMainWindow::moveEvent(event);
 }
 
 void App::resizeEvent(QResizeEvent *event)
 {
-    d_ptr->storage->storeSetting(QStringLiteral("Size"), event->size(), QStringLiteral("App"));
+    d_ptr->storage->storeSetting(SizeKey, event->size(), WindowGroup);
     QMainWindow::resizeEvent(event);
 }
