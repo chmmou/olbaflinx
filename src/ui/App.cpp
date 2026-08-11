@@ -30,6 +30,9 @@
 
 #include <QtCore/QDir>
 
+#include <QtGui/QAccessible>
+#include <QtGui/QAccessibleAnnouncementEvent>
+
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QLayout>
 #include <QtWidgets/QMessageBox>
@@ -490,7 +493,19 @@ private:
 App::App(Logger *logger, Storage *storage, QWidget *parent, const Qt::WindowFlags &flags)
     : QMainWindow(parent, flags)
     , d_ptr(new Private(this, logger, storage))
-{}
+{
+    // Messages reach the bar from four places, and it swaps its text without a
+    // sound. This signal is the one point all four pass through. An empty text
+    // means the message was taken away, and there is nothing to announce.
+    connect(statusBar(), &QStatusBar::messageChanged, this, [this](const QString &message) {
+        if (message.isEmpty()) {
+            return;
+        }
+
+        QAccessibleAnnouncementEvent announcement(statusBar(), message);
+        QAccessible::updateAccessibility(&announcement);
+    });
+}
 
 App::~App()
 {

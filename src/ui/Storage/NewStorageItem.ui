@@ -55,6 +55,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnStorageMenu">
+       <property name="accessibleName">
+        <string>Storage actions</string>
+       </property>
        <property name="minimumSize">
         <size>
          <width>30</width>
@@ -98,6 +101,9 @@
      </item>
      <item>
       <widget class="QLineEdit" name="leStoragePassword">
+       <property name="accessibleName">
+        <string>Storage password</string>
+       </property>
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -117,6 +123,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnOpenStorage">
+       <property name="accessibleName">
+        <string>Open storage</string>
+       </property>
        <property name="minimumSize">
         <size>
          <width>30</width>
