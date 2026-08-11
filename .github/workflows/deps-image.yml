@@ -95,5 +95,16 @@ jobs:
             pkg-config --modversion gwenhywfar aqbanking libchipcard-client
             test -f "$(qmake6 -query QT_INSTALL_PLUGINS)/sqldrivers/libqsqlcipher.so"
             objdump -p /usr/lib/libgwengui-qt6.so | grep -q "NEEDED.*libQt6Widgets"
+
+            # The four parts the run from outside stands on. Each fails in its
+            # own way when absent: no service and the application is never
+            # seen, no screen and the bridge never loads, no window manager and
+            # a synthesised key arrives nowhere, no framework and there is
+            # nothing to drive with.
+            test -x /usr/libexec/at-spi-bus-launcher
+            test -x /usr/libexec/at-spi2-registryd
+            command -v Xvfb matchbox-window-manager gsettings
+            python3 -c "import dogtail"
+
             echo "the image carries what the test run expects"
           '

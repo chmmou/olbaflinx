@@ -71,3 +71,48 @@ jobs:
 
       - name: Test
         run: ctest --preset debug
+
+  # Kept apart from the targets above rather than hung behind them. This one
+  # starts a process, drives it through the accessibility interface and walks
+  # the whole way twice; it takes longer than they do, and a failure here says
+  # something else than a failing target does.
+  outside:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    container:
+      image: ghcr.io/${{ github.repository }}/ci-ubuntu:qt6.8.3
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7.0.1
+
+      - name: Check what the image brought
+        run: |
+          set -euxo pipefail
+
+          test "$(qmake6 -query QT_VERSION)" = "$QT_VERSION"
+
+          # The four parts this job stands on, asked for before the build so
+          # that a missing one does not look like a broken application.
+          test -x /usr/libexec/at-spi-bus-launcher
+          command -v Xvfb matchbox-window-manager gsettings
+          python3 -c "import dogtail"
+
+          echo "QT_ROOT_DIR=$(qmake6 -query QT_INSTALL_PREFIX)" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake --preset debug -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,$QT_ROOT_DIR/lib"
+
+      - name: Build the application
+        # Only the application. The test targets belong to the job above and
+        # building them here a second time would buy nothing.
+        run: cmake --build --preset debug --target OlbaFlinxApp
+
+      - name: Walk the way a user takes on a first start
+        # The platform is set to offscreen for this workflow, and the run needs
+        # xcb; it sets that for the application it starts, so the variable above
+        # is left alone.
+        run: |
+          set -euo pipefail
+          OLBAFLINX_BINARY="$PWD/cbuild/debug/src/olbaflinx" tests/system/run.sh
