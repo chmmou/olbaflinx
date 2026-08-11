@@ -86,6 +86,57 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     /**
+     * @brief Orders the whole holding of the account by one column.
+     *
+     * The order lies in the query and not above the rows that are loaded, so it
+     * reaches every transaction of the account and not only the page on screen.
+     * Like a change of account it drops what stands and starts over; a result of
+     * the previous order that arrives afterwards is discarded.
+     *
+     * @param column One of Column. Anything outside that range is ignored.
+     * @param order Ascending or descending.
+     */
+    void sort(int column, Qt::SortOrder order = Qt::AscendingOrder) override;
+
+    [[nodiscard]] Column sortColumn() const;
+    [[nodiscard]] Qt::SortOrder sortOrder() const;
+
+    /**
+     * @brief Whether there is anything left to fetch.
+     *
+     * When to ask is for the view to decide; it knows its visible area, which
+     * nothing here does. This answers only whether asking would bring anything:
+     * not while the holding is through, not while a request is running, and not
+     * after one came back with a failure.
+     */
+    [[nodiscard]] bool canFetchMore(const QModelIndex &parent) const override;
+
+    /**
+     * @brief Asks for the next page and appends it.
+     *
+     * Appends rather than replaces: a reset would take the view its position and
+     * the user his selection. The call returns before the rows arrive.
+     */
+    void fetchMore(const QModelIndex &parent) override;
+
+    /**
+     * @brief Whether the holding is loaded completely.
+     *
+     * A run that ended with a failure does not set this, however many rows it
+     * left standing. A part of the holding shown as the whole would mislead.
+     */
+    [[nodiscard]] bool atEnd() const;
+
+    /**
+     * @brief Whether a read this model asked for is still going.
+     *
+     * It tells a failure that belongs to this model from one that belongs to
+     * another reader. The storage reports every failure through the same signal
+     * and names no owner.
+     */
+    [[nodiscard]] bool isReading() const;
+
+    /**
      * @brief The storage the model reads from.
      *
      * Externally owned and has to outlive the model. Passing nullptr detaches
@@ -178,10 +229,20 @@ Q_SIGNALS:
     void totalRowsChanged(int totalRows);
 
 private:
+    /**
+     * What the view opens with, and what it returns to once no account is shown.
+     * The booking a user looks for first is the one that came in last, so the
+     * newest stands at the top until he says otherwise.
+     */
+    static constexpr Column DefaultSortColumn = DateColumn;
+    static constexpr Qt::SortOrder DefaultSortOrder = Qt::DescendingOrder;
+
     void startOver();
     void requestItems();
+    void appendItems(const olbaflinx::core::banking::BankingItems &items);
     void takeResult(const olbaflinx::core::banking::BankingItems &items);
     void takeCount(int count);
+    void takeError(olbaflinx::core::ErrorCode code);
     void setTotalRows(int totalRows);
     void runEnded();
 
@@ -191,6 +252,9 @@ private:
     quint32 m_accountId = 0;
     Filter m_filter = {};
     int m_totalRows = 0;
+
+    Column m_sortColumn = DefaultSortColumn;
+    Qt::SortOrder m_sortOrder = DefaultSortOrder;
 
     /**
      * Tells the request that is running from the one the user has since asked
@@ -202,6 +266,23 @@ private:
 
     bool m_pending = false;
     bool m_queued = false;
+
+    /**
+     * How many rows the storage has handed over, which is where the next page
+     * starts. Counted separately from the rows the model holds: a record the
+     * mapping cannot build would otherwise move the offset back and have the
+     * next page repeat what the last one brought.
+     */
+    int m_loadedRows = 0;
+
+    bool m_atEnd = false;
+
+    /**
+     * Whether the last run ended with a failure. It blocks further fetching
+     * until the account, the order or the filter changes; without that the view
+     * would ask again at once and meet the same failure.
+     */
+    bool m_failed = false;
 };
 
 } // namespace olbaflinx::ui::models

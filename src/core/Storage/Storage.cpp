@@ -155,6 +155,33 @@ QString escapedForLike(const QString &text)
     return escaped;
 }
 
+/**
+ * The column a value of the enumeration stands for. SQL binds no identifier, so
+ * a column name reaches a statement by interpolation and by nothing else; the
+ * closed enumeration is what keeps anything but these four out of it, the same
+ * way the list of known tables does for a table name.
+ *
+ * None answers with nothing. A read without a chosen column orders by the row id
+ * alone.
+ */
+QString sortColumnName(const Storage::SortColumn column)
+{
+    switch (column) {
+    case Storage::SortColumn::None:
+        break;
+    case Storage::SortColumn::Date:
+        return QStringLiteral("`date`");
+    case Storage::SortColumn::Value:
+        return QStringLiteral("`value`");
+    case Storage::SortColumn::RemoteName:
+        return QStringLiteral("remote_name");
+    case Storage::SortColumn::Purpose:
+        return QStringLiteral("purpose");
+    }
+
+    return {};
+}
+
 bool isKnownTable(const QString &table)
 {
     static const QSet<QString> knownTables = {
@@ -965,15 +992,17 @@ public:
         // of StorageConnection already carries a random number.
         const auto workerConnectionName = sourceConnectionName + QStringLiteral("_reader");
 
-        // Scoped, because removeDatabase below must not run while a QSqlQuery or
-        // a QSqlDatabase still refers to the connection. Qt warns and leaks it.
-        {
+        // Called rather than written out, so that every way out of it releases
+        // the query and the handle before removeDatabase runs below. Qt warns
+        // and leaks the connection while either still refers to it, and a plain
+        // block could not do it: a return inside one leaves the function and
+        // skips what follows the block.
+        [&] {
             QSqlDatabase database = QSqlDatabase::cloneDatabase(sourceConnectionName,
                                                                 workerConnectionName);
             if (!database.isValid() || !database.open()) {
                 fail(ErrorCode::DatabaseFailure,
                      QStringLiteral("Could not open a second connection to %1").arg(fileName));
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -981,28 +1010,39 @@ public:
             if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
                 fail(error.code(), error.message());
                 database.close();
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
-            // The table name is interpolated because SQL knows no binding for an
-            // identifier. It comes from the switch in receiveItems and has passed
-            // the list in tableColumns, which answers empty for a name it does
-            // not know. The window and the condition are bound.
-            //
             // The order by the row id is not a preference. Without it SQLite is
             // free to hand two windows back in an order of its own, and a record
-            // could then fall between them or appear in both.
-            const auto statement
-                = QStringLiteral("SELECT * FROM %1%2 ORDER BY id ASC LIMIT :limit OFFSET :offset;")
-                      .arg(table, condition.where);
+            // could then fall between them or appear in both. A chosen column
+            // stands in front of it and never in its place, because two records
+            // may well carry the same date or the same amount.
+            const auto sortName = sortColumnName(itemQuery.sort);
+            const auto orderBy = sortName.isEmpty()
+                                     ? QStringLiteral("ORDER BY id ASC")
+                                     : QStringLiteral("ORDER BY %1 %2, id ASC")
+                                           .arg(sortName,
+                                                itemQuery.order == Qt::DescendingOrder
+                                                    ? QStringLiteral("DESC")
+                                                    : QStringLiteral("ASC"));
+
+            // Three identifiers are interpolated because SQL knows no binding for
+            // one: the table, the column that is ordered by, and the direction.
+            // The table comes from the switch in receiveItems and has passed the
+            // list in tableColumns, which answers empty for a name it does not
+            // know. The other two come from sortColumnName and from a comparison
+            // against one value of Qt::SortOrder, so neither can carry anything a
+            // caller wrote. The window and the condition are bound.
+            const auto statement = QStringLiteral(
+                                       "SELECT * FROM %1%2 %3 LIMIT :limit OFFSET :offset;")
+                                       .arg(table, condition.where, orderBy);
 
             if (!query.prepare(statement)) {
                 fail(ErrorCode::DatabaseFailure,
                      QStringLiteral("Could not prepare the read of %1: %2")
                          .arg(table, query.lastError().text()));
                 database.close();
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -1018,7 +1058,6 @@ public:
                      QStringLiteral("Could not read the table %1: %2")
                          .arg(table, query.lastError().text()));
                 database.close();
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -1105,7 +1144,7 @@ public:
             }
 
             database.close();
-        }
+        }();
 
         QSqlDatabase::removeDatabase(workerConnectionName);
     }

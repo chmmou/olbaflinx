@@ -69,6 +69,37 @@ public:
     }
 
     /**
+     * Runs one statement against a storage file, past Storage, and says whether
+     * it went through. For statements that answer with no row: a schema change,
+     * a delete. storageScalar cannot serve there, it counts a missing row as a
+     * failure.
+     */
+    static bool runStatement(const QString &file, const QString &key, const QString &statement)
+    {
+        auto executed = false;
+        const auto connectionName = QStringLiteral("TestHelpersStatement");
+
+        {
+            auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"), connectionName);
+            database.setDatabaseName(file);
+
+            if (database.open()) {
+                auto quotedKey = key;
+                quotedKey.replace(QLatin1Char('\''), QLatin1StringView("''"));
+
+                QSqlQuery query(database);
+                executed = query.exec(QStringLiteral("PRAGMA key='%1';").arg(quotedKey))
+                           && query.exec(statement);
+
+                database.close();
+            }
+        }
+        QSqlDatabase::removeDatabase(connectionName);
+
+        return executed;
+    }
+
+    /**
      * Puts transactions into a storage past Storage, hung on the identifier the
      * institution assigns. This epic fetches none from a bank, so whoever reads
      * them has to write them first.
@@ -92,6 +123,56 @@ public:
                                  .arg(uniqueAccountId)
                                  .arg(count)
                                  .arg(purpose))
+            .isValid();
+    }
+
+    /**
+     * Puts transactions that carry a date, an amount and a counterparty, each of
+     * them one step apart from the record before it.
+     *
+     * putTransactions writes none of the three, so a read over it has no expected
+     * order in any column but the purpose. Ordering by a column needs values that
+     * differ, and it needs them to differ the same way in every column, so that
+     * one answer is right for all four.
+     *
+     * The rows go in even numbers first and odd numbers after, so that the order
+     * of the row ids is neither the order of the values nor its reverse. Written
+     * in the plain order, a read that ignores the chosen column and falls back on
+     * the row id would answer exactly as one that honours it, and a test over it
+     * would pass against an implementation that does not order at all.
+     *
+     * Each record carries its amount as its unique_id as well, so that a run over
+     * several pages can be checked by the set of identifiers it delivered.
+     *
+     * @param firstDate The day of the record that carries the smallest amount, in
+     *  ISO form. Every further record moves dayStep days on, so a span that
+     *  crosses a month or a year is a matter of choosing the day.
+     * @param dayStep Days between two records. Zero puts every one of them on the
+     *  same day, which is what leaves the order to the second criterion alone.
+     */
+    static bool putOrderedTransactions(const QString &file,
+                                       const QString &key,
+                                       quint32 uniqueAccountId,
+                                       int count,
+                                       const QString &firstDate = QStringLiteral("2026-01-01"),
+                                       int dayStep = 1)
+    {
+        return storageScalar(file,
+                             key,
+                             QStringLiteral(
+                                 "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM "
+                                 "seq WHERE n < %2) INSERT INTO transactions (account_id, "
+                                 "unique_account_id, unique_id, purpose, remote_name, `date`, "
+                                 "`value`) "
+                                 "SELECT 1, %1, v, 'Buchung ' || v, 'Partner ' || v, "
+                                 "date('%3', '+' || ((v - 1) * %4) || ' days'), v * 1.0 FROM "
+                                 "(SELECT CASE WHEN n <= %2 / 2 THEN n * 2 "
+                                 "ELSE (n - %2 / 2) * 2 - 1 END AS v FROM seq) "
+                                 "RETURNING unique_account_id;")
+                                 .arg(uniqueAccountId)
+                                 .arg(count)
+                                 .arg(firstDate)
+                                 .arg(dayStep))
             .isValid();
     }
 

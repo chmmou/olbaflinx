@@ -25,6 +25,8 @@ using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::transaction;
 using namespace olbaflinx::core::storage;
 
+using olbaflinx::core::ErrorCode;
+
 namespace {
 
 /**
@@ -32,6 +34,38 @@ namespace {
  * carries two, and a value that lost them would round a payment.
  */
 constexpr int AmountDecimals = 2;
+
+/**
+ * How many rows one page holds. It is the view that pages, so the number stands
+ * here and not in the storage: the default of an ItemQuery stays where it is, so
+ * that another caller is not moved by this choice.
+ *
+ * A hundred rows fill more than a window at any size a desktop offers, so the
+ * view has rows in hand before the user reaches the end of what he sees. It is
+ * well below the thousand a single read may ask for at most.
+ */
+constexpr int PageSize = 100;
+
+/**
+ * The column of the storage a column of the view orders by. Two enumerations
+ * rather than one, because the view may drop a column or move it without the
+ * storage learning of it.
+ */
+Storage::SortColumn sortColumnOf(const TransactionTableModel::Column column)
+{
+    switch (column) {
+    case TransactionTableModel::DateColumn:
+        return Storage::SortColumn::Date;
+    case TransactionTableModel::RemoteNameColumn:
+        return Storage::SortColumn::RemoteName;
+    case TransactionTableModel::PurposeColumn:
+        return Storage::SortColumn::Purpose;
+    case TransactionTableModel::ValueColumn:
+        return Storage::SortColumn::Value;
+    }
+
+    return Storage::SortColumn::None;
+}
 
 } // namespace
 
@@ -174,6 +208,13 @@ void TransactionTableModel::setStorage(Storage *storage)
 
     connect(m_storage, &Storage::itemsCounted, this, [this](int count) { takeCount(count); });
 
+    // An end and a failure reach the model through this one signal, told apart
+    // by their code alone. Without listening to it the model would see both as
+    // the same event, namely the finished below.
+    connect(m_storage, &Storage::errorOccurred, this, [this](ErrorCode code, const QString &) {
+        takeError(code);
+    });
+
     // finished arrives on every path, after a failure as well. It is what frees
     // the storage for the next read, so it is what a waiting request waits for.
     connect(m_storage, &Storage::finished, this, [this] { runEnded(); });
@@ -186,7 +227,75 @@ void TransactionTableModel::setAccountId(quint32 accountId)
     }
 
     m_accountId = accountId;
+
+    // Giving up the account is how the window says that the storage was closed.
+    // The order belongs to the storage it was chosen in: it outlives a change of
+    // account, it does not outlive the file.
+    if (m_accountId == 0) {
+        m_sortColumn = DefaultSortColumn;
+        m_sortOrder = DefaultSortOrder;
+    }
+
     startOver();
+}
+
+void TransactionTableModel::sort(int column, Qt::SortOrder order)
+{
+    if (column < 0 || column >= ColumnCount) {
+        return;
+    }
+
+    const auto sortColumn = static_cast<Column>(column);
+    if (m_sortColumn == sortColumn && m_sortOrder == order) {
+        return;
+    }
+
+    m_sortColumn = sortColumn;
+    m_sortOrder = order;
+
+    startOver();
+}
+
+TransactionTableModel::Column TransactionTableModel::sortColumn() const
+{
+    return m_sortColumn;
+}
+
+Qt::SortOrder TransactionTableModel::sortOrder() const
+{
+    return m_sortOrder;
+}
+
+bool TransactionTableModel::canFetchMore(const QModelIndex &parent) const
+{
+    if (parent.isValid()) {
+        return false;
+    }
+
+    if (m_storage == nullptr || m_accountId == 0) {
+        return false;
+    }
+
+    return !m_atEnd && !m_pending && !m_failed;
+}
+
+void TransactionTableModel::fetchMore(const QModelIndex &parent)
+{
+    if (!canFetchMore(parent)) {
+        return;
+    }
+
+    requestItems();
+}
+
+bool TransactionTableModel::atEnd() const
+{
+    return m_atEnd;
+}
+
+bool TransactionTableModel::isReading() const
+{
+    return m_pending;
 }
 
 quint32 TransactionTableModel::accountId() const
@@ -215,8 +324,8 @@ int TransactionTableModel::totalRows() const
 }
 
 /**
- * What the account and the filter have in common: both make a running request
- * stale, both drop what is on screen, and both ask again from the top.
+ * What the account, the order and the filter have in common: each of them makes
+ * a running request stale, drops what is on screen, and asks again from the top.
  */
 void TransactionTableModel::startOver()
 {
@@ -224,6 +333,15 @@ void TransactionTableModel::startOver()
 
     setItems({});
     setTotalRows(0);
+
+    m_loadedRows = 0;
+    m_atEnd = false;
+
+    // The block a failure put on the fetching is lifted here, and here alone.
+    // Each of the three changes that lead through this function is the user
+    // asking for something else, which is reason enough to try again.
+    m_failed = false;
+
     requestItems();
 }
 
@@ -244,10 +362,41 @@ void TransactionTableModel::requestItems()
 
     m_storage->receiveItems({.type = Storage::StorageTransaction,
                              .accountId = m_accountId,
+                             .sort = sortColumnOf(m_sortColumn),
+                             .order = m_sortOrder,
+                             .offset = m_loadedRows,
+                             .limit = PageSize,
                              .text = m_filter.text,
                              .from = m_filter.from,
                              .to = m_filter.to,
                              .direction = m_filter.direction});
+}
+
+/**
+ * Adds a page to what stands. A reset would be the shorter way and the wrong
+ * one: it takes the view its position and the user his selection, and both are
+ * his and not the model's to give up while he is scrolling.
+ */
+void TransactionTableModel::appendItems(const BankingItems &items)
+{
+    auto transactions = QList<std::shared_ptr<Transaction>>();
+    transactions.reserve(items.size());
+
+    for (const auto &item : items) {
+        if (auto transaction = std::dynamic_pointer_cast<Transaction>(item)) {
+            transactions.append(std::move(transaction));
+        }
+    }
+
+    if (transactions.isEmpty()) {
+        return;
+    }
+
+    const int first = static_cast<int>(m_transactions.size());
+
+    beginInsertRows({}, first, first + static_cast<int>(transactions.size()) - 1);
+    m_transactions.append(transactions);
+    endInsertRows();
 }
 
 void TransactionTableModel::takeResult(const BankingItems &items)
@@ -259,7 +408,37 @@ void TransactionTableModel::takeResult(const BankingItems &items)
         return;
     }
 
-    setItems(items);
+    appendItems(items);
+
+    m_loadedRows += static_cast<int>(items.size());
+
+    // The holding is through as soon as as many rows stand as the storage
+    // counted. That costs no request of its own: the number travels with every
+    // result anyway, and an account of exactly one full page is done with that
+    // page.
+    //
+    // A page that came back short is the second way there, and it is needed:
+    // a run whose count failed reports no number, and then the first way has
+    // nothing to compare against.
+    if ((m_totalRows > 0 && m_loadedRows >= m_totalRows) || items.size() < PageSize) {
+        m_atEnd = true;
+    }
+}
+
+void TransactionTableModel::takeError(ErrorCode code)
+{
+    if (!m_pending || m_requestGeneration != m_generation) {
+        return;
+    }
+
+    // A read that found no record is not a failure. It is the end of the
+    // holding, and the rows that stand stay where they are.
+    if (code == ErrorCode::NotFound) {
+        m_atEnd = true;
+        return;
+    }
+
+    m_failed = true;
 }
 
 void TransactionTableModel::takeCount(int count)
