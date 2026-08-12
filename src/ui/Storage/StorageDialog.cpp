@@ -190,9 +190,6 @@ public:
 
         storageContentsLayout = new QVBoxLayout(scrollAreaStorageContents);
 
-        scrollAreaSpacerTop = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
-        scrollAreaSpacerBottom = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
-
         createStorageInfoLabel();
 
         // Runs last, when every widget it sizes exists.
@@ -232,6 +229,7 @@ public:
             addStorageItem(QFileInfo(file).baseName(), file);
         }
 
+        scrollAreaSpacerBottom = verticalSpacer();
         storageContentsLayout->addItem(scrollAreaSpacerBottom);
         storageContentsLayout->update();
     }
@@ -528,8 +526,23 @@ private:
         storageContentsLayout->addWidget(storageItem);
     }
 
+    /**
+     * A spacer for the two ends of the overview.
+     *
+     * The caller hands it to the layout right away. A QSpacerItem carries no
+     * parent, and QLayout::addItem takes over what it is given, so the layout is
+     * the only owner there ever is; one that never reaches it is lost.
+     */
+    static QSpacerItem *verticalSpacer()
+    {
+        return new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
+    }
+
     void addStorageInfo()
     {
+        scrollAreaSpacerTop = verticalSpacer();
+        scrollAreaSpacerBottom = verticalSpacer();
+
         storageContentsLayout->addItem(scrollAreaSpacerTop);
         storageContentsLayout->addWidget(storageInfoLabel);
         storageContentsLayout->addItem(scrollAreaSpacerBottom);
@@ -540,15 +553,21 @@ private:
 
     void removeStorageInfo()
     {
-        int indexOf = storageContentsLayout->indexOf(scrollAreaSpacerTop);
-        if (indexOf >= 0) {
-            auto item = storageContentsLayout->takeAt(indexOf);
-            delete item;
+        // Taking an item out of a layout gives its ownership back, and for a
+        // spacer there is nobody to give it to. The two fields therefore hold a
+        // spacer only as long as the layout holds it, and the next one is built
+        // where it goes in. Both used to be rebuilt right here, and a rebuilt
+        // spacer that the layout never got again was never freed.
+        if (scrollAreaSpacerTop != nullptr) {
+            const int indexOf = storageContentsLayout->indexOf(scrollAreaSpacerTop);
+            if (indexOf >= 0) {
+                delete storageContentsLayout->takeAt(indexOf);
+            }
 
-            scrollAreaSpacerTop = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
+            scrollAreaSpacerTop = nullptr;
         }
 
-        indexOf = storageContentsLayout->indexOf(storageInfoLabel);
+        const int indexOf = storageContentsLayout->indexOf(storageInfoLabel);
         if (indexOf >= 0) {
             auto item = storageContentsLayout->takeAt(indexOf);
             delete item->widget();
@@ -558,15 +577,13 @@ private:
             createStorageInfoLabel();
         }
 
-        indexOf = storageContentsLayout->indexOf(scrollAreaSpacerBottom);
-        if (indexOf >= 0) {
-            auto item = storageContentsLayout->takeAt(indexOf);
-            delete item;
+        if (scrollAreaSpacerBottom != nullptr) {
+            const int indexOfBottom = storageContentsLayout->indexOf(scrollAreaSpacerBottom);
+            if (indexOfBottom >= 0) {
+                delete storageContentsLayout->takeAt(indexOfBottom);
+            }
 
-            scrollAreaSpacerBottom = new QSpacerItem(1,
-                                                     1,
-                                                     QSizePolicy::Fixed,
-                                                     QSizePolicy::Expanding);
+            scrollAreaSpacerBottom = nullptr;
         }
 
         storageContentsLayout->update();
