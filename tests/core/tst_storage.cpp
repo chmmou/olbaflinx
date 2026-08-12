@@ -188,6 +188,7 @@ private Q_SLOTS:
     void storeItemsReturnsBeforeTheAccountsAreWritten();
     void storeItemsSignalsArriveInOrderAndInTheCallingThread();
     void storeItemsRefusesASecondRunWhileOneIsGoing();
+    void manyWritesLeaveNoConnectionBehind();
 };
 
 void StorageTest::initTestCase()
@@ -1382,6 +1383,36 @@ void StorageTest::storeItemsRefusesASecondRunWhileOneIsGoing()
     // The first run is unaffected and still delivers.
     QVERIFY(storedSpy.wait(workerTimeout));
     QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
+
+    storage.close();
+}
+
+/**
+ * A write runs on a second connection of its own and unregisters it at the end.
+ * Twenty runs therefore leave as many connections behind as none do. The read
+ * path is held by the same kind of check.
+ */
+void StorageTest::manyWritesLeaveNoConnectionBehind()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto connectionsWithoutAWrite = QSqlDatabase::connectionNames().size();
+
+    for (int i = 0; i < 20; ++i) {
+        QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+
+        auto accounts = BankingItems();
+        accounts << TestHelpers::createFakeAccount();
+
+        storage.storeItems(accounts);
+        QVERIFY(storedSpy.wait(workerTimeout));
+    }
+
+    QCOMPARE(QSqlDatabase::connectionNames().size(), connectionsWithoutAWrite);
 
     storage.close();
 }
