@@ -68,7 +68,6 @@ private Q_SLOTS:
     void showPasswordChangeDialog();
     void deleteStorage();
     void backupStorage();
-    void aboutStorage();
 
 private:
     class Private;
