@@ -1280,9 +1280,13 @@ public:
 
         int stored = 0;
 
-        // Scoped, because removeDatabase below must not run while a QSqlQuery or
-        // a QSqlDatabase still refers to the connection. Qt warns and leaks it.
-        {
+        // Called rather than written out, so that every way out of it releases
+        // the handle before removeDatabase runs below. Qt warns and leaks the
+        // connection while anything still refers to it, and a plain block could
+        // not do it: a return inside one leaves the whole function and skips
+        // what follows the block. That is what happened here on the way out that
+        // finds no second connection. The read path is built the same way.
+        [&] {
             QSqlDatabase database = QSqlDatabase::cloneDatabase(sourceConnectionName,
                                                                 workerConnectionName);
             if (!database.isValid() || !database.open()) {
@@ -1291,7 +1295,6 @@ public:
                                 Error(ErrorCode::DatabaseFailure,
                                       QStringLiteral("Could not open a second connection to %1")
                                           .arg(fileName))});
-                QSqlDatabase::removeDatabase(workerConnectionName);
                 return;
             }
 
@@ -1312,7 +1315,7 @@ public:
             promise.addResult(WriteResult{stored, error});
 
             database.close();
-        }
+        }();
 
         QSqlDatabase::removeDatabase(workerConnectionName);
     }
