@@ -132,7 +132,12 @@ void NewStorageItem::showMenu()
 {
     auto itemMenu = new QMenu(this);
 
-    itemMenu->addAction(tr("Information"), this, &NewStorageItem::aboutStorage);
+    // The command is not built yet. It stays in the menu and says so through its
+    // state, rather than being dropped: a tool can then tell the user that there
+    // is such an entry and that it does not act. A missing entry tells nobody
+    // anything, and a working one would have to be written first.
+    itemMenu->addAction(tr("Information"))->setEnabled(false);
+
     itemMenu->addAction(tr("Passwort ändern"), this, &NewStorageItem::showPasswordChangeDialog);
     itemMenu->addSeparator();
     itemMenu->addAction(tr("Sicherungen"), this, &NewStorageItem::backupStorage);
@@ -183,10 +188,21 @@ void NewStorageItem::showPasswordChangeDialog()
 
     form.addItem(new QSpacerItem(1, 12, QSizePolicy::Minimum, QSizePolicy::Fixed));
 
+    // Both fields carry a pass phrase of the storage. Password mode is what keeps
+    // it off the screen and out of the accessibility interface, which hands out
+    // the masked text and reports a field that holds a secret. Without it a
+    // reading aid speaks the phrase out loud.
+    //
+    // The names are what a run from outside holds the fields by; a dialog built
+    // in code carries none unless it is given one.
     QPointer<QLineEdit> currPasswordField = new QLineEdit(&pwdChangeDlg);
+    currPasswordField->setObjectName(QStringLiteral("lineEditCurrentPassword"));
+    currPasswordField->setEchoMode(QLineEdit::Password);
     form.addRow(tr("Current Password"), currPasswordField);
 
     QPointer<QLineEdit> newPasswordField = new QLineEdit(&pwdChangeDlg);
+    newPasswordField->setObjectName(QStringLiteral("lineEditNewPassword"));
+    newPasswordField->setEchoMode(QLineEdit::Password);
     form.addRow(tr("New Password"), newPasswordField);
 
     QDialogButtonBox pwdChangeDlgBtns(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
@@ -282,6 +298,10 @@ void NewStorageItem::showPasswordChangeDialog()
                 pwdChangeDlg.accept();
             });
 
+    // The current pass phrase is what the user begins with. A dialog that does
+    // not say so leaves the focus wherever the build order put it.
+    currPasswordField->setFocus();
+
     pwdChangeDlg.exec();
 
     currPasswordField->deleteLater();
@@ -329,9 +349,4 @@ void NewStorageItem::backupStorage()
 
         storageFile.copy(storageBackupFile);
     }
-}
-
-void NewStorageItem::aboutStorage()
-{
-    QMessageBox::information(this, tr("Storage"), tr("Not implemented yet!"));
 }

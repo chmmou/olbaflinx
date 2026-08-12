@@ -30,12 +30,15 @@
 #include <QtGui/QAccessibleInterface>
 
 #include <QtWidgets/QApplication>
+#include <QtWidgets/QDialog>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
+#include <QtWidgets/QMenu>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QPushButton>
 
 #include <chrono>
+#include <functional>
 #include <memory>
 
 using namespace olbaflinx::core;
@@ -71,6 +74,62 @@ private:
             .toStringList();
     }
 
+    /**
+     * @brief Opens the password change dialog of an entry and hands it to a check.
+     * @return Whether the dialog appeared and the check ran.
+     *
+     * The dialog runs an event loop of its own, so nothing after the call gets to
+     * see it. A timer looks for the modal window instead, runs the check while it
+     * stands and closes it afterwards.
+     */
+    static bool withPasswordChangeDialog(NewStorageItem *entry,
+                                         const std::function<void(QDialog *)> &check)
+    {
+        bool checked = false;
+        bool gaveUp = false;
+
+        // A dialog that never comes would leave the call below waiting forever.
+        QTimer::singleShot(std::chrono::seconds(5), entry, [&gaveUp] { gaveUp = true; });
+
+        QTimer driver;
+        driver.setInterval(0);
+
+        connect(&driver, &QTimer::timeout, entry, [&] {
+            auto *modal = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (modal == nullptr && !gaveUp) {
+                return;
+            }
+
+            driver.stop();
+
+            if (modal == nullptr) {
+                return;
+            }
+
+            if (!gaveUp) {
+                check(modal);
+                checked = true;
+            }
+
+            modal->reject();
+        });
+
+        driver.start();
+        QMetaObject::invokeMethod(entry, "showPasswordChangeDialog");
+
+        return checked;
+    }
+
+    /**
+     * @brief The single entry of an overview that holds exactly one storage.
+     * @return The entry, or null when there is not exactly one.
+     */
+    static NewStorageItem *singleEntryOf(const StorageDialog &dialog)
+    {
+        const auto entries = dialog.findChildren<NewStorageItem *>();
+        return entries.size() == 1 ? entries.first() : nullptr;
+    }
+
     std::unique_ptr<QTemporaryDir> workingDirectory;
     QByteArray previousHome;
 
@@ -90,6 +149,9 @@ private Q_SLOTS:
     void anEntryReportsItselfAsAGroupUnderItsName();
     void everyControlOfAnEntryCarriesAName_data();
     void everyControlOfAnEntryCarriesAName();
+    void bothFieldsOfThePasswordChangeDialogHideTheirContent();
+    void thePasswordChangeDialogOpensWithTheFocusOnTheCurrentPassword();
+    void theInformationEntrySaysThatItDoesNotAct();
 };
 
 void StorageDialogTest::initTestCase()
@@ -521,6 +583,135 @@ void StorageDialogTest::everyControlOfAnEntryCarriesAName()
 
     QVERIFY(!accessible->text(QAccessible::Name).isEmpty());
     QCOMPARE(accessible->role(), role);
+}
+
+/**
+ * Both fields used to show the pass phrase of the storage in clear text and to
+ * hand it out through the accessibility interface, where a reading aid speaks
+ * it. The dialog beside this one was fixed for the same reason.
+ */
+void StorageDialogTest::bothFieldsOfThePasswordChangeDialogHideTheirContent()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    auto *entry = singleEntryOf(dialog);
+    QVERIFY(entry != nullptr);
+
+    // Read out of the dialog while it stands, because it takes its fields with
+    // it when it closes.
+    QList<QLineEdit::EchoMode> modes;
+    QList<bool> reportedAsPasswordField;
+    QList<bool> handedOutTheSecret;
+
+    const QString secret = password();
+
+    QVERIFY(withPasswordChangeDialog(entry, [&](QDialog *pwdChangeDialog) {
+        for (const auto &name :
+             {QStringLiteral("lineEditCurrentPassword"), QStringLiteral("lineEditNewPassword")}) {
+            auto *field = pwdChangeDialog->findChild<QLineEdit *>(name);
+            if (field == nullptr) {
+                return;
+            }
+
+            field->setText(secret);
+            modes.append(field->echoMode());
+
+            QAccessibleInterface *accessible = QAccessible::queryAccessibleInterface(field);
+            if (accessible == nullptr) {
+                return;
+            }
+
+            reportedAsPasswordField.append(accessible->state().passwordEdit);
+            handedOutTheSecret.append(accessible->text(QAccessible::Value).contains(secret));
+        }
+    }));
+
+    QCOMPARE(modes, QList<QLineEdit::EchoMode>({QLineEdit::Password, QLineEdit::Password}));
+    QCOMPARE(reportedAsPasswordField, QList<bool>({true, true}));
+    QCOMPARE(handedOutTheSecret, QList<bool>({false, false}));
+}
+
+/**
+ * The current pass phrase is what the user begins with. The dialog is built in
+ * code, and nothing there says where the focus starts.
+ */
+void StorageDialogTest::thePasswordChangeDialogOpensWithTheFocusOnTheCurrentPassword()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    auto *entry = singleEntryOf(dialog);
+    QVERIFY(entry != nullptr);
+
+    bool focusIsOnTheCurrentPassword = false;
+
+    QVERIFY(withPasswordChangeDialog(entry, [&](QDialog *pwdChangeDialog) {
+        auto *field = pwdChangeDialog->findChild<QLineEdit *>(
+            QStringLiteral("lineEditCurrentPassword"));
+
+        focusIsOnTheCurrentPassword = field != nullptr && pwdChangeDialog->focusWidget() == field;
+    }));
+
+    QVERIFY(focusIsOnTheCurrentPassword);
+}
+
+/**
+ * The entry used to answer with "Not implemented yet!", which told a tool that
+ * the command can be invoked. It cannot, and the state is where that belongs.
+ */
+void StorageDialogTest::theInformationEntrySaysThatItDoesNotAct()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    auto *entry = singleEntryOf(dialog);
+    QVERIFY(entry != nullptr);
+
+    // The menu is built on demand and pops up without a loop of its own.
+    QMetaObject::invokeMethod(entry, "showMenu");
+
+    auto *menu = entry->findChild<QMenu *>();
+    QVERIFY(menu != nullptr);
+
+    const auto actions = menu->actions();
+    QVERIFY(!actions.isEmpty());
+
+    // An action carries no interface of its own; the menu holds one child per
+    // action, in the order they were added.
+    QAccessibleInterface *menuInterface = QAccessible::queryAccessibleInterface(menu);
+    QVERIFY(menuInterface != nullptr);
+
+    QAccessibleInterface *informationEntry = menuInterface->child(0);
+    QVERIFY(informationEntry != nullptr);
+
+    QVERIFY(!informationEntry->text(QAccessible::Name).isEmpty());
+    QVERIFY(informationEntry->state().disabled);
+
+    // The command below it acts, so the state says something.
+    QAccessibleInterface *changeEntry = menuInterface->child(1);
+    QVERIFY(changeEntry != nullptr);
+    QVERIFY(!changeEntry->state().disabled);
+
+    menu->close();
 }
 
 } // namespace olbaflinx::ui::storage::tests
