@@ -133,10 +133,6 @@ QString keyLiteral(const QString &key)
 }
 
 /**
- * The tables the storage reads from. A table name cannot be bound, so a name is
- * checked against this list before it reaches a statement.
- */
-/**
  * Escapes what LIKE reads as a pattern, so that the search text is looked for as
  * it was typed. A percent sign a user enters is a character to him, not a
  * placeholder for anything.
@@ -182,6 +178,10 @@ QString sortColumnName(const Storage::SortColumn column)
     return {};
 }
 
+/**
+ * The tables the storage reads from. A table name cannot be bound, so a name is
+ * checked against this list before it reaches a statement.
+ */
 bool isKnownTable(const QString &table)
 {
     static const QSet<QString> knownTables = {
