@@ -12,13 +12,13 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>OlbaFlinx</string>
   </property>
   <widget class="olbaflinx::ui::AppCentralWidget" name="appCentralWidget"/>
   <widget class="QStatusBar" name="appStatusBar"/>
   <widget class="QToolBar" name="appToolBar">
    <property name="windowTitle">
-    <string>toolBar</string>
+    <string>Banking commands</string>
    </property>
    <attribute name="toolBarArea">
     <enum>TopToolBarArea</enum>

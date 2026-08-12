@@ -26,6 +26,9 @@
 
 #include <QtCore/QTimer>
 
+#include <QtGui/QAccessible>
+#include <QtGui/QAccessibleInterface>
+
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
@@ -84,6 +87,9 @@ private Q_SLOTS:
     void cancellingTheConflictMessageLeavesTheDialogStanding();
     void anEntryWhoseFileIsGoneDoesNotShowUp();
     void aNameThatLeavesTheDirectoryCreatesNothing();
+    void anEntryReportsItselfAsAGroupUnderItsName();
+    void everyControlOfAnEntryCarriesAName_data();
+    void everyControlOfAnEntryCarriesAName();
 };
 
 void StorageDialogTest::initTestCase()
@@ -448,6 +454,73 @@ void StorageDialogTest::aNameThatLeavesTheDirectoryCreatesNothing()
 
     QVERIFY(storedPaths(storage).isEmpty());
     QVERIFY(!QFileInfo::exists(QStringLiteral("%1/../Privat.olbflx").arg(storage.storagePath())));
+}
+
+/**
+ * An entry is a widget of its own that draws a title, a password field and two
+ * buttons. A plain widget reports itself as a client area and carries no name,
+ * which leaves a tool with a nameless box where a storage should be.
+ */
+void StorageDialogTest::anEntryReportsItselfAsAGroupUnderItsName()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    const auto entries = dialog.findChildren<NewStorageItem *>();
+    QCOMPARE(entries.size(), 1);
+
+    QAccessibleInterface *accessible = QAccessible::queryAccessibleInterface(entries.first());
+    QVERIFY(accessible != nullptr);
+
+    QCOMPARE(accessible->role(), QAccessible::Grouping);
+    QCOMPARE(accessible->text(QAccessible::Name), QStringLiteral("Privat"));
+}
+
+/**
+ * Two of the three carry an icon and no text, and the field has no label beside
+ * it. Nothing in the form says what any of them does.
+ */
+void StorageDialogTest::everyControlOfAnEntryCarriesAName_data()
+{
+    QTest::addColumn<QString>("objectName");
+    QTest::addColumn<QAccessible::Role>("role");
+
+    QTest::newRow("menu") << QStringLiteral("btnStorageMenu") << QAccessible::Button;
+    QTest::newRow("open") << QStringLiteral("btnOpenStorage") << QAccessible::Button;
+    QTest::newRow("password") << QStringLiteral("leStoragePassword") << QAccessible::EditableText;
+}
+
+void StorageDialogTest::everyControlOfAnEntryCarriesAName()
+{
+    QFETCH(QString, objectName);
+    QFETCH(QAccessible::Role, role);
+
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    const auto entries = dialog.findChildren<NewStorageItem *>();
+    QCOMPARE(entries.size(), 1);
+
+    auto *control = entries.first()->findChild<QWidget *>(objectName);
+    QVERIFY(control != nullptr);
+
+    QAccessibleInterface *accessible = QAccessible::queryAccessibleInterface(control);
+    QVERIFY(accessible != nullptr);
+
+    QVERIFY(!accessible->text(QAccessible::Name).isEmpty());
+    QCOMPARE(accessible->role(), role);
 }
 
 } // namespace olbaflinx::ui::storage::tests

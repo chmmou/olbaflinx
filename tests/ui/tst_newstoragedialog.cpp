@@ -22,6 +22,9 @@
 
 #include <QtTest/QtTest>
 
+#include <QtGui/QAccessible>
+#include <QtGui/QAccessibleInterface>
+
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPushButton>
@@ -101,6 +104,12 @@ private Q_SLOTS:
     void aNameThatCannotBeAFileNameCannotBeConfirmed();
     void bothPasswordFieldsHideTheirContent();
     void theGuidelineIsNamedWithTheNumberTheCoreEnforces();
+    void bothPasswordFieldsKeepTheirContentFromTools();
+    void everyFieldIsReachedThroughItsLabel_data();
+    void everyFieldIsReachedThroughItsLabel();
+    void theDialogCarriesATitle();
+    void theDialogOpensWithTheFocusOnTheNameField();
+    void theFieldsFollowTheArrangementOfTheForm();
 };
 
 void NewStorageDialogTest::initTestCase()
@@ -252,6 +261,137 @@ void NewStorageDialogTest::theGuidelineIsNamedWithTheNumberTheCoreEnforces()
         QVERIFY(help->toolTip().contains(expected));
         QVERIFY(!help->toolTip().contains(QStringLiteral("%1")));
     }
+}
+
+/**
+ * Hiding the characters on screen is one thing, keeping them out of the
+ * accessibility interface is another. A tool that reads the value of the field
+ * would otherwise speak the password out loud.
+ */
+void NewStorageDialogTest::bothPasswordFieldsKeepTheirContentFromTools()
+{
+    Storage storage(applicationInfo());
+    NewStorageDialog dialog(&storage);
+
+    const QString secret = validPassword();
+    enter(dialog, QStringLiteral("Vault"), secret, secret);
+
+    for (auto *field : {passwordFieldOf(dialog), confirmFieldOf(dialog)}) {
+        QVERIFY(field != nullptr);
+
+        QAccessibleInterface *accessible = QAccessible::queryAccessibleInterface(field);
+        QVERIFY(accessible != nullptr);
+
+        QVERIFY(accessible->state().passwordEdit);
+        QVERIFY(!accessible->text(QAccessible::Value).contains(secret));
+    }
+}
+
+/**
+ * A label that sits next to a field looks like it belongs to it. Nothing carries
+ * that over to a tool but the buddy, and the name the field reports is the one
+ * the buddy holds.
+ */
+void NewStorageDialogTest::everyFieldIsReachedThroughItsLabel_data()
+{
+    QTest::addColumn<QString>("fieldName");
+    QTest::addColumn<QString>("labelName");
+
+    QTest::newRow("name") << QStringLiteral("lineEditStorageName")
+                          << QStringLiteral("labelVaultName");
+    QTest::newRow("password") << QStringLiteral("lineEditPassword")
+                              << QStringLiteral("labelPassword");
+    QTest::newRow("confirm") << QStringLiteral("lineEditPasswordConfirm")
+                             << QStringLiteral("labelPasswordConfirm");
+}
+
+void NewStorageDialogTest::everyFieldIsReachedThroughItsLabel()
+{
+    QFETCH(QString, fieldName);
+    QFETCH(QString, labelName);
+
+    Storage storage(applicationInfo());
+    NewStorageDialog dialog(&storage);
+
+    auto *field = dialog.findChild<QLineEdit *>(fieldName);
+    QVERIFY(field != nullptr);
+
+    auto *label = dialog.findChild<QLabel *>(labelName);
+    QVERIFY(label != nullptr);
+
+    QCOMPARE(label->buddy(), field);
+
+    QAccessibleInterface *accessible = QAccessible::queryAccessibleInterface(field);
+    QVERIFY(accessible != nullptr);
+    QCOMPARE(accessible->text(QAccessible::Name), label->text());
+}
+
+/**
+ * The form left the title at the word the designer puts there, and nothing
+ * replaced it. A tool announces a window by its title, and "Dialog" says
+ * nothing about which one just opened.
+ */
+void NewStorageDialogTest::theDialogCarriesATitle()
+{
+    Storage storage(applicationInfo());
+    NewStorageDialog dialog(&storage);
+
+    QVERIFY(!dialog.windowTitle().isEmpty());
+    QVERIFY(dialog.windowTitle() != QStringLiteral("Dialog"));
+}
+
+/**
+ * The name is what the user starts with. A tab order cannot say so: it orders
+ * the stops and leaves the first one to whatever the build order produced.
+ */
+void NewStorageDialogTest::theDialogOpensWithTheFocusOnTheNameField()
+{
+    Storage storage(applicationInfo());
+    NewStorageDialog dialog(&storage);
+
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+
+    QCOMPARE(dialog.focusWidget(), nameFieldOf(dialog));
+}
+
+/**
+ * The form carried a tab order of its own that put Ok in front of Cancel, while
+ * the buttons stand the other way round on the screen. The order comes from the
+ * arrangement now, and the list that said otherwise is gone.
+ */
+void NewStorageDialogTest::theFieldsFollowTheArrangementOfTheForm()
+{
+    Storage storage(applicationInfo());
+    NewStorageDialog dialog(&storage);
+
+    // Ok stands greyed out until the input can carry a storage, and a disabled
+    // button is no stop of the chain.
+    enter(dialog, QStringLiteral("Privat"), validPassword(), validPassword());
+
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+
+    const QStringList expected{QStringLiteral("lineEditStorageName"),
+                               QStringLiteral("lineEditPassword"),
+                               QStringLiteral("lineEditPasswordConfirm"),
+                               QStringLiteral("pushButtonCancel"),
+                               QStringLiteral("pushButtonOk")};
+
+    QWidget *const start = nameFieldOf(dialog);
+    QVERIFY(start != nullptr);
+
+    QStringList reached{start->objectName()};
+    for (QWidget *widget = start->nextInFocusChain(); widget != start;
+         widget = widget->nextInFocusChain()) {
+        if (widget->isEnabled() && widget->isVisible()
+            && (widget->focusPolicy() & Qt::TabFocus) == Qt::TabFocus
+            && expected.contains(widget->objectName())) {
+            reached.append(widget->objectName());
+        }
+    }
+
+    QCOMPARE(reached, expected);
 }
 
 } // namespace olbaflinx::ui::storage::tests

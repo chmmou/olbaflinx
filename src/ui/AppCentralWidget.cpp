@@ -25,6 +25,7 @@
 
 #include <QtGui/QAccessible>
 #include <QtGui/QAccessibleEvent>
+#include <QtGui/QAction>
 
 #include <QtWidgets/QBoxLayout>
 #include <QtWidgets/QComboBox>
@@ -76,9 +77,61 @@ public:
         ui->tableViewTransactions->setAccessibleName(AppCentralWidget::tr("Transactions"));
 
         setUpTransactionFilter();
+        setUpTransactionSorting();
 
         applyAccountNotice();
         applyTransactionNotice();
+    }
+
+    /**
+     * Gives the ordering a second way that does not need the mouse.
+     *
+     * The header is the only place that offers it, and a QHeaderView takes no
+     * keyboard focus, so the header itself cannot be that way. The action sits on
+     * the table instead, which does take the focus: it carries a key sequence and
+     * it stands in the menu the context key opens.
+     *
+     * It orders by the column the current cell sits in and turns the order around
+     * on a column that already carries the indicator, which is what a second
+     * click on the header does. Both ways go through the indicator, so neither
+     * can drift from the other.
+     */
+    void setUpTransactionSorting()
+    {
+        auto *const view = ui->tableViewTransactions;
+
+        auto *const sort = new QAction(AppCentralWidget::tr("&Sort By This Column"), view);
+        sort->setObjectName(QStringLiteral("actionSortTransactions"));
+        sort->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S));
+        sort->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+
+        QObject::connect(sort, &QAction::triggered, q_ptr, [this] { sortByCurrentColumn(); });
+
+        view->addAction(sort);
+        view->setContextMenuPolicy(Qt::ActionsContextMenu);
+    }
+
+    void sortByCurrentColumn() const
+    {
+        auto *const view = ui->tableViewTransactions;
+        if (view->model() == nullptr) {
+            return;
+        }
+
+        auto *const header = view->horizontalHeader();
+
+        // The ordering resets the model and the current cell goes with it, so a
+        // second press has none to read. The column that carries the indicator
+        // is the one it worked on, and taking it back up is what turns the order
+        // around.
+        const QModelIndex current = view->currentIndex();
+        const int column = current.isValid() ? current.column() : header->sortIndicatorSection();
+
+        const bool alreadyAscending = header->sortIndicatorSection() == column
+                                      && header->sortIndicatorOrder() == Qt::AscendingOrder;
+
+        header->setSortIndicator(column,
+                                 alreadyAscending ? Qt::DescendingOrder : Qt::AscendingOrder);
     }
 
     /**

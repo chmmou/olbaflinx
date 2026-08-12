@@ -44,7 +44,13 @@ public:
                             Qt::WindowFlags f = Qt::WindowFlags());
     ~NewStorageItem() override;
 
-    void setTitle(const QString &title) const;
+    /**
+     * @brief Names the entry, on screen and towards assistive tools.
+     *
+     * The entry is a group without a label of its own, so the title is what
+     * tells one apart from the next.
+     */
+    void setTitle(const QString &title);
     void setFileInfo(const QString &info) const;
     void setFilePath(const QString &filePath) const;
 

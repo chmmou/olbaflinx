@@ -30,6 +30,9 @@
 
 #include <QtCore/QDir>
 
+#include <QtGui/QAccessible>
+#include <QtGui/QAccessibleAnnouncementEvent>
+
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QLayout>
 #include <QtWidgets/QMessageBox>
@@ -225,6 +228,17 @@ public:
         // The areas only stand on the second page, so there is nothing to put
         // back on the first.
         ui->appResetLayoutAction->setEnabled(storageIsOpen);
+
+        // Where the keyboard starts on this page. The focus chain is a ring, so
+        // which of the two areas comes first is decided by where the walk
+        // begins, not by their order in the chain: without this it begins at the
+        // area the dock manager built first, and that has to be the central one
+        // because the library refuses any other as the first. The accounts stand
+        // left of the transactions and are what a user picks from, so the walk
+        // starts there and reaches the transactions next.
+        if (storageIsOpen) {
+            ui->appCentralWidget->accountWidget()->setFocus(Qt::OtherFocusReason);
+        }
 
         // Held back from the start until the areas are on screen, and said once.
         // Repeating it every time a storage is opened would nag about something
@@ -490,7 +504,19 @@ private:
 App::App(Logger *logger, Storage *storage, QWidget *parent, const Qt::WindowFlags &flags)
     : QMainWindow(parent, flags)
     , d_ptr(new Private(this, logger, storage))
-{}
+{
+    // Messages reach the bar from four places, and it swaps its text without a
+    // sound. This signal is the one point all four pass through. An empty text
+    // means the message was taken away, and there is nothing to announce.
+    connect(statusBar(), &QStatusBar::messageChanged, this, [this](const QString &message) {
+        if (message.isEmpty()) {
+            return;
+        }
+
+        QAccessibleAnnouncementEvent announcement(statusBar(), message);
+        QAccessible::updateAccessibility(&announcement);
+    });
+}
 
 App::~App()
 {

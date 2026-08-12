@@ -94,7 +94,13 @@ RUN apt-get update && apt-get install -y locales libdbus-1* nano
 RUN apt-get clean
 RUN rm -rf /var/lib/apt/lists/*
 
-RUN locale-gen en_US.UTF-8
+# The second one is not for the build. The run that drives the application from
+# outside walks its way twice, under two languages, to show that it holds an
+# element by an id no translation touches. Without a locale the C library knows,
+# Qt falls back to C and both runs speak the same language, which would prove
+# nothing. These are the two the project translates. That run lives in the
+# image beside this one, which is built on top of it and inherits both.
+RUN locale-gen en_US.UTF-8 de_DE.UTF-8
 RUN update-locale LC_ALL=en_US.UTF-8 \
     LANG=en_US.UTF-8 \
     LC_LANG=en_US.UTF-8 \

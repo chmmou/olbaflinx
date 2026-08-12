@@ -59,3 +59,35 @@ Der Treiber bindet SQLCipher ein. SQLCipher selbst steht unter einer BSD-artigen
 Verwendet wird Version 5.0.0.
 
 Die Lizenzangabe `LGPL-2.1-or-later` stammt aus den Metadaten des installierten Distributionspakets. Das Upstream-Repository nennt LGPL-2.1.
+
+## Werkzeuge des Nachweises
+
+Diese Komponenten stehen im Abbild `ci-ubuntu-selenium` und treiben die
+Anwendung beim Lauf von aussen. Sie werden weder gegen die Anwendung gelinkt
+noch mit ihr ausgeliefert, und sie sind zum Bauen nicht nötig. Erfasst sind
+sie trotzdem, denn erfasst wird jede Drittanbieterkomponente, nicht nur die
+des Bauens.
+
+| Komponente | Version im Abbild | SPDX | Bezugsquelle |
+|---|---|---|---|
+| selenium-webdriver-at-spi | Commit `d45a21e8` vom 2026-06-29 | `AGPL-3.0-or-later` und `BSD-3-Clause` | https://github.com/KDE/selenium-webdriver-at-spi |
+| at-spi2-core | 2.60.4 | `LGPL-2.0-or-later` | https://gitlab.gnome.org/GNOME/at-spi2-core |
+| Xvfb | 21.1.22 | `MIT` | https://www.x.org/ |
+| matchbox-window-manager | 1.2.3 | `GPL-2.0-only` | https://www.yoctoproject.org/software-item/matchbox/ |
+| Appium-Python-Client | 4.5.1 | `Apache-2.0` | https://pypi.org/project/Appium-Python-Client/ |
+| KF6 WindowSystem, CoreAddons | 6.24.0 | `LGPL-2.1-or-later` | https://invent.kde.org/frameworks |
+| KWayland | 6.6.4 | `LGPL-2.1-or-later` | https://invent.kde.org/plasma/kwayland |
+| KPipeWire | 6.6.4 | `LGPL-2.1-or-later` | https://invent.kde.org/plasma/kpipewire |
+
+Die Bezeichner geben wieder, was die Datei `copyright` des jeweiligen
+Distributionspakets nennt, und beim Werkzeug, was seine eigenen SPDX-Köpfe
+nennen: `run.rb` steht unter AGPL, die CMake-Dateien unter BSD.
+
+Bei matchbox-window-manager nennt die copyright-Datei "version 2 dated June,
+1991" ohne die Formel "or any later version", daher `GPL-2.0-only`. Bei Xvfb
+nennt sie die Fassung der X.Org Foundation, eine Abwandlung der MIT-Lizenz.
+
+Keine dieser Komponenten berührt die Lizenz der Anwendung. Sie werden als
+eigenständige Programme aufgerufen; kein Code von ihnen wird gebunden. Das
+gilt auch für das Werkzeug unter AGPL: es treibt die Anwendung von aussen
+über die Barrierefreiheitsschnittstelle des Betriebssystems.

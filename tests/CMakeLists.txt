@@ -77,6 +77,8 @@ olbaflinx_add_test(tst_newstoragedialog ui/tst_newstoragedialog.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_appaccessibility ui/tst_appaccessibility.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_appkeyboard ui/tst_appkeyboard.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 
 # The only test that reaches for the docking library itself. OlbaFlinxUi links
 # it privately, which carries the symbols but not the right to name its types.

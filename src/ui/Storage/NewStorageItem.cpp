@@ -25,8 +25,10 @@
 #include <QtCore/QFile>
 #include <QtCore/QPointer>
 
+#include <QtGui/QAccessible>
 #include <QtGui/QFont>
 
+#include <QtWidgets/QAccessibleWidget>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QFormLayout>
@@ -35,6 +37,47 @@
 
 using namespace olbaflinx::ui::storage;
 using namespace olbaflinx::core::storage;
+
+namespace {
+
+/**
+ * An entry holds a title, a password field and two buttons that belong
+ * together. A plain QWidget reports itself as a client area, which tells a tool
+ * nothing about that grouping, and setting a name does not change the role.
+ *
+ * It is a group and not a list item: the overview stacks the entries in a
+ * layout, there is no selection to be part of, and a list item would promise one.
+ */
+class NewStorageItemAccessible final : public QAccessibleWidget
+{
+public:
+    explicit NewStorageItemAccessible(QWidget *widget)
+        : QAccessibleWidget(widget, QAccessible::Grouping)
+    {}
+};
+
+QAccessibleInterface *accessibleFactory(const QString &className, QObject *object)
+{
+    Q_UNUSED(className)
+
+    if (auto *item = qobject_cast<NewStorageItem *>(object)) {
+        return new NewStorageItemAccessible(item);
+    }
+
+    return nullptr;
+}
+
+void installAccessibleFactory()
+{
+    static const bool installed = [] {
+        QAccessible::installFactory(&accessibleFactory);
+        return true;
+    }();
+
+    Q_UNUSED(installed)
+}
+
+} // namespace
 
 class NewStorageItem::Private
 {
@@ -55,16 +98,19 @@ public:
 NewStorageItem::NewStorageItem(Storage *storage, QWidget *parent, Qt::WindowFlags f)
     : QWidget(parent, f)
     , d_ptr(new Private(this, storage))
-{}
+{
+    installAccessibleFactory();
+}
 
 NewStorageItem::~NewStorageItem()
 {
     delete d_ptr;
 }
 
-void NewStorageItem::setTitle(const QString &title) const
+void NewStorageItem::setTitle(const QString &title)
 {
     d_ptr->ui->lblStorageTitel->setText(title);
+    setAccessibleName(title);
 }
 
 void NewStorageItem::setFileInfo(const QString &info) const
