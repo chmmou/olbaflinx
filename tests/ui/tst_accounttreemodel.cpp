@@ -167,11 +167,9 @@ void AccountTreeModelTest::threeAccountsAtTwoBanksBecomeTwoBankNodes()
     model.setItems(items);
 
     QCOMPARE(model.rowCount(), 2);
-    QCOMPARE(model.data(model.index(0, 0), Qt::DisplayRole).toString(),
-             QStringLiteral("ING-DiBa"));
+    QCOMPARE(model.data(model.index(0, 0), Qt::DisplayRole).toString(), QStringLiteral("ING-DiBa"));
     QCOMPARE(model.rowCount(model.index(0, 0)), 2);
-    QCOMPARE(model.data(model.index(1, 0), Qt::DisplayRole).toString(),
-             QStringLiteral("Postbank"));
+    QCOMPARE(model.data(model.index(1, 0), Qt::DisplayRole).toString(), QStringLiteral("Postbank"));
     QCOMPARE(model.rowCount(model.index(1, 0)), 1);
 }
 
@@ -189,8 +187,7 @@ void AccountTreeModelTest::anInactiveAccountAndItsLoneBankStayAway()
     model.setItems(items);
 
     QCOMPARE(model.rowCount(), 1);
-    QCOMPARE(model.data(model.index(0, 0), Qt::DisplayRole).toString(),
-             QStringLiteral("ING-DiBa"));
+    QCOMPARE(model.data(model.index(0, 0), Qt::DisplayRole).toString(), QStringLiteral("ING-DiBa"));
     QCOMPARE(model.rowCount(model.index(0, 0)), 1);
 }
 
@@ -221,8 +218,7 @@ void AccountTreeModelTest::banksAndAccountsFollowTheOrderOfTheLanguage()
 
     // Compared by character value "Bankhaus Nord" would come first and "Sparkonto"
     // before "Ölkonto", because the umlauts sit above every plain letter there.
-    QCOMPARE(model.data(model.index(0, 0), Qt::DisplayRole).toString(),
-             QStringLiteral("Ärztebank"));
+    QCOMPARE(model.data(model.index(0, 0), Qt::DisplayRole).toString(), QStringLiteral("Ärztebank"));
     QCOMPARE(model.data(model.index(1, 0), Qt::DisplayRole).toString(),
              QStringLiteral("Bankhaus Nord"));
 

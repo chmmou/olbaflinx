@@ -254,9 +254,9 @@ void NewStorageDialogTest::theGuidelineIsNamedWithTheNumberTheCoreEnforces()
     QVERIFY(description->text().contains(expected));
     QVERIFY(!description->text().contains(QStringLiteral("%1")));
 
-    for (const auto *help : {dialog.findChild<QLabel *>(QStringLiteral("labelHelpPassword")),
-                             dialog.findChild<QLabel *>(
-                                 QStringLiteral("labelHelpPasswordConfirm"))}) {
+    for (const auto *help :
+         {dialog.findChild<QLabel *>(QStringLiteral("labelHelpPassword")),
+          dialog.findChild<QLabel *>(QStringLiteral("labelHelpPasswordConfirm"))}) {
         QVERIFY(help != nullptr);
         QVERIFY(help->toolTip().contains(expected));
         QVERIFY(!help->toolTip().contains(QStringLiteral("%1")));
