@@ -67,3 +67,8 @@ settings.cmake
 /res/help/*.html
 PKGBUILD
 *.~
+
+# Python bytecode. The run that drives the application from outside is a
+# python program, and any tool that reads it leaves this behind.
+__pycache__/
+*.py[cod]
