@@ -91,22 +91,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN apt-get update && apt-get install -y locales libdbus-1* nano
 
-# What a run driving the application from outside needs. Qt itself needs
-# nothing: the accessibility bridge is compiled into QtGui and is not a plugin.
-# What is missing is the service that mediates between an application and a
-# client, and a screen. The bridge hangs off the xcb platform and does not load
-# under the offscreen one this image sets, so the run brings an X server of its
-# own. Without a window manager no window holds the input focus and a
-# synthesised key arrives nowhere. The last two provide gsettings, which the
-# test framework insists on before it will even import.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    at-spi2-core \
-    xvfb \
-    matchbox-window-manager \
-    python3-dogtail \
-    libglib2.0-bin \
-    dconf-cli
-
 RUN apt-get clean
 RUN rm -rf /var/lib/apt/lists/*
 
@@ -114,7 +98,8 @@ RUN rm -rf /var/lib/apt/lists/*
 # outside walks its way twice, under two languages, to show that it holds an
 # element by an id no translation touches. Without a locale the C library knows,
 # Qt falls back to C and both runs speak the same language, which would prove
-# nothing. These are the two the project translates.
+# nothing. These are the two the project translates. That run lives in the
+# image beside this one, which is built on top of it and inherits both.
 RUN locale-gen en_US.UTF-8 de_DE.UTF-8
 RUN update-locale LC_ALL=en_US.UTF-8 \
     LANG=en_US.UTF-8 \

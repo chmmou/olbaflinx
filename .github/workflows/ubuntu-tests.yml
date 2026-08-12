@@ -80,8 +80,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    # Its own image, built on the one above and carrying the WebDriver. The
+    # driver brings a second Qt with it, which is why the job above keeps
+    # pulling the smaller one.
     container:
-      image: ghcr.io/${{ github.repository }}/ci-ubuntu:qt6.8.3
+      image: ghcr.io/${{ github.repository }}/ci-ubuntu-selenium:qt6.8.3
 
     steps:
       - name: Check out the code
@@ -93,11 +96,11 @@ jobs:
 
           test "$(qmake6 -query QT_VERSION)" = "$QT_VERSION"
 
-          # The four parts this job stands on, asked for before the build so
-          # that a missing one does not look like a broken application.
+          # The parts this job stands on, asked for before the build so that a
+          # missing one does not look like a broken application.
           test -x /usr/libexec/at-spi-bus-launcher
-          command -v Xvfb matchbox-window-manager gsettings
-          python3 -c "import dogtail"
+          command -v Xvfb matchbox-window-manager selenium-webdriver-at-spi-run
+          /opt/appium-client/bin/python -c "import appium"
 
           echo "QT_ROOT_DIR=$(qmake6 -query QT_INSTALL_PREFIX)" >> "$GITHUB_ENV"
 

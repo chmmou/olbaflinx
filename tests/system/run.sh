@@ -1,17 +1,16 @@
 #!/bin/bash
-# Brings up what a run from outside needs, then walks the way twice.
+# Brings up what a run from outside needs and hands the way to the driver.
 #
-# Four things have to stand before the application starts, and the order is not
-# free. The screen comes first, because the accessibility bridge hangs off the
-# xcb platform and does not load under the offscreen one the image otherwise
-# sets. The accessibility bus comes before the application, because one that
-# finds no bus at startup never announces itself afterwards. The window manager
-# comes before it as well, because otherwise no window holds the input focus
-# and a synthesised key arrives nowhere. And the desktop setting comes before
-# the test framework, which refuses to import without it.
+# The tool takes care of the accessibility bus, the session bus and the
+# WebDriver server itself. What it does not bring is a screen: it expects a
+# nested compositor, and this image has none, so the screen and a window
+# manager are started here. The screen matters because the accessibility bridge
+# hangs off the xcb platform and does not load under the offscreen one the
+# image otherwise sets; the window manager matters because otherwise no window
+# holds the input focus and a synthesised key arrives nowhere.
 #
 # The way is walked twice, under two locales. The steps name no visible text,
-# so both runs hold whatever the interface says.
+# so both walks hold whatever the interface says.
 #
 # The second walk was meant to show more than that: with the interface speaking
 # another language, an element held by an id would still be found while one
@@ -28,24 +27,19 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${DISPLAY_NUMBER:=99}"
 : "${FIRST_LANGUAGE:=en_US.UTF-8}"
 : "${SECOND_LANGUAGE:=de_DE.UTF-8}"
-
-# A session bus of its own. The script re-enters itself under one rather than
-# splitting into a second file.
-if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-    exec dbus-run-session -- "${BASH_SOURCE[0]}" "$@"
-fi
+: "${APPIUM_PYTHON:=/opt/appium-client/bin/python}"
 
 Xvfb ":${DISPLAY_NUMBER}" -screen 0 1280x1024x24 >/dev/null 2>&1 &
 xvfb_pid=$!
 export DISPLAY=":${DISPLAY_NUMBER}"
 
 matchbox_pid=""
-launcher_pid=""
 
 cleanup() {
-    for pid in "$matchbox_pid" "$launcher_pid" "$xvfb_pid"; do
+    for pid in "$matchbox_pid" "$xvfb_pid"; do
         [ -n "$pid" ] && kill "$pid" 2>/dev/null
     done
+    rm -f "${first_output:-}" "${second_output:-}"
     return 0
 }
 trap cleanup EXIT
@@ -63,24 +57,22 @@ done
 matchbox-window-manager -use_titlebar no >/dev/null 2>&1 &
 matchbox_pid=$!
 
-gsettings set org.gnome.desktop.interface toolkit-accessibility true
+# A session would set this, and a container has none. The launcher creates the
+# directory it names and fails on the empty value before it does anything else.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-outside}"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
 
-/usr/libexec/at-spi-bus-launcher --launch-immediately &
-launcher_pid=$!
+# The nested compositor the launcher would otherwise exec itself into. There is
+# none in this image, and the run does not need one: it drives through the
+# interface, not through the screen. It also decides how the driver types:
+# without a compositor it synthesises keys through the accessibility interface
+# instead of through the wayland protocol, and that is the way that works on
+# the screen this run brings.
+export TEST_WITH_KWIN_WAYLAND=0
 
-for _ in $(seq 100); do
-    dbus-send --session --dest=org.a11y.Bus /org/a11y/bus \
-        org.a11y.Bus.GetAddress >/dev/null 2>&1 && break
-    sleep 0.1
-done
-dbus-send --session --dest=org.a11y.Bus /org/a11y/bus \
-    org.a11y.Bus.GetAddress >/dev/null 2>&1 || {
-    echo "no accessibility bus" >&2
-    exit 1
-}
-
-# The setting above is what turns the bridge on; this says the same a second
-# way and costs nothing.
+# The launcher makes a fresh XDG home of its own, which is welcome, but the run
+# sets its own anyway so that it walks a first start even when told otherwise.
 export QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
 
 walk() {
@@ -89,13 +81,13 @@ walk() {
 
     echo "=== the way, under ${language} ==="
     LANG="$language" LANGUAGE="${language%%.*}" LC_ALL="$language" \
-        python3 -u "${here}/first_start.py" | tee "$output"
+        selenium-webdriver-at-spi-run "$APPIUM_PYTHON" "${here}/first_start.py" \
+        | tee "$output"
     echo
 }
 
 first_output="$(mktemp)"
 second_output="$(mktemp)"
-trap 'rm -f "$first_output" "$second_output"; cleanup' EXIT
 
 walk "$FIRST_LANGUAGE" "$first_output"
 walk "$SECOND_LANGUAGE" "$second_output"

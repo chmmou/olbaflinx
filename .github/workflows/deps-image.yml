@@ -22,7 +22,7 @@ on:
   push:
     branches: [ develop-qt6 ]
     paths:
-      - 'res/ci/ubuntu/**'
+      - 'res/ci/**'
       - '.github/workflows/deps-image.yml'
 
 permissions:
@@ -31,6 +31,10 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE: ${{ github.repository }}/ci-ubuntu
+  # The second image, for the run that drives the application from outside. It
+  # is built on top of the first and carries a WebDriver with a Qt of its own,
+  # which is why it is a second image and not more lines in the first.
+  SELENIUM_IMAGE: ${{ github.repository }}/ci-ubuntu-selenium
 
 jobs:
   build:
@@ -96,15 +100,79 @@ jobs:
             test -f "$(qmake6 -query QT_INSTALL_PLUGINS)/sqldrivers/libqsqlcipher.so"
             objdump -p /usr/lib/libgwengui-qt6.so | grep -q "NEEDED.*libQt6Widgets"
 
-            # The four parts the run from outside stands on. Each fails in its
-            # own way when absent: no service and the application is never
-            # seen, no screen and the bridge never loads, no window manager and
-            # a synthesised key arrives nowhere, no framework and there is
-            # nothing to drive with.
-            test -x /usr/libexec/at-spi-bus-launcher
-            test -x /usr/libexec/at-spi2-registryd
-            command -v Xvfb matchbox-window-manager gsettings
-            python3 -c "import dogtail"
+            # The second locale, which the run from outside walks under. It
+            # lives in the image beside this one and inherits this.
+            locale -a | grep -q de_DE
 
             echo "the image carries what the test run expects"
+          '
+
+  # The image for the run from outside, built on top of the one above and
+  # therefore after it. It carries a second Qt, which is the whole reason it is
+  # a separate image: the test run pulls the first one on every push and has no
+  # use for six hundred megabytes of desktop libraries.
+  selenium:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7.0.1
+
+      - name: Decide the Qt version
+        id: qt
+        run: |
+          set -euo pipefail
+          version="${{ github.event.inputs.qt_version || '6.8.3' }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Log in to the registry
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: res/ci/ubuntu-selenium
+          file: res/ci/ubuntu-selenium/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.SELENIUM_IMAGE }}:qt${{ steps.qt.outputs.version }}
+          build-args: |
+            QT_VERSION=${{ steps.qt.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Say what the image promises
+        run: |
+          set -euo pipefail
+          image="${{ env.REGISTRY }}/${{ env.SELENIUM_IMAGE }}:qt${{ steps.qt.outputs.version }}"
+
+          # The parts the run from outside stands on. Each fails in its own way
+          # when absent: no service and the application is never seen, no
+          # screen and the bridge never loads, no window manager and a
+          # synthesised key arrives nowhere, no driver and there is nothing to
+          # drive with.
+          docker run --rm "$image" bash -lc '
+            set -euo pipefail
+            test -x /usr/libexec/at-spi-bus-launcher
+            command -v Xvfb matchbox-window-manager selenium-webdriver-at-spi-run
+            /opt/appium-client/bin/python -c "import appium"
+
+            # The one thing that could silently go wrong here: the programs of
+            # the tool are built against another Qt than the application, and
+            # only an rpath keeps the two apart.
+            ldd /usr/bin/selenium-webdriver-at-spi-inputsynth \
+              | grep -q "libQt6Core.so.6 => /usr/lib/x86_64-linux-gnu/"
+
+            echo "the image carries what the run from outside expects"
           '
