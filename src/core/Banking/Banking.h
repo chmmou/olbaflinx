@@ -28,6 +28,10 @@
 // belong.
 #include <gwenhywfar/gui.h>
 
+#include <aqbanking/types/imexporter_context.h>
+#include <aqbanking/types/transaction.h>
+
+#include <QtCore/QDate>
 #include <QtCore/QObject>
 
 namespace olbaflinx::core::banking {
@@ -101,6 +105,58 @@ public:
      */
     void accounts();
 
+    /**
+     * @brief Fetch the transactions and the balance of one account.
+     *
+     * Both requests travel in one session. The result arrives through
+     * itemsReceived, transactions and balance in one list, each record carrying
+     * the id of the account it belongs to and told apart by its item type.
+     *
+     * @param account The account to fetch. It stays with its caller.
+     * @param firstDate The day the fetch starts at. An invalid date fetches
+     *  everything the bank offers.
+     *
+     * Preconditions: the backend is initialized, and the thread that calls this
+     *  has a user interface of the banking backend set. Without one the library
+     *  aborts the process instead of reporting an error.
+     *
+     * Errors: a failed session reports errorOccurred. An account without online
+     *  access reports accountSkipped and is not an error. An empty result is
+     *  none either, it reports an empty list. Every path ends in finished.
+     *
+     * Concurrency: this call blocks until the session has ended, the entry of a
+     *  PIN and a TAN included. An instance of this class belongs to one thread,
+     *  and so does every record it hands out.
+     */
+    void fetchAccount(const Account &account, const QDate &firstDate = {});
+
+    /**
+     * @brief Build the two orders of a fetch, without sending them.
+     *
+     * Separate from the session so that the orders can be read before they go
+     * out, which is what makes them measurable without a bank.
+     *
+     * @return A list of two orders, one for the transactions and one for the
+     *  balance. The caller owns it and releases it, orders included, with
+     *  AB_Transaction_List2_freeAll.
+     */
+    [[nodiscard]] static AB_TRANSACTION_LIST2 *buildFetchCommands(const Account &account,
+                                                                  const QDate &firstDate);
+
+    /**
+     * @brief Read the answer of a session out of its container.
+     *
+     * @param context The container the session filled.
+     * @param commands The orders that were sent. They carry the outcome of the
+     *  session per order, which decides whether an account is reported at all.
+     *
+     * @return The transactions and the balance, in one list. Both stay with
+     *  their new owner. An account whose order failed is not in it, neither
+     *  with its transactions nor with its balance.
+     */
+    [[nodiscard]] static BankingItems itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
+                                                       AB_TRANSACTION_LIST2 *commands);
+
 Q_SIGNALS:
     /**
      * @brief This signal is emitted if an error occurred on an asynchronous path.
@@ -110,6 +166,17 @@ Q_SIGNALS:
      *  value of the banking backend where there is one.
      */
     void errorOccurred(olbaflinx::core::ErrorCode errorCode, const QString &reason);
+
+    /**
+     * @brief This signal is emitted for an account a fetch has passed over.
+     *
+     * Not an error of the session: an account without online access is skipped
+     * before anything is sent, so that the accounts beside it still run.
+     *
+     * @param uniqueAccountId The account, as the banking backend keeps it.
+     * @param reason Why it was passed over. It carries no account data.
+     */
+    void accountSkipped(quint32 uniqueAccountId, const QString &reason);
 
     void progressValueChanged(qreal progress);
     void itemsReceived(const BankingItems &items);

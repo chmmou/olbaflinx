@@ -97,6 +97,15 @@ public:
     [[nodiscard]] bool isActive() const;
     void setActive(bool active);
 
+    /**
+     * @brief The account as the banking backend describes it.
+     *
+     * Borrowed, it stays the property of this account and must not be freed by
+     * the caller. It is here because building an order means filling it from
+     * the description, which the backend does itself.
+     */
+    [[nodiscard]] const AB_ACCOUNT_SPEC *accountSpec() const;
+
     [[nodiscard]] TransactionLimitsList *transactionLimits() const;
     [[nodiscard]] ReferenceAccounts referenceAccounts() const;
     [[nodiscard]] TransactionLimits *transactionLimitsForCommand(const TransactionCommand &cmd) const;
