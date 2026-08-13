@@ -586,6 +586,15 @@ void Banking::fetchAccount(const Account &account, const QDate &firstDate)
         return;
     }
 
+    // A session can come back successful and still carry an order the bank
+    // refused. Without this the account would answer with an empty list, and a
+    // refusal would read like an account with nothing new.
+    if (accountsOfFailedCommands(commands.get()).contains(account.uniqueId())) {
+        reportError(ErrorCode::BankingFailure,
+                    QStringLiteral("An order of account %1 was refused").arg(account.uniqueId()));
+        return;
+    }
+
     const BankingItems items = itemsFromContext(context.get(), commands.get());
 
     qCDebug(lcBanking) << "fetched" << items.size() << "records for account" << account.uniqueId();
