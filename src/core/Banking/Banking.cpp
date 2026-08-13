@@ -17,6 +17,8 @@
 
 #include "core/Banking/Banking.h"
 
+#include "core/Banking/Balance/Balance.h"
+#include "core/Banking/Transaction/Transaction.h"
 #include "core/Logging.h"
 
 #include <chipcard/client.h>
@@ -24,16 +26,22 @@
 #include <gwenhywfar/dialog.h>
 #include <gwenhywfar/error.h>
 #include <gwenhywfar/gui.h>
+#include <gwenhywfar/gwendate.h>
 #include <gwenhywfar/gwenhywfar.h>
 
 #include <aqbanking/banking.h>
 #include <aqbanking/banking_dialogs.h>
 #include <aqbanking/banking_online.h>
+#include <aqbanking/banking_transaction.h>
 
 #include <aqbanking/error.h>
 #include <aqbanking/gui/abgui.h>
 #include <aqbanking/types/account_spec.h>
+#include <aqbanking/types/balance.h>
 
+#include <QtCore/QSet>
+
+#include <memory>
 #include <utility>
 
 #ifndef AB_SUCCESS
@@ -46,6 +54,130 @@
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
+using namespace olbaflinx::core::banking::balance;
+using namespace olbaflinx::core::banking::transaction;
+
+namespace {
+
+/**
+ * The backend AqBanking gives an account that has no online access at all. An
+ * account without any backend name is the other half of the same case.
+ */
+constexpr auto offlineBackendName = QLatin1StringView("aqnone");
+
+/**
+ * The C structures of the backend, held so that every path out of a function
+ * releases them: the success, the failure and the abort alike.
+ */
+struct CommandListDeleter
+{
+    void operator()(AB_TRANSACTION_LIST2 *list) const { AB_Transaction_List2_freeAll(list); }
+};
+
+using CommandListPtr = std::unique_ptr<AB_TRANSACTION_LIST2, CommandListDeleter>;
+using ContextPtr = std::unique_ptr<AB_IMEXPORTER_CONTEXT, decltype(&AB_ImExporterContext_free)>;
+using GwenDatePtr = std::unique_ptr<GWEN_DATE, decltype(&GWEN_Date_free)>;
+
+/**
+ * Hands a date to the banking backend. Ownership stays with the caller, the
+ * setters of AB_TRANSACTION duplicate what they are given.
+ *
+ * A date that is not set answers with an empty handle, which the setters read
+ * as "no date", and the bank then delivers what it holds.
+ */
+GwenDatePtr fromDate(const QDate &date)
+{
+    if (!date.isValid() || date.isNull()) {
+        return {nullptr, &GWEN_Date_free};
+    }
+
+    const auto text = date.toString(QStringLiteral("yyyyMMdd")).toLatin1();
+
+    return {GWEN_Date_fromString(text.constData()), &GWEN_Date_free};
+}
+
+/**
+ * Whether an order ended in a failure of its own.
+ *
+ * A status the backend never touched is not one: an order that ran through and
+ * brought nothing is no failure, an empty result is a result.
+ */
+bool hasFailed(AB_TRANSACTION_STATUS status)
+{
+    return status == AB_Transaction_StatusError || status == AB_Transaction_StatusRejected
+           || status == AB_Transaction_StatusAborted || status == AB_Transaction_StatusRevoked;
+}
+
+/** The accounts whose fetch is to be dropped as a whole. */
+QSet<quint32> accountsOfFailedCommands(AB_TRANSACTION_LIST2 *commands)
+{
+    QSet<quint32> accounts;
+
+    AB_TRANSACTION_LIST2_ITERATOR *iterator = AB_Transaction_List2_First(commands);
+    if (iterator == nullptr) {
+        return accounts;
+    }
+
+    AB_TRANSACTION *command = AB_Transaction_List2Iterator_Data(iterator);
+    while (command != nullptr) {
+        if (hasFailed(AB_Transaction_GetStatus(command))) {
+            accounts.insert(AB_Transaction_GetUniqueAccountId(command));
+        }
+        command = AB_Transaction_List2Iterator_Next(iterator);
+    }
+
+    AB_Transaction_List2Iterator_free(iterator);
+
+    return accounts;
+}
+
+/**
+ * Whether the first balance is to be preferred over the second: the booked one
+ * wins over every other kind whatever date it carries, among equals the more
+ * recent one, and among those of the same date the one delivered last.
+ *
+ * AB_Balance_List_GetLatestByType would answer the first two, but it keeps the
+ * earlier of two with the same date, which is the opposite of the third.
+ */
+bool isPreferredOver(const AB_BALANCE *candidate, const AB_BALANCE *chosen)
+{
+    const bool candidateIsBooked = AB_Balance_GetType(candidate) == AB_Balance_TypeBooked;
+    const bool chosenIsBooked = AB_Balance_GetType(chosen) == AB_Balance_TypeBooked;
+
+    if (candidateIsBooked != chosenIsBooked) {
+        return candidateIsBooked;
+    }
+
+    const GWEN_DATE *candidateDate = AB_Balance_GetDate(candidate);
+    const GWEN_DATE *chosenDate = AB_Balance_GetDate(chosen);
+
+    if (candidateDate == nullptr || chosenDate == nullptr) {
+        return chosenDate == nullptr;
+    }
+
+    return GWEN_Date_Compare(candidateDate, chosenDate) >= 0;
+}
+
+/** The one balance of an account that is kept, or null if the bank sent none. */
+const AB_BALANCE *chooseBalance(const AB_BALANCE_LIST *balances)
+{
+    if (balances == nullptr) {
+        return nullptr;
+    }
+
+    const AB_BALANCE *chosen = nullptr;
+
+    for (const AB_BALANCE *balance = AB_Balance_List_First(balances); balance != nullptr;
+         balance = AB_Balance_List_Next(balance)) {
+        if (chosen == nullptr || isPreferredOver(balance, chosen)) {
+            chosen = balance;
+        }
+    }
+
+    return chosen;
+}
+
+} // namespace
 
 class Banking::Private
 {
@@ -319,6 +451,148 @@ void Banking::accounts()
     qCDebug(lcBanking) << "read" << accounts.size() << "accounts";
 
     Q_EMIT itemsReceived(accounts);
+
+    Q_EMIT finished();
+}
+
+AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account, const QDate &firstDate)
+{
+    const auto addCommand = [&account, &firstDate](AB_TRANSACTION_LIST2 *list,
+                                                   AB_TRANSACTION_COMMAND kind) {
+        AB_TRANSACTION *command = AB_Transaction_new();
+
+        AB_Transaction_SetCommand(command, kind);
+
+        // Fills the identifiers of the local account out of its description, the
+        // unique id among them. The backend needs all of them, and it is the one
+        // that knows which.
+        AB_Banking_FillTransactionFromAccountSpec(command, account.accountSpec());
+
+        // The period travels in FirstDate. The field belongs to the group of
+        // standing orders by its name, but the FinTS backend reads it as the day
+        // a fetch starts at. No end date is set, so the bank delivers up to what
+        // it holds today.
+        if (const GwenDatePtr first = fromDate(firstDate); first) {
+            AB_Transaction_SetFirstDate(command, first.get());
+        }
+
+        // StringIdForApplication stays untouched here and everywhere else:
+        // AB_Transaction_free does not release it.
+
+        AB_Transaction_List2_PushBack(list, command);
+    };
+
+    AB_TRANSACTION_LIST2 *commands = AB_Transaction_List2_new();
+
+    addCommand(commands, AB_Transaction_CommandGetTransactions);
+    addCommand(commands, AB_Transaction_CommandGetBalance);
+
+    return commands;
+}
+
+BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
+                                       AB_TRANSACTION_LIST2 *commands)
+{
+    const QSet<quint32> failedAccounts = accountsOfFailedCommands(commands);
+
+    BankingItems items = {};
+
+    const AB_IMEXPORTER_ACCOUNTINFO *accountInfo = AB_ImExporterContext_GetFirstAccountInfo(context);
+
+    while (accountInfo != nullptr) {
+        const quint32 uniqueAccountId = AB_ImExporterAccountInfo_GetAccountId(accountInfo);
+
+        // All or nothing per account. One failed order takes the other one down
+        // with it, so that no half fetched account reaches the storage.
+        if (failedAccounts.contains(uniqueAccountId)) {
+            qCWarning(lcBanking) << "an order of account" << uniqueAccountId
+                                 << "failed, the account is dropped as a whole";
+
+            accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
+            continue;
+        }
+
+        // Both filters open: every booking the bank sent belongs to the account
+        // it was sent for.
+        const AB_TRANSACTION *transaction
+            = AB_ImExporterAccountInfo_GetFirstTransaction(accountInfo,
+                                                           AB_Transaction_TypeNone,
+                                                           AB_Transaction_CommandNone);
+
+        while (transaction != nullptr) {
+            items.append(std::make_shared<Transaction>(transaction));
+
+            transaction = AB_Transaction_List_FindNextByType(transaction,
+                                                             AB_Transaction_TypeNone,
+                                                             AB_Transaction_CommandNone);
+        }
+
+        if (const AB_BALANCE *balance = chooseBalance(
+                AB_ImExporterAccountInfo_GetBalanceList(accountInfo));
+            balance != nullptr) {
+            if (uniqueAccountId == 0) {
+                // A balance carries no account of its own, it belongs to the
+                // entry it sits in. Without an id there is nothing to store it
+                // against, whereas a booking carries its account itself.
+                qCWarning(lcBanking) << "a balance arrived without an account id and is dropped";
+            } else {
+                items.append(std::make_shared<Balance>(uniqueAccountId, balance));
+            }
+        }
+
+        accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
+    }
+
+    return items;
+}
+
+void Banking::fetchAccount(const Account &account, const QDate &firstDate)
+{
+    const auto reportError = [this](ErrorCode code, const QString &message) {
+        qCCritical(lcBanking) << message;
+
+        Q_EMIT errorOccurred(code, message);
+        Q_EMIT finished();
+    };
+
+    if (!d_ptr->isInitialized()) {
+        reportError(ErrorCode::BankingFailure,
+                    QStringLiteral("The banking backend is not initialized"));
+        return;
+    }
+
+    // An account without a backend brings down the whole run rather than itself:
+    // AqBanking sorts the queues by backend before it sends anything and answers
+    // GWEN_ERROR_BAD_DATA for an account that carries none. Passing such an
+    // account over is therefore what keeps the accounts beside it running.
+    const QString backendName = account.backendName();
+    if (backendName.isEmpty() || backendName.compare(offlineBackendName, Qt::CaseInsensitive) == 0) {
+        const QString reason = tr("The account has no online access");
+
+        qCInfo(lcBanking) << "account" << account.uniqueId() << "skipped, no online access";
+
+        Q_EMIT accountSkipped(account.uniqueId(), reason);
+        Q_EMIT finished();
+        return;
+    }
+
+    const CommandListPtr commands(buildFetchCommands(account, firstDate));
+    const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
+
+    const int rv = AB_Banking_SendCommands(d_ptr->aqBanking, commands.get(), context.get());
+    if (rv != AB_SUCCESS) {
+        reportError(ErrorCode::BankingFailure,
+                    QStringLiteral("AB_Banking_SendCommands failed with %1").arg(rv));
+        return;
+    }
+
+    const BankingItems items = itemsFromContext(context.get(), commands.get());
+
+    qCDebug(lcBanking) << "fetched" << items.size() << "records for account" << account.uniqueId();
+
+    // An account with nothing new reports an empty list. That is not an error,
+    // and it is where a fetch parts from a read of the storage.
+    Q_EMIT itemsReceived(items);
 
     Q_EMIT finished();
 }

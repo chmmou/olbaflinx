@@ -204,6 +204,11 @@ void Account::setActive(const bool active)
     d_ptr->active = active;
 }
 
+const AB_ACCOUNT_SPEC *Account::accountSpec() const
+{
+    return d_ptr->abAccountSpec;
+}
+
 TransactionLimitsList *Account::transactionLimits() const
 {
     return AB_AccountSpec_GetTransactionLimitsList(d_ptr->abAccountSpec);
