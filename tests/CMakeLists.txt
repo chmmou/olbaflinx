@@ -52,6 +52,7 @@ olbaflinx_add_test(tst_storage core/tst_storage.cpp OlbaFlinxCore::OlbaFlinxCore
 olbaflinx_add_test(tst_storage_key core/tst_storage_key.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_storage_errors core/tst_storage_errors.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_storage_lifetime core/tst_storage_lifetime.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_storage_unique core/tst_storage_unique.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_banking core/tst_banking.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_banking_fetch core/tst_banking_fetch.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_account core/tst_account.cpp OlbaFlinxCore::OlbaFlinxCore)

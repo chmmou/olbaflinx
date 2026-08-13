@@ -20,6 +20,7 @@
 
 #include "core/Banking/Account/Account.h"
 #include "core/Banking/Account/ReferenceAccount.h"
+#include "core/Banking/Balance/Balance.h"
 #include "core/Banking/Transaction/Transaction.h"
 #include "core/Logging.h"
 #include "core/Result.h"
@@ -44,6 +45,7 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -204,7 +206,7 @@ bool isKnownTable(const QString &table)
  * newer build and is refused; a file below it is brought up by setupTables,
  * whose statements all create what is missing rather than what is new.
  */
-constexpr int CurrentSchemaVersion = 3;
+constexpr int CurrentSchemaVersion = 4;
 
 /**
  * The number a migration name carries in its first four characters. Names
@@ -263,6 +265,9 @@ const QString &accountStateUpdateQuery()
  * The balance of an account goes to a table of its own, which carries the day
  * and the currency the figure belongs to. A row per account, replaced on every
  * write, which is what the UNIQUE on account_id in the schema is for.
+ *
+ * This one is for the figure a fetch brings: it carries a day and a type of its
+ * own and takes the place of whatever stood there.
  */
 const QString &balanceInsertQuery()
 {
@@ -272,6 +277,29 @@ const QString &balanceInsertQuery()
         "ON CONFLICT (account_id) DO UPDATE SET "
         "`date` = excluded.`date`, `value` = excluded.`value`, "
         "`type` = excluded.`type`, currency = excluded.currency;");
+
+    return statement;
+}
+
+/**
+ * The same table, written from the account path. That path carries neither a day
+ * nor a type and puts a placeholder in both, so it must not push aside a figure
+ * a fetch put there: the fetched one was chosen by its type, and a placeholder
+ * would undo that choice on the next run over the account list.
+ *
+ * It recognises its own by that placeholder type and refreshes only that. An
+ * account that is never fetched, because it has no online access, would
+ * otherwise stay on the figure of the day it was set up.
+ */
+const QString &placeholderBalanceInsertQuery()
+{
+    static const QString statement = QStringLiteral(
+        "INSERT INTO balances (account_id, `date`, `value`, `type`, currency) "
+        "VALUES (:account_id, :date, :value, :type, :currency) "
+        "ON CONFLICT (account_id) DO UPDATE SET "
+        "`date` = excluded.`date`, `value` = excluded.`value`, "
+        "`type` = excluded.`type`, currency = excluded.currency "
+        "WHERE balances.`type` = excluded.`type`;");
 
     return statement;
 }
@@ -316,7 +344,8 @@ constexpr auto TransactionInsertQueryText = QLatin1StringView(
     ":remote_addr_street, :remote_addr_zipcode, :remote_addr_city, :remote_addr_phone, "
     ":period, :cycle, :execution_day, :first_date, :last_date, :next_date, :unit_id, "
     ":unit_id_name_space, :ticker_symbol, :units, :unit_price_value, :unit_price_date, "
-    ":commission_value, :memo, :hash);");
+    ":commission_value, :memo, :hash) "
+    "ON CONFLICT (`hash`) DO NOTHING;");
 
 const QString &transactionInsertQuery()
 {
@@ -1168,18 +1197,24 @@ public:
     }
 
     /**
-     * Writes one row and answers with the id the database assigned to it.
+     * Writes one row and answers with the number of rows that changed by it.
+     *
+     * Nought is not a failure: a statement with an ON CONFLICT clause reaches
+     * this on a record that is already there, and passing over it is what the
+     * clause is for. The number is what a run reports as its result, and only a
+     * count of the rows that actually changed answers the question the user
+     * asks, which is how much is new.
      *
      * A key of the property map that the statement does not name is reported and
      * skipped. bindValue would drop it without a word, which is how the balance
      * of an account went missing.
      */
-    static Result<QVariant> insertRowOn(const QSqlDatabase &database,
-                                        const QString &key,
-                                        const QString &fileName,
-                                        const QString &statement,
-                                        const QMap<QString, QVariant> &map,
-                                        const QString &type)
+    static Result<int> insertRowOn(const QSqlDatabase &database,
+                                   const QString &key,
+                                   const QString &fileName,
+                                   const QString &statement,
+                                   const QMap<QString, QVariant> &map,
+                                   const QString &type)
     {
         QSqlQuery query;
         if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
@@ -1210,20 +1245,27 @@ public:
                              .arg(type, database.lastError().text()));
         }
 
-        return query.lastInsertId();
+        // numRowsAffected is defined for an INSERT and answers what SQLite
+        // counted. A record the ON CONFLICT clause passed over answers nought.
+        return qMax(query.numRowsAffected(), 0);
     }
 
     /**
-     * Writes one record, whatever its type. The whole write path is static and
-     * takes the database, because storeItems runs it in a thread of its own on a
-     * connection of its own; a QSqlDatabase belongs to the thread that created
-     * it. Storage::storeItem hands in the connection of this object and adds the
-     * signals, this function emits none.
+     * Writes one record, whatever its type, and answers with the number of rows
+     * it added. The whole write path is static and takes the database, because
+     * storeItems runs it in a thread of its own on a connection of its own; a
+     * QSqlDatabase belongs to the thread that created it. Storage::storeItem
+     * hands in the connection of this object and adds the signals, this function
+     * emits none.
+     *
+     * The type is told from the record itself rather than from the enumeration of
+     * storage types: that one steers the read path, where a table name and a row
+     * have to be brought together, and the write path has never needed it.
      */
-    static Error storeItemOn(const QSqlDatabase &database,
-                             const QString &key,
-                             const QString &fileName,
-                             const BankingItem *bankingItem)
+    static Result<int> storeItemOn(const QSqlDatabase &database,
+                                   const QString &key,
+                                   const QString &fileName,
+                                   const BankingItem *bankingItem)
     {
         if (bankingItem == nullptr) {
             return Error(ErrorCode::InvalidInput, QStringLiteral("No banking item to store"));
@@ -1242,19 +1284,57 @@ public:
         }
 
         if (type == QLatin1StringView("Transaction")) {
-            const auto result = insertRowOn(database,
-                                            key,
-                                            fileName,
-                                            transactionInsertQuery(),
-                                            bankingItem->toMap(),
-                                            type);
-            return result.hasValue() ? Error() : result.error();
+            return insertRowOn(database,
+                               key,
+                               fileName,
+                               transactionInsertQuery(),
+                               bankingItem->toMap(),
+                               type);
+        }
+
+        if (type == QLatin1StringView("Balance")) {
+            return storeFetchedBalanceOn(database, key, fileName, bankingItem->toMap());
         }
 
         // Category and Contact have no table of their own yet. The branch used to
         // be empty, which sent an unprepared query on its way.
         return Error(ErrorCode::NotImplemented,
                      QStringLiteral("Storing an item of type %1 is not implemented").arg(type));
+    }
+
+    /**
+     * Writes the balance a fetch brought, without touching the account it hangs
+     * on. It carries a day, a type and a currency of its own and takes the place
+     * of whatever the account row held.
+     *
+     * The record names the account by the identifier the institution assigns; the
+     * table keys on the row id of the stored account, so the one is translated
+     * into the other here, the same way the account path does it.
+     */
+    static Result<int> storeFetchedBalanceOn(const QSqlDatabase &database,
+                                             const QString &key,
+                                             const QString &fileName,
+                                             const QMap<QString, QVariant> &map)
+    {
+        auto balanceMap = map;
+
+        const auto uniqueAccountId = balanceMap.take(QStringLiteral("unique_account_id"));
+
+        const auto accountId = accountIdOfOn(database, key, fileName, uniqueAccountId);
+        if (!accountId.hasValue()) {
+            return Error(ErrorCode::NotFound,
+                         QStringLiteral("No stored account for the balance of account %1")
+                             .arg(uniqueAccountId.toString()));
+        }
+
+        balanceMap[QStringLiteral("account_id")] = accountId.value();
+
+        return insertRowOn(database,
+                           key,
+                           fileName,
+                           balanceInsertQuery(),
+                           balanceMap,
+                           QStringLiteral("Balance"));
     }
 
     /**
@@ -1300,16 +1380,55 @@ public:
 
             promise.setProgressRange(0, 100);
 
+            // A run that carries an account is not bracketed here: the account
+            // path begins a transaction of its own, and SQLite does not nest
+            // them. It brackets each account for itself, which is the guarantee
+            // that path needs. A fetch hands over bookings and a balance and
+            // never an account, so the run that needs the bracket gets it.
+            const bool carriesAccount
+                = std::any_of(items.cbegin(), items.cend(), [](const BankingItemPtr &item) {
+                      return item != nullptr && item->itemType() == QLatin1StringView("Account");
+                  });
+
+            if (!carriesAccount && !database.transaction()) {
+                promise.addResult(
+                    WriteResult{0,
+                                Error(ErrorCode::DatabaseFailure,
+                                      QStringLiteral("Could not begin a transaction on %1: %2")
+                                          .arg(fileName, database.lastError().text()))});
+                database.close();
+                return;
+            }
+
             auto error = Error();
+            int handled = 0;
 
             for (const auto &item : std::as_const(items)) {
-                error = storeItemOn(database, key, fileName, item.get());
-                if (error.isError()) {
+                const auto written = storeItemOn(database, key, fileName, item.get());
+                if (!written.hasValue()) {
+                    error = written.error();
                     break;
                 }
 
-                ++stored;
-                promise.setProgressValue(qMin(stored * 100 / items.size(), 100));
+                stored += written.value();
+
+                ++handled;
+                promise.setProgressValue(qMin(handled * 100 / items.size(), 100));
+            }
+
+            if (!carriesAccount) {
+                if (error.isError()) {
+                    // Nothing of this run stays. Half a holding would move the
+                    // starting point of the next fetch past bookings that nobody
+                    // holds, and the count that is reported has to say so.
+                    error = rollbackOn(database, error);
+                    stored = 0;
+                } else if (!database.commit()) {
+                    error = Error(ErrorCode::DatabaseFailure,
+                                  QStringLiteral("Could not commit a run of records to %1: %2")
+                                      .arg(fileName, database.lastError().text()));
+                    stored = 0;
+                }
             }
 
             promise.addResult(WriteResult{stored, error});
@@ -1325,10 +1444,10 @@ public:
      * and the reference accounts held with it. Either all three are written or
      * none is, so that no account ends up carrying the balance of an older write.
      */
-    static Error storeAccountOn(QSqlDatabase database,
-                                const QString &key,
-                                const QString &fileName,
-                                const QMap<QString, QVariant> &map)
+    static Result<int> storeAccountOn(QSqlDatabase database,
+                                      const QString &key,
+                                      const QString &fileName,
+                                      const QMap<QString, QVariant> &map)
     {
         auto accountMap = map;
 
@@ -1351,13 +1470,13 @@ public:
                              .arg(fileName, database.lastError().text()));
         }
 
-        if (const auto written = insertRowOn(database,
-                                             key,
-                                             fileName,
-                                             accountInsertQuery(),
-                                             accountMap,
-                                             QStringLiteral("Account"));
-            !written.hasValue()) {
+        const auto written = insertRowOn(database,
+                                         key,
+                                         fileName,
+                                         accountInsertQuery(),
+                                         accountMap,
+                                         QStringLiteral("Account"));
+        if (!written.hasValue()) {
             return rollbackOn(database, written.error());
         }
 
@@ -1396,7 +1515,9 @@ public:
                              .arg(fileName, database.lastError().text()));
         }
 
-        return {};
+        // The row of the account itself. The balance and the reference accounts
+        // belong to it and are not counted beside it.
+        return written.value();
     }
 
     /**
@@ -1478,8 +1599,18 @@ public:
      * The balance goes to a row of its own, keyed by the account. The day is the
      * day of the write in UTC; AB_ACCOUNT_SPEC carries no date with the figure,
      * and inventing a business day would be worse than recording when it was
-     * read. The type stays at zero for the same reason, the source does not say
-     * whether the figure is booked or noted.
+     * read.
+     *
+     * The type says unknown for the same reason: the account list does not say
+     * whether the figure is booked or noted. It used to say none, which a bank
+     * also sends for a figure it gives no type for, so the two could not be told
+     * apart - and telling them apart is what the statement below rests on. It
+     * refreshes the row it wrote itself and leaves a fetched figure alone, which
+     * was chosen by its type and would otherwise be pushed aside by this
+     * placeholder on the next run over the account list.
+     *
+     * A row that stays untouched for that reason is not a failure, so nought
+     * rows changed is a result like any other here.
      */
     static Error storeBalanceOn(const QSqlDatabase &database,
                                 const QString &key,
@@ -1496,14 +1627,14 @@ public:
             {QStringLiteral("account_id"), accountId},
             {QStringLiteral("date"), QDate::currentDate()},
             {QStringLiteral("value"), balance},
-            {QStringLiteral("type"), 0},
+            {QStringLiteral("type"), static_cast<int>(AB_Balance_TypeUnknown)},
             {QStringLiteral("currency"), accountMap.value(QStringLiteral("currency"))},
         };
 
         const auto result = insertRowOn(database,
                                         key,
                                         fileName,
-                                        balanceInsertQuery(),
+                                        placeholderBalanceInsertQuery(),
                                         balanceMap,
                                         QStringLiteral("Balance"));
 
@@ -1911,12 +2042,14 @@ Error Storage::storeItem(const BankingItem *bankingItem)
                      QStringLiteral("No storage connection for %1").arg(d_ptr->storageFileName()));
     }
 
-    const auto error = Private::storeItemOn(d_ptr->connection()->database(),
-                                            d_ptr->m_key,
-                                            d_ptr->storageFileName(),
-                                            bankingItem);
+    const auto written = Private::storeItemOn(d_ptr->connection()->database(),
+                                              d_ptr->m_key,
+                                              d_ptr->storageFileName(),
+                                              bankingItem);
 
-    if (error.isError()) {
+    if (!written.hasValue()) {
+        const auto error = written.error();
+
         qCCritical(lcStorage) << error.message();
 
         Q_EMIT errorOccurred(error.code(), error.message());

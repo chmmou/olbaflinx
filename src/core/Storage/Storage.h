@@ -277,13 +277,26 @@ public:
      * cannot report that way, which is why this is a second entry point rather
      * than a change to the first.
      *
-     * The bracket sits around the single record, not around the run. What went
-     * in before a failure stays in, the failing one does not, and the run ends
-     * there rather than carrying on over a record that may be the cause.
+     * The bracket sits around the run. A run that fails at one record leaves no
+     * row of that run behind, so a fetch is either stored whole or not at all;
+     * half a holding would move the starting point of the next fetch past
+     * bookings that nobody holds. The one exception is a run that carries an
+     * account: the account path brackets each account for itself and SQLite does
+     * not nest transactions, so that guarantee stays the one it already had.
      *
-     * itemsStored reports how many records were written, on every path.
-     * errorOccurred names the failure, finished ends the run either way. All of
-     * them reach the caller in the thread it called from.
+     * A balance is stored through here as well, without the account it belongs
+     * to being written again. It names its account by the identifier the
+     * institution assigns, and the storage translates that into the row it keys
+     * on. The account it names has to be stored already.
+     *
+     * itemsStored reports how many rows were added, on every path. A booking
+     * that is already there adds none and is no failure, and a run that was
+     * rolled back reports nought. errorOccurred names the failure, finished ends
+     * the run either way. All of them reach the caller in the thread it called
+     * from.
+     *
+     * A second run while one is going is refused. A fetch therefore stores its
+     * bookings first and its balance after the end of that run.
      *
      * @param items The records to store. An empty run is not an error.
      */
@@ -333,7 +346,9 @@ Q_SIGNALS:
      * carry it: QFutureWatcher limits the rate of its progress reports, so a
      * receiver is not told every value.
      *
-     * @param count The number of records that reached the storage.
+     * @param count The number of rows the run added. Not the number of records
+     *  it was handed: a booking that is already stored adds none. A run that
+     *  failed and was rolled back reports nought.
      */
     void itemsStored(int count);
 

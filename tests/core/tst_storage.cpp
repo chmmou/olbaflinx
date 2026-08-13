@@ -301,7 +301,7 @@ void StorageTest::initializeRunsTwiceAndLeavesTheSchemaAtItsVersion()
         storage.close();
     }
 
-    QCOMPARE(schemaVersionOf(file), 3);
+    QCOMPARE(schemaVersionOf(file), 4);
 }
 
 void StorageTest::changeKeyMakesOldPasswordInvalid()
