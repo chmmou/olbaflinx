@@ -19,6 +19,8 @@
 #include "core/Banking/Banking.h"
 #include "core/Error.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 #include <memory>
@@ -27,6 +29,8 @@ using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 
 namespace olbaflinx::core::banking::tests {
+
+using namespace olbaflinx::core::tests;
 
 class BankingTest final : public QObject
 {
@@ -37,9 +41,7 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxBankingTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxBankingTest"));
     }
 
 private Q_SLOTS:

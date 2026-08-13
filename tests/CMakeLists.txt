@@ -27,8 +27,12 @@ find_package(Qt6 ${OLBAFLINX_QT_MIN_VERSION} REQUIRED COMPONENTS Test)
 function(olbaflinx_add_test name source)
     qt_add_executable(${name} ${source})
 
-    # For "TestHelpers.h", which sits next to the core test sources.
-    target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+    # For the helper headers. The three of core carry the storage, the bookings
+    # and what the banking backend hands over; the one of ui carries what needs
+    # Widgets and is therefore out of reach of a core target.
+    target_include_directories(${name} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/core
+            ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 
     target_compile_options(${name} PRIVATE ${OLBAFLINX_WARNINGS})
     target_compile_definitions(${name} PRIVATE ${OLBAFLINX_QT_DEPRECATION})

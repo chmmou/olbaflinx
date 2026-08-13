@@ -23,13 +23,9 @@
 #include "core/Error.h"
 #include "core/Storage/Storage.h"
 
+#include "BankingHelpers.h"
 #include "TestHelpers.h"
-
-#include <aqbanking/types/balance.h>
-#include <aqbanking/types/imexporter_context.h>
-#include <aqbanking/types/value.h>
-
-#include <gwenhywfar/gwendate.h>
+#include "TransactionHelpers.h"
 
 #include <QtTest/QtTest>
 
@@ -62,12 +58,10 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxStorageUniqueTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxStorageUniqueTest"));
     }
 
-    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+    static QString password() { return TestHelpers::password(); }
 
     /**
      * How long a spy waits for a signal a worker thread has to produce first.
@@ -92,7 +86,7 @@ private:
 
     static int rowsOf(const QString &file, const QString &table)
     {
-        return scalarOf(file, QStringLiteral("SELECT COUNT(*) FROM %1;").arg(table)).toInt();
+        return TestHelpers::rowCount(file, password(), table);
     }
 
     /**
@@ -142,136 +136,30 @@ namespace {
 constexpr quint32 testAccountId = 4711;
 
 /**
- * A booking the way the core hands one to the storage. The type is what makes
- * it valid; a transaction of type None is refused by the write path.
- *
- * @param fingerprint Left empty, the core forms the value while it writes.
+ * One booking, hung on the test account. The identifier decides the day, the
+ * amount and the counterparty, so two bookings never share a fingerprint.
  */
-BankingItemPtr makeTransaction(quint32 uniqueAccountId,
-                               quint32 uniqueId,
+BankingItemPtr makeTransaction(quint32 uniqueId,
                                const QString &purpose,
                                const QString &fingerprint = {})
 {
-    auto map = QMap<QString, QVariant>{
-        {QStringLiteral("type"), static_cast<int>(AB_Transaction_TypeStatement)},
-        {QStringLiteral("unique_account_id"), uniqueAccountId},
-        {QStringLiteral("unique_id"), uniqueId},
-        {QStringLiteral("date"), QDate(2026, 1, 1).addDays(uniqueId)},
-        {QStringLiteral("valuta_date"), QDate(2026, 1, 1).addDays(uniqueId)},
-        {QStringLiteral("value"), uniqueId * 1.5},
-        {QStringLiteral("currency"), QStringLiteral("EUR")},
-        {QStringLiteral("purpose"), purpose},
-        {QStringLiteral("remote_name"), QStringLiteral("Partner %1").arg(uniqueId)},
-    };
-
-    if (!fingerprint.isEmpty()) {
-        map[QStringLiteral("hash")] = fingerprint;
-    }
-
-    return Transaction::fromMap(map);
-}
-
-/** A booking the write path refuses, so that a run can fail in its middle. */
-BankingItemPtr makeUnusableTransaction()
-{
-    return Transaction::fromMap(
-        {{QStringLiteral("type"), static_cast<int>(AB_Transaction_TypeNone)}});
-}
-
-/** A balance the way a fetch reports one. */
-BankingItemPtr makeBalance(quint32 uniqueAccountId,
-                           AB_BALANCE_TYPE type,
-                           const QDate &date,
-                           double value)
-{
-    AB_BALANCE *abBalance = AB_Balance_new();
-
-    AB_Balance_SetType(abBalance, type);
-
-    const auto text = date.toString(QStringLiteral("yyyyMMdd")).toLatin1();
-    GWEN_DATE *gwenDate = GWEN_Date_fromString(text.constData());
-    AB_Balance_SetDate(abBalance, gwenDate);
-    GWEN_Date_free(gwenDate);
-
-    AB_VALUE *abValue = AB_Value_fromDouble(value);
-    AB_Value_SetCurrency(abValue, "EUR");
-    AB_Balance_SetValue(abBalance, abValue);
-    AB_Value_free(abValue);
-
-    auto balance = std::make_shared<Balance>(uniqueAccountId, abBalance);
-    AB_Balance_free(abBalance);
-
-    return balance;
+    return TransactionHelpers::transactionFromMap({
+        .type = AB_Transaction_TypeStatement,
+        .uniqueId = uniqueId,
+        .uniqueAccountId = testAccountId,
+        .date = QDate(2026, 1, 1).addDays(uniqueId),
+        .valutaDate = QDate(2026, 1, 1).addDays(uniqueId),
+        .value = uniqueId * 1.5,
+        .purpose = purpose,
+        .remoteName = QStringLiteral("Partner %1").arg(uniqueId),
+        .fingerprint = fingerprint,
+    });
 }
 
 /** An account under a known identifier, so that a balance can be hung on it. */
-BankingItemPtr makeAccount(quint32 uniqueId, double balance)
+BankingItemPtr makeAccount(double balance)
 {
-    auto map = TestHelpers::createFakeAccountMap();
-    map[QStringLiteral("unique_id")] = uniqueId;
-    map[QStringLiteral("balance")] = balance;
-
-    return Account::fromMap(map);
-}
-
-/** The account the banking backend would report, for the fetch path. */
-std::shared_ptr<Account> makeBackendAccount(quint32 uniqueId)
-{
-    AB_ACCOUNT_SPEC *spec = AB_AccountSpec_new();
-
-    AB_AccountSpec_SetUniqueId(spec, uniqueId);
-    AB_AccountSpec_SetBackendName(spec, "aqhbci");
-    AB_AccountSpec_SetAccountName(spec, "Girokonto");
-    AB_AccountSpec_SetIban(spec, "DE02120300000000202051");
-    AB_AccountSpec_SetBankCode(spec, "12030000");
-    AB_AccountSpec_SetAccountNumber(spec, "0000202051");
-    AB_AccountSpec_SetCurrency(spec, "EUR");
-
-    auto account = std::make_shared<Account>(spec);
-    AB_AccountSpec_free(spec);
-
-    return account;
-}
-
-/** One balance of the response container a session would have filled. */
-struct BalanceSpec
-{
-    AB_BALANCE_TYPE type;
-    QDate date;
-    double value;
-};
-
-AB_IMEXPORTER_CONTEXT *makeContext(quint32 uniqueId, const QList<BalanceSpec> &balances)
-{
-    AB_IMEXPORTER_CONTEXT *context = AB_ImExporterContext_new();
-
-    AB_IMEXPORTER_ACCOUNTINFO *info
-        = AB_ImExporterContext_GetOrAddAccountInfo(context,
-                                                   uniqueId,
-                                                   "DE02120300000000202051",
-                                                   "12030000",
-                                                   "0000202051",
-                                                   AB_AccountType_Checking);
-
-    for (const BalanceSpec &spec : balances) {
-        AB_BALANCE *balance = AB_Balance_new();
-
-        AB_Balance_SetType(balance, spec.type);
-
-        const auto text = spec.date.toString(QStringLiteral("yyyyMMdd")).toLatin1();
-        GWEN_DATE *date = GWEN_Date_fromString(text.constData());
-        AB_Balance_SetDate(balance, date);
-        GWEN_Date_free(date);
-
-        AB_VALUE *value = AB_Value_fromDouble(spec.value);
-        AB_Value_SetCurrency(value, "EUR");
-        AB_Balance_SetValue(balance, value);
-        AB_Value_free(value);
-
-        AB_ImExporterAccountInfo_AddBalance(info, balance);
-    }
-
-    return context;
+    return Account::fromMap(TestHelpers::accountMapWith(testAccountId, balance));
 }
 
 } // namespace
@@ -315,10 +203,7 @@ void StorageUniqueTest::aHundredBookingsBecomeAHundredRows()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    auto items = BankingItems();
-    for (quint32 index = 1; index <= 100; ++index) {
-        items << makeTransaction(testAccountId, index, QStringLiteral("Booking %1").arg(index));
-    }
+    const auto items = TransactionHelpers::transactionRun(testAccountId, 100);
 
     QCOMPARE(storeAndWait(storage, items), 100);
 
@@ -340,10 +225,7 @@ void StorageUniqueTest::theSameHundredWrittenAgainLeaveAHundred()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    auto items = BankingItems();
-    for (quint32 index = 1; index <= 100; ++index) {
-        items << makeTransaction(testAccountId, index, QStringLiteral("Booking %1").arg(index));
-    }
+    const auto items = TransactionHelpers::transactionRun(testAccountId, 100);
 
     QCOMPARE(storeAndWait(storage, items), 100);
 
@@ -370,17 +252,11 @@ void StorageUniqueTest::fiftyKnownAndTenNewReportTen()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    auto known = BankingItems();
-    for (quint32 index = 1; index <= 50; ++index) {
-        known << makeTransaction(testAccountId, index, QStringLiteral("Booking %1").arg(index));
-    }
+    const auto known = TransactionHelpers::transactionRun(testAccountId, 50);
 
     QCOMPARE(storeAndWait(storage, known), 50);
 
-    auto mixed = known;
-    for (quint32 index = 51; index <= 60; ++index) {
-        mixed << makeTransaction(testAccountId, index, QStringLiteral("Booking %1").arg(index));
-    }
+    const auto mixed = TransactionHelpers::transactionRun(testAccountId, 60);
 
     QCOMPARE(storeAndWait(storage, mixed), 10);
 
@@ -402,7 +278,7 @@ void StorageUniqueTest::aBookingWithoutAFingerprintCarriesOneAfterTheWrite()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    const auto item = makeTransaction(testAccountId, 1, QStringLiteral("Without a fingerprint"));
+    const auto item = makeTransaction(1, QStringLiteral("Without a fingerprint"));
     QVERIFY(std::static_pointer_cast<Transaction>(item)->hash().isEmpty());
 
     QCOMPARE(storeAndWait(storage, BankingItems{item}), 1);
@@ -432,10 +308,7 @@ void StorageUniqueTest::aBookingKeepsTheFingerprintItAlreadyCarries()
     QVERIFY(!storage.initialize(true).isError());
 
     const auto fingerprint = QStringLiteral("a1b2c3d4e5f6");
-    const auto item = makeTransaction(testAccountId,
-                                      1,
-                                      QStringLiteral("With a fingerprint"),
-                                      fingerprint);
+    const auto item = makeTransaction(1, QStringLiteral("With a fingerprint"), fingerprint);
 
     QCOMPARE(storeAndWait(storage, BankingItems{item}), 1);
 
@@ -459,20 +332,22 @@ void StorageUniqueTest::anAccountCarriesTheSecondOfTwoStoredBalances()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 100.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(100.0)}), 1);
 
     QCOMPARE(storeAndWait(storage,
-                          BankingItems{makeBalance(testAccountId,
-                                                   AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 1),
-                                                   500.0)}),
+                          BankingItems{
+                              BankingHelpers::balanceFromBackend(testAccountId,
+                                                                 {.type = AB_Balance_TypeBooked,
+                                                                  .date = QDate(2026, 2, 1),
+                                                                  .value = 500.0})}),
              1);
 
     QCOMPARE(storeAndWait(storage,
-                          BankingItems{makeBalance(testAccountId,
-                                                   AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 2),
-                                                   750.0)}),
+                          BankingItems{
+                              BankingHelpers::balanceFromBackend(testAccountId,
+                                                                 {.type = AB_Balance_TypeBooked,
+                                                                  .date = QDate(2026, 2, 2),
+                                                                  .value = 750.0})}),
              1);
 
     storage.close();
@@ -497,16 +372,16 @@ void StorageUniqueTest::theBookedBalanceOfAFetchReachesTheStorage()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 100.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(100.0)}), 1);
 
-    const auto account = makeBackendAccount(testAccountId);
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
 
     AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
-    AB_IMEXPORTER_CONTEXT *context = makeContext(testAccountId,
-                                                 {{AB_Balance_TypeNoted, QDate(2026, 2, 2), 17.50},
-                                                  {AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 1),
-                                                   1234.56}});
+    AB_IMEXPORTER_CONTEXT *context
+        = BankingHelpers::responseContext(testAccountId,
+                                          0,
+                                          {{AB_Balance_TypeNoted, QDate(2026, 2, 2), 17.50},
+                                           {AB_Balance_TypeBooked, QDate(2026, 2, 1), 1234.56}});
 
     const BankingItems items = Banking::itemsFromContext(context, commands);
 
@@ -539,7 +414,7 @@ void StorageUniqueTest::aStoredBalanceCarriesDateTypeAndCurrency()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 100.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(100.0)}), 1);
 
     const auto accountBefore = scalarOf(file,
                                         QStringLiteral("SELECT account_name FROM accounts WHERE "
@@ -553,10 +428,11 @@ void StorageUniqueTest::aStoredBalanceCarriesDateTypeAndCurrency()
                                    .toString();
 
     QCOMPARE(storeAndWait(storage,
-                          BankingItems{makeBalance(testAccountId,
-                                                   AB_Balance_TypeBooked,
-                                                   QDate(2026, 3, 4),
-                                                   987.65)}),
+                          BankingItems{
+                              BankingHelpers::balanceFromBackend(testAccountId,
+                                                                 {.type = AB_Balance_TypeBooked,
+                                                                  .date = QDate(2026, 3, 4),
+                                                                  .value = 987.65})}),
              1);
 
     storage.close();
@@ -595,19 +471,18 @@ void StorageUniqueTest::aFetchWithoutABalanceLeavesTheStoredOneStanding()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 100.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(100.0)}), 1);
     QCOMPARE(storeAndWait(storage,
-                          BankingItems{makeBalance(testAccountId,
-                                                   AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 1),
-                                                   1234.56)}),
+                          BankingItems{
+                              BankingHelpers::balanceFromBackend(testAccountId,
+                                                                 {.type = AB_Balance_TypeBooked,
+                                                                  .date = QDate(2026, 2, 1),
+                                                                  .value = 1234.56})}),
              1);
 
     // What a fetch without a balance hands to the storage: the transactions
     // alone.
-    QCOMPARE(storeAndWait(storage,
-                          BankingItems{
-                              makeTransaction(testAccountId, 1, QStringLiteral("Booking 1"))}),
+    QCOMPARE(storeAndWait(storage, BankingItems{makeTransaction(1, QStringLiteral("Booking 1"))}),
              1);
 
     storage.close();
@@ -632,10 +507,7 @@ void StorageUniqueTest::moreThanAThousandBookingsAllArrive()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    auto items = BankingItems();
-    for (quint32 index = 1; index <= 1500; ++index) {
-        items << makeTransaction(testAccountId, index, QStringLiteral("Booking %1").arg(index));
-    }
+    const auto items = TransactionHelpers::transactionRun(testAccountId, 1500);
 
     QCOMPARE(storeAndWait(storage, items), 1500);
 
@@ -658,23 +530,19 @@ void StorageUniqueTest::transactionsAndBalanceOfOneAccountBothArrive()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 100.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(100.0)}), 1);
 
-    auto transactions = BankingItems();
-    for (quint32 index = 1; index <= 5; ++index) {
-        transactions << makeTransaction(testAccountId,
-                                        index,
-                                        QStringLiteral("Booking %1").arg(index));
-    }
+    const auto transactions = TransactionHelpers::transactionRun(testAccountId, 5);
 
     QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
 
     QCOMPARE(storeAndWait(storage, transactions), 5);
     QCOMPARE(storeAndWait(storage,
-                          BankingItems{makeBalance(testAccountId,
-                                                   AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 1),
-                                                   1234.56)}),
+                          BankingItems{
+                              BankingHelpers::balanceFromBackend(testAccountId,
+                                                                 {.type = AB_Balance_TypeBooked,
+                                                                  .date = QDate(2026, 2, 1),
+                                                                  .value = 1234.56})}),
              1);
 
     QCOMPARE(errorSpy.count(), 0);
@@ -699,16 +567,10 @@ void StorageUniqueTest::aFailureInTheMiddleOfARunLeavesNoRowBehind()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    auto items = BankingItems();
-    for (quint32 index = 1; index <= 5; ++index) {
-        items << makeTransaction(testAccountId, index, QStringLiteral("Booking %1").arg(index));
-    }
-
-    items << makeUnusableTransaction();
-
-    for (quint32 index = 6; index <= 10; ++index) {
-        items << makeTransaction(testAccountId, index, QStringLiteral("Booking %1").arg(index));
-    }
+    // Five that go through, one the write path refuses, five behind it.
+    auto items = TransactionHelpers::transactionRun(testAccountId, 5);
+    items << TransactionHelpers::unusableTransaction();
+    items << TransactionHelpers::transactionRun(testAccountId, 10).mid(5);
 
     QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
 
@@ -735,7 +597,7 @@ void StorageUniqueTest::theAccountPathLeavesAFetchedBalanceAlone()
     QVERIFY(!storage.initialize(true).isError());
 
     // Third case first, it is what every account starts from: no balance yet.
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 100.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(100.0)}), 1);
 
     QCOMPARE(rowsOf(file, QStringLiteral("balances")), 1);
     QCOMPARE(scalarOf(file, QStringLiteral("SELECT `value` FROM balances;")).toDouble(), 100.0);
@@ -743,20 +605,21 @@ void StorageUniqueTest::theAccountPathLeavesAFetchedBalanceAlone()
              static_cast<int>(AB_Balance_TypeUnknown));
 
     // Second case: the placeholder is its own, so it is refreshed.
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 250.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(250.0)}), 1);
 
     QCOMPARE(scalarOf(file, QStringLiteral("SELECT `value` FROM balances;")).toDouble(), 250.0);
 
     // First case: a fetched balance stands, and the account path leaves it and
     // its date and its type where they are.
     QCOMPARE(storeAndWait(storage,
-                          BankingItems{makeBalance(testAccountId,
-                                                   AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 1),
-                                                   1234.56)}),
+                          BankingItems{
+                              BankingHelpers::balanceFromBackend(testAccountId,
+                                                                 {.type = AB_Balance_TypeBooked,
+                                                                  .date = QDate(2026, 2, 1),
+                                                                  .value = 1234.56})}),
              1);
 
-    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(testAccountId, 999.0)}), 1);
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(999.0)}), 1);
 
     QCOMPARE(scalarOf(file, QStringLiteral("SELECT `value` FROM balances;")).toDouble(), 1234.56);
     QCOMPARE(scalarOf(file, QStringLiteral("SELECT `type` FROM balances;")).toInt(),
@@ -909,11 +772,11 @@ void StorageUniqueTest::rowsWithoutAFingerprintSurviveTheStep()
 
     QVERIFY(putBackToSchemaThree(file, password()));
 
-    QVERIFY(TestHelpers::putTransactions(file,
-                                         password(),
-                                         testAccountId,
-                                         500,
-                                         QStringLiteral("Without fingerprint")));
+    QVERIFY(TransactionHelpers::putTransactions(file,
+                                                password(),
+                                                testAccountId,
+                                                500,
+                                                QStringLiteral("Without fingerprint")));
 
     QCOMPARE(rowsOf(file, QStringLiteral("transactions")), 500);
 

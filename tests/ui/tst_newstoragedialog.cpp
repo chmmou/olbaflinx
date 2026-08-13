@@ -20,6 +20,8 @@
 #include "core/ApplicationInfo.h"
 #include "core/Storage/Storage.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 #include <QtGui/QAccessible>
@@ -35,6 +37,8 @@ using namespace olbaflinx::ui::storage;
 
 namespace olbaflinx::ui::storage::tests {
 
+using namespace olbaflinx::core::tests;
+
 /**
  * The dialog used to hand nothing to its caller and to accept whatever was
  * typed, because Ok was wired to accept() in the form itself. It reports name
@@ -47,15 +51,13 @@ class NewStorageDialogTest final : public QObject
 private:
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxNewStorageDialogTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxNewStorageDialogTest"));
     }
 
-    // Lower and upper case letter, digit and special character, twelve long.
+    static QString validPassword() { return TestHelpers::minimalPassword(); }
+
     // Short by four of what the guideline asks for, complete in every other
     // respect, so that a rejection can only come from the length.
-    static QString validPassword() { return QStringLiteral("Aa1!Aa1!Aa1!"); }
     static QString shortPassword() { return QStringLiteral("Aa1!Aa1!"); }
 
     static QLineEdit *nameFieldOf(const NewStorageDialog &dialog)

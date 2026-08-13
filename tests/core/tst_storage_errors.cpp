@@ -23,6 +23,7 @@
 #include "core/Storage/Storage.h"
 
 #include "TestHelpers.h"
+#include "TransactionHelpers.h"
 
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
@@ -68,81 +69,14 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxStorageErrorTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxStorageErrorTest"));
     }
 
-    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+    static QString password() { return TestHelpers::password(); }
 
     QString storageFile(const QString &name) const
     {
         return workingDirectory.filePath(name + QStringLiteral(".obfx"));
-    }
-
-    /**
-     * A transaction with every field of the property map filled, so that a write
-     * and a read back can be compared field by field.
-     */
-    static std::shared_ptr<Transaction> createFilledTransaction()
-    {
-        auto abTransaction = AB_Transaction_new();
-
-        AB_Transaction_SetType(abTransaction, AB_Transaction_TypeTransaction);
-        AB_Transaction_SetSubType(abTransaction, AB_Transaction_SubTypeStandard);
-        AB_Transaction_SetCommand(abTransaction, AB_Transaction_CommandGetTransactions);
-        AB_Transaction_SetUniqueId(abTransaction, 4711);
-        AB_Transaction_SetUniqueAccountId(abTransaction, 815);
-        AB_Transaction_SetLocalIban(abTransaction, "DE02500105170137075030");
-        AB_Transaction_SetRemoteIban(abTransaction, "DE02120300000000202051");
-        AB_Transaction_SetRemoteName(abTransaction, "Erika Musterfrau");
-        AB_Transaction_SetLocalName(abTransaction, "Max Mustermann");
-        AB_Transaction_SetPurpose(abTransaction, "Miete Februar");
-
-        auto value = AB_Value_new();
-        AB_Value_SetValueFromDouble(value, 42.5);
-        AB_Value_SetCurrency(value, "EUR");
-        // The setter duplicates what it is given, so the extra dup this used to
-        // pass was never released.
-        AB_Transaction_SetValue(abTransaction, value);
-        AB_Value_free(value);
-
-        auto transaction = std::make_shared<Transaction>(abTransaction);
-        AB_Transaction_free(abTransaction);
-
-        return transaction;
-    }
-
-    /**
-     * The number of rows a table of a store holds, read past Storage. What a
-     * failed run left behind is exactly what Storage offers no way to ask.
-     */
-    static int rowsIn(const QString &file, const QString &table)
-    {
-        int count = -1;
-
-        {
-            auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
-                                                      QStringLiteral("StorageErrorTestCount"));
-            database.setDatabaseName(file);
-
-            if (database.open()) {
-                auto key = password();
-                key.replace(QLatin1Char('\''), QLatin1StringView("''"));
-
-                QSqlQuery query(database);
-                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(key))
-                    && query.exec(QStringLiteral("SELECT COUNT(*) FROM %1;").arg(table))
-                    && query.next()) {
-                    count = query.value(0).toInt();
-                }
-
-                database.close();
-            }
-        }
-        QSqlDatabase::removeDatabase(QStringLiteral("StorageErrorTestCount"));
-
-        return count;
     }
 
 private Q_SLOTS:
@@ -429,7 +363,7 @@ void StorageErrorTest::receiveItemsFillsTransactionFields()
 
     QVERIFY(!storage.initialize(true).isError());
 
-    const auto written = createFilledTransaction();
+    const auto written = TransactionHelpers::transactionFromBackend();
     QVERIFY(written->isValid());
     QVERIFY(!storage.storeItem(written.get()).isError());
 
@@ -505,11 +439,11 @@ void StorageErrorTest::storeItemsEndsAtTheFailingAccountAndKeepsWhatWentIn()
     storage.close();
 
     // One row, and it belongs to the first account. The third was not attempted.
-    QCOMPARE(rowsIn(file, QStringLiteral("accounts")), 1);
+    QCOMPARE(TestHelpers::rowCount(file, password(), QStringLiteral("accounts")), 1);
 
     // The first account went in whole. Its balance belongs to the same bracket,
     // so a row there is what tells a complete write from a half one.
-    QCOMPARE(rowsIn(file, QStringLiteral("balances")), 1);
+    QCOMPARE(TestHelpers::rowCount(file, password(), QStringLiteral("balances")), 1);
 }
 
 } // namespace olbaflinx::core::storage::tests

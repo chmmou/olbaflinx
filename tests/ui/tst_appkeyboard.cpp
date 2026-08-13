@@ -27,6 +27,8 @@
 #include "ui/Storage/StorageDialog.h"
 
 #include "TestHelpers.h"
+#include "TransactionHelpers.h"
+#include "UiTestHelpers.h"
 
 #include <QtTest/QtTest>
 
@@ -60,6 +62,8 @@ using namespace olbaflinx::ui::models;
 using namespace olbaflinx::ui::storage;
 
 namespace olbaflinx::ui::tests {
+
+using namespace olbaflinx::core::tests;
 
 namespace {
 
@@ -167,15 +171,13 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxAppKeyboardTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxAppKeyboardTest"));
     }
 
-    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+    static QString password() { return TestHelpers::password(); }
 
-    static constexpr auto workerTimeout = std::chrono::seconds{30};
-    static constexpr int workerTimeoutMs = 30000;
+    static constexpr auto workerTimeout = UiTestHelpers::workerTimeout;
+    static constexpr int workerTimeoutMs = UiTestHelpers::workerTimeoutMs;
 
     /**
      * How many bookings the fixture puts into the storage.
@@ -185,22 +187,6 @@ private:
     [[nodiscard]] QString storageFile() const
     {
         return workingDirectory->filePath(QStringLiteral("storage.obfx"));
-    }
-
-    static QMap<QString, QVariant> accountMap()
-    {
-        return {{QStringLiteral("type"), 1},
-                {QStringLiteral("unique_id"), 4711},
-                {QStringLiteral("backend_name"), QStringLiteral("aqhbci")},
-                {QStringLiteral("owner_name"), QStringLiteral("Max Mustermann")},
-                {QStringLiteral("account_name"), QStringLiteral("Girokonto")},
-                {QStringLiteral("currency"), QStringLiteral("EUR")},
-                {QStringLiteral("iban"), QStringLiteral("DE02500105170137075030")},
-                {QStringLiteral("bic"), QStringLiteral("INGDDEFF")},
-                {QStringLiteral("bank_code"), QStringLiteral("50010517")},
-                {QStringLiteral("bank_name"), QStringLiteral("ING-DiBa")},
-                {QStringLiteral("account_number"), QStringLiteral("0137075030")},
-                {QStringLiteral("balance"), 12.5}};
     }
 
     /**
@@ -218,53 +204,16 @@ private:
             return false;
         }
 
-        const auto account = Account::fromMap(accountMap());
+        const auto account = Account::fromMap(TestHelpers::namedAccountMap());
         if (storage.storeItem(account.get()).isError()) {
             return false;
         }
 
-        return olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                    password(),
-                                                                    4711,
-                                                                    bookingCount,
-                                                                    QStringLiteral("Buchung"));
-    }
-
-    /**
-     * Brings the accounts of the storage onto the screen the way the application
-     * does it, over the core and not by handing the model a list.
-     */
-    static bool readAccountsInto(App &app, Storage &storage)
-    {
-        auto *const overview = app.findChild<StorageDialog *>();
-        if (overview == nullptr) {
-            return false;
-        }
-
-        connect(&storage, &Storage::itemsReceived, &app, &App::setAccounts, Qt::SingleShotConnection);
-
-        Q_EMIT overview->storageOpened();
-
-        QSignalSpy finishedSpy(&storage, &Storage::finished);
-        storage.receiveItems({.type = Storage::StorageAccount});
-
-        return finishedSpy.wait(workerTimeout);
-    }
-
-    static QModelIndex firstAccountOf(const AccountTreeModel &model)
-    {
-        return model.index(0, 0, model.index(0, 0));
-    }
-
-    /**
-     * Puts the window up, still on the overview.
-     */
-    static bool showTheWindow(App &app)
-    {
-        app.initialize();
-        app.show();
-
-        return QTest::qWaitForWindowExposed(&app);
+        return TransactionHelpers::putTransactions(storageFile(),
+                                                   password(),
+                                                   4711,
+                                                   bookingCount,
+                                                   QStringLiteral("Buchung"));
     }
 
     /**
@@ -285,11 +234,11 @@ private:
             return false;
         }
 
-        if (!readAccountsInto(app, storage)) {
+        if (!UiTestHelpers::readAccountsInto(app, storage)) {
             return false;
         }
 
-        central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+        central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
 
         return QTest::qWaitFor(
             [transactionModel] { return transactionModel->rowCount() == bookingCount; },
@@ -377,7 +326,7 @@ void AppKeyboardTest::theChainOfTheBankingPageFollowsTheArrangement()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     // From where the page puts the keyboard, not from the window. The chain is
@@ -428,7 +377,7 @@ void AppKeyboardTest::eachPageCarriesItsOwnChain()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
 
     const QString overviewButton = QStringLiteral("btnNewStorageItem");
     const QString searchField = QStringLiteral("lineEditTransactionSearch");
@@ -457,7 +406,7 @@ void AppKeyboardTest::theEmptyStateOfTheFilterBringsItsButtonIntoTheChain()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     const QString reset = QStringLiteral("pushButtonTransactionsNoticeReset");
@@ -487,7 +436,7 @@ void AppKeyboardTest::noElementHoldsTheFocus()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     const QList<QWidget *> chain = tabChain(&app);
@@ -573,7 +522,7 @@ void AppKeyboardTest::theToolBarStandsOutsideTheChain()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     auto *const toolBar = app.findChild<QToolBar *>(QStringLiteral("appToolBar"));
@@ -610,7 +559,7 @@ void AppKeyboardTest::noKeySequenceIsGivenTwice()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     QList<QKeySequence> seen;
@@ -695,7 +644,7 @@ void AppKeyboardTest::theAccountsComeBeforeTheTransactions()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     auto *const central = app.findChild<AppCentralWidget *>();
@@ -725,7 +674,7 @@ void AppKeyboardTest::theAccountsStayBeforeTheTransactionsAfterARestore()
     // The arrangement of a first run, written the way the window writes it.
     {
         App first(&logger, &storage);
-        QVERIFY(showTheWindow(first));
+        QVERIFY(UiTestHelpers::showTheWindow(first));
         QVERIFY(chooseTheAccount(first, storage));
 
         first.close();
@@ -736,7 +685,7 @@ void AppKeyboardTest::theAccountsStayBeforeTheTransactionsAfterARestore()
                  .isEmpty());
 
     App second(&logger, &storage);
-    QVERIFY(showTheWindow(second));
+    QVERIFY(UiTestHelpers::showTheWindow(second));
     QVERIFY(chooseTheAccount(second, storage));
 
     auto *const central = second.findChild<AppCentralWidget *>();
@@ -771,7 +720,7 @@ void AppKeyboardTest::theKeyboardChoosesAnAccountLikeAClick()
     QVERIFY(transactionModel != nullptr);
     QVERIFY(central != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
     app.show();
     QVERIFY(QTest::qWaitForWindowExposed(&app));
@@ -787,7 +736,7 @@ void AppKeyboardTest::theKeyboardChoosesAnAccountLikeAClick()
     // Down from the bank onto the account below it, the step a click takes.
     QTest::keyClick(view, Qt::Key_Down);
 
-    QCOMPARE(view->currentIndex(), firstAccountOf(*treeModel));
+    QCOMPARE(view->currentIndex(), UiTestHelpers::firstAccountOf(*treeModel));
     QCOMPARE(transactionModel->accountId(), 4711u);
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), bookingCount, workerTimeoutMs);
 }
@@ -834,7 +783,7 @@ void AppKeyboardTest::theSortingByKeyOrdersLikeAClickOnTheHeader()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     auto *const transactionModel = app.findChild<TransactionTableModel *>();
@@ -880,7 +829,7 @@ void AppKeyboardTest::takingTheFocusChangesNothing()
     QVERIFY(fillStorage(storage));
 
     App app(&logger, &storage);
-    QVERIFY(showTheWindow(app));
+    QVERIFY(UiTestHelpers::showTheWindow(app));
     QVERIFY(chooseTheAccount(app, storage));
 
     auto *const central = app.findChild<AppCentralWidget *>();

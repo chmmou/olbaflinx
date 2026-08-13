@@ -19,7 +19,9 @@
 
 #include "core/Banking/Transaction/Transaction.h"
 
+#include "TestHelpers.h"
 #include <QtCore/QLocale>
+
 #include <QtTest/QtTest>
 
 using namespace olbaflinx::core::banking;
@@ -29,33 +31,13 @@ using namespace olbaflinx::ui::models;
 
 namespace olbaflinx::ui::models::tests {
 
+using namespace olbaflinx::core::tests;
+
 class AccountTreeModelTest final : public QObject
 {
     Q_OBJECT
 
 private:
-    static QMap<QString, QVariant> accountMap(const QString &accountName,
-                                              const QString &bankName = QStringLiteral("ING-DiBa"),
-                                              quint32 uniqueId = 4711)
-    {
-        QMap<QString, QVariant> map = {};
-
-        map[QStringLiteral("type")] = 1;
-        map[QStringLiteral("unique_id")] = uniqueId;
-        map[QStringLiteral("backend_name")] = QStringLiteral("aqhbci");
-        map[QStringLiteral("owner_name")] = QStringLiteral("Max Mustermann");
-        map[QStringLiteral("account_name")] = accountName;
-        map[QStringLiteral("currency")] = QStringLiteral("EUR");
-        map[QStringLiteral("iban")] = QStringLiteral("DE02500105170137075030");
-        map[QStringLiteral("bic")] = QStringLiteral("INGDDEFF");
-        map[QStringLiteral("bank_code")] = QStringLiteral("50010517");
-        map[QStringLiteral("bank_name")] = bankName;
-        map[QStringLiteral("account_number")] = QStringLiteral("0137075030");
-        map[QStringLiteral("balance")] = 12.5;
-
-        return map;
-    }
-
 private Q_SLOTS:
     void initTestCase();
 
@@ -93,9 +75,10 @@ void AccountTreeModelTest::setItemsCountsOnlyAccounts()
     AccountTreeModel model;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Girokonto"));
+    items << Account::fromMap(TestHelpers::namedAccountMap("Girokonto"));
     items << Transaction::fromMap({});
-    items << Account::fromMap(accountMap("Sparkonto", QStringLiteral("ING-DiBa"), 4712));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Sparkonto", QStringLiteral("ING-DiBa"), 4712));
 
     model.setItems(items);
 
@@ -108,7 +91,7 @@ void AccountTreeModelTest::setItemsWithEmptyListClearsTheModel()
     AccountTreeModel model;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Girokonto"));
+    items << Account::fromMap(TestHelpers::namedAccountMap("Girokonto"));
     model.setItems(items);
     QCOMPARE(model.rowCount(), 1);
 
@@ -122,7 +105,7 @@ void AccountTreeModelTest::dataReturnsTheMappedRoles()
     AccountTreeModel model;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Girokonto"));
+    items << Account::fromMap(TestHelpers::namedAccountMap("Girokonto"));
     model.setItems(items);
 
     const QModelIndex index = model.index(0, 0, model.index(0, 0));
@@ -160,9 +143,12 @@ void AccountTreeModelTest::threeAccountsAtTwoBanksBecomeTwoBankNodes()
     AccountTreeModel model;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Girokonto", QStringLiteral("ING-DiBa"), 4711));
-    items << Account::fromMap(accountMap("Sparkonto", QStringLiteral("ING-DiBa"), 4712));
-    items << Account::fromMap(accountMap("Tagesgeld", QStringLiteral("Postbank"), 4713));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Girokonto", QStringLiteral("ING-DiBa"), 4711));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Sparkonto", QStringLiteral("ING-DiBa"), 4712));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Tagesgeld", QStringLiteral("Postbank"), 4713));
 
     model.setItems(items);
 
@@ -177,11 +163,12 @@ void AccountTreeModelTest::anInactiveAccountAndItsLoneBankStayAway()
 {
     AccountTreeModel model;
 
-    auto inactive = accountMap("Altkonto", QStringLiteral("Postbank"), 4713);
+    auto inactive = TestHelpers::namedAccountMap("Altkonto", QStringLiteral("Postbank"), 4713);
     inactive[QStringLiteral("active")] = false;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Girokonto", QStringLiteral("ING-DiBa"), 4711));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Girokonto", QStringLiteral("ING-DiBa"), 4711));
     items << Account::fromMap(inactive);
 
     model.setItems(items);
@@ -196,7 +183,7 @@ void AccountTreeModelTest::aBankNodeCarriesNoAccountId()
     AccountTreeModel model;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Girokonto"));
+    items << Account::fromMap(TestHelpers::namedAccountMap("Girokonto"));
     model.setItems(items);
 
     const QModelIndex bank = model.index(0, 0);
@@ -210,9 +197,12 @@ void AccountTreeModelTest::banksAndAccountsFollowTheOrderOfTheLanguage()
     AccountTreeModel model;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Bankhaus Nord", QStringLiteral("Bankhaus Nord"), 4711));
-    items << Account::fromMap(accountMap("Sparkonto", QStringLiteral("Ärztebank"), 4712));
-    items << Account::fromMap(accountMap("Ölkonto", QStringLiteral("Ärztebank"), 4713));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Bankhaus Nord", QStringLiteral("Bankhaus Nord"), 4711));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Sparkonto", QStringLiteral("Ärztebank"), 4712));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Ölkonto", QStringLiteral("Ärztebank"), 4713));
 
     model.setItems(items);
 
@@ -234,8 +224,10 @@ void AccountTreeModelTest::twoAccountsOfTheSameBankShareOneNode()
     AccountTreeModel model;
 
     BankingItems items;
-    items << Account::fromMap(accountMap("Girokonto", QStringLiteral("Sparkasse"), 4711));
-    items << Account::fromMap(accountMap("Sparkonto", QStringLiteral("Sparkasse"), 4712));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Girokonto", QStringLiteral("Sparkasse"), 4711));
+    items << Account::fromMap(
+        TestHelpers::namedAccountMap("Sparkonto", QStringLiteral("Sparkasse"), 4712));
 
     model.setItems(items);
 
@@ -247,7 +239,7 @@ void AccountTreeModelTest::anAccountWithoutAnIbanStaysInTheTree()
 {
     AccountTreeModel model;
 
-    auto withoutIban = accountMap("Girokonto");
+    auto withoutIban = TestHelpers::namedAccountMap("Girokonto");
     withoutIban[QStringLiteral("iban")] = QString();
 
     BankingItems items;
