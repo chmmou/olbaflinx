@@ -173,6 +173,26 @@ CREATE INDEX IF NOT EXISTS transactions_last_date_index on transactions (last_da
 CREATE INDEX IF NOT EXISTS transactions_next_date_index on transactions (next_date desc);
 CREATE INDEX IF NOT EXISTS transactions_unit_price_date_index on transactions (unit_price_date desc);
 
+-- Removes rows that carry a booking twice. It runs before the unique index is
+-- built, because an index over a holding that already has duplicates cannot be
+-- created at all, and a storage whose schema step fails is one the user has no
+-- way back into. Over a holding without duplicates it does nothing, so it is
+-- safe to replay: the schema resource runs again on every version step.
+--
+-- Per fingerprint the row with the smallest id stays, which is the one that was
+-- written first.
+--
+-- Rows without a fingerprint are left alone, in both halves. A grouping over the
+-- column puts every empty value into one single group, so without the exception
+-- one of a thousand such rows would be left. The unique index below is
+-- unaffected by them: there several empty values count as different.
+DELETE FROM transactions
+ WHERE COALESCE(`hash`, '') <> ''
+   AND id NOT IN (SELECT MIN(id) FROM transactions
+                   WHERE COALESCE(`hash`, '') <> '' GROUP BY `hash`);
+
+CREATE UNIQUE INDEX IF NOT EXISTS transactions_hash_unique_index on transactions (`hash`);
+
 CREATE TABLE IF NOT EXISTS balances
 (
     id         integer not null
@@ -232,4 +252,5 @@ end;
 INSERT OR IGNORE INTO migrations (name)
 VALUES ('0001_initial_schema'),
        ('0002_reference_accounts'),
-       ('0003_account_active');
+       ('0003_account_active'),
+       ('0004_unique_transactions');
