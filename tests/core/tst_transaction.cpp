@@ -17,6 +17,8 @@
 
 #include "core/Banking/Transaction/Transaction.h"
 
+#include "TransactionHelpers.h"
+
 #include <QtTest/QtTest>
 
 using namespace olbaflinx::core::banking;
@@ -24,45 +26,22 @@ using namespace olbaflinx::core::banking::transaction;
 
 namespace olbaflinx::core::banking::transaction::tests {
 
+using namespace olbaflinx::core::tests;
+
 class TransactionTest final : public QObject
 {
     Q_OBJECT
 
 private:
     /**
-     * Builds a transaction with a type set, which the default constructor cannot produce.
-     * AB_Transaction_new() initialises type to AB_Transaction_TypeUnknown.
+     * A transaction with a type set, which the default constructor cannot
+     * produce: AB_Transaction_new() leaves the type unknown.
      */
-    static Transaction *createTypedTransaction(TransactionType type,
-                                               const QString &endToEndReference = QString())
+    static std::shared_ptr<Transaction> createTypedTransaction(
+        TransactionType type, const QString &endToEndReference = QString())
     {
-        auto abTransaction = AB_Transaction_new();
-        AB_Transaction_SetType(abTransaction, type);
-
-        if (!endToEndReference.isEmpty()) {
-            AB_Transaction_SetEndToEndReference(abTransaction,
-                                                endToEndReference.toUtf8().constData());
-        }
-
-        AB_Transaction_SetUniqueId(abTransaction, 4711);
-        AB_Transaction_SetLocalIban(abTransaction, "DE02500105170137075030");
-        AB_Transaction_SetRemoteIban(abTransaction, "DE02120300000000202051");
-        AB_Transaction_SetRemoteName(abTransaction, "Erika Musterfrau");
-        AB_Transaction_SetLocalName(abTransaction, "Max Mustermann");
-        AB_Transaction_SetRemoteAccountNumber(abTransaction, "0137075030");
-
-        auto value = AB_Value_new();
-        AB_Value_SetValueFromDouble(value, 42.5);
-        AB_Value_SetCurrency(value, "EUR");
-        // The setter duplicates what it is given, so the extra dup this used to
-        // pass was never released.
-        AB_Transaction_SetValue(abTransaction, value);
-        AB_Value_free(value);
-
-        const auto transaction = new Transaction(abTransaction);
-        AB_Transaction_free(abTransaction);
-
-        return transaction;
+        return TransactionHelpers::transactionFromBackend(
+            {.type = type, .endToEndReference = endToEndReference});
     }
 
     /**
@@ -70,10 +49,7 @@ private:
      */
     static QMap<QString, QVariant> mapOfATypedTransaction()
     {
-        const QScopedPointer<Transaction> transaction(
-            createTypedTransaction(AB_Transaction_TypeTransaction));
-
-        return transaction->toMap();
+        return createTypedTransaction(AB_Transaction_TypeTransaction)->toMap();
     }
 
 private Q_SLOTS:
@@ -102,15 +78,14 @@ void TransactionTest::transactionIsValidRejectsUnknownType()
 
 void TransactionTest::transactionIsValidRejectsNoneType()
 {
-    const QScopedPointer<Transaction> transaction(createTypedTransaction(AB_Transaction_TypeNone));
+    const auto transaction = createTypedTransaction(AB_Transaction_TypeNone);
 
     QVERIFY(!transaction->isValid());
 }
 
 void TransactionTest::transactionIsValidAcceptsKnownType()
 {
-    const QScopedPointer<Transaction> transaction(
-        createTypedTransaction(AB_Transaction_TypeTransaction));
+    const auto transaction = createTypedTransaction(AB_Transaction_TypeTransaction);
 
     QCOMPARE(transaction->type(), AB_Transaction_TypeTransaction);
     QVERIFY(transaction->isValid());
@@ -118,8 +93,7 @@ void TransactionTest::transactionIsValidAcceptsKnownType()
 
 void TransactionTest::transactionToStringOmitsPersonalData()
 {
-    const QScopedPointer<Transaction> transaction(
-        createTypedTransaction(AB_Transaction_TypeTransaction));
+    const auto transaction = createTypedTransaction(AB_Transaction_TypeTransaction);
 
     // Guards the assertions below: contains() on an empty string is always true.
     QVERIFY(!transaction->localIban().isEmpty());
@@ -158,8 +132,7 @@ void TransactionTest::transactionToStringHandlesEmptyTransaction()
  */
 void TransactionTest::toMapAndBackYieldsTheSameTransaction()
 {
-    const QScopedPointer<Transaction> written(
-        createTypedTransaction(AB_Transaction_TypeTransaction));
+    const auto written = createTypedTransaction(AB_Transaction_TypeTransaction);
 
     const auto read = Transaction::fromMap(written->toMap());
     QVERIFY(read != nullptr);
@@ -177,8 +150,7 @@ void TransactionTest::toMapAndBackYieldsTheSameTransaction()
 
 void TransactionTest::toMapKeepsNonAsciiNames()
 {
-    const QScopedPointer<Transaction> written(
-        createTypedTransaction(AB_Transaction_TypeTransaction));
+    const auto written = createTypedTransaction(AB_Transaction_TypeTransaction);
 
     auto map = written->toMap();
     map[QStringLiteral("remote_name")] = QStringLiteral("Erika Müller-Groß");
@@ -199,7 +171,7 @@ void TransactionTest::toMapKeepsNonAsciiNames()
 void TransactionTest::toMapOfAnEmptyTransactionCarriesTheSameKeys()
 {
     const Transaction empty;
-    const QScopedPointer<Transaction> filled(createTypedTransaction(AB_Transaction_TypeTransaction));
+    const auto filled = createTypedTransaction(AB_Transaction_TypeTransaction);
 
     QCOMPARE(empty.toMap().keys(), filled->toMap().keys());
 }
@@ -211,35 +183,28 @@ void TransactionTest::toMapOfAnEmptyTransactionCarriesTheSameKeys()
  */
 void TransactionTest::toMapCarriesAHashOverTheContent()
 {
-    const QScopedPointer<Transaction> first(createTypedTransaction(AB_Transaction_TypeTransaction));
-    const QScopedPointer<Transaction> referenced(
-        createTypedTransaction(AB_Transaction_TypeTransaction, QStringLiteral("E2E-4711")));
+    const auto first = createTypedTransaction(AB_Transaction_TypeTransaction);
+    const auto referenced = createTypedTransaction(AB_Transaction_TypeTransaction,
+                                                   QStringLiteral("E2E-4711"));
 
     const auto hashOf = [](const Transaction *transaction) {
         return transaction->toMap().value(QStringLiteral("hash")).toString();
     };
 
-    QVERIFY(!hashOf(first.data()).isEmpty());
-    QVERIFY(hashOf(referenced.data()) != hashOf(first.data()));
+    QVERIFY(!hashOf(first.get()).isEmpty());
+    QVERIFY(hashOf(referenced.get()) != hashOf(first.get()));
 
     // Same content, same hash. The fingerprint is a function of the booking, not
     // of the moment it was taken.
-    const QScopedPointer<Transaction> again(createTypedTransaction(AB_Transaction_TypeTransaction));
-    QCOMPARE(hashOf(again.data()), hashOf(first.data()));
+    const auto again = createTypedTransaction(AB_Transaction_TypeTransaction);
+    QCOMPARE(hashOf(again.get()), hashOf(first.get()));
 
-    // Another party has to change it. Under the old rule it did not.
-    auto abTransaction = AB_Transaction_new();
-    AB_Transaction_SetType(abTransaction, AB_Transaction_TypeTransaction);
-    AB_Transaction_SetUniqueId(abTransaction, 4711);
-    AB_Transaction_SetLocalIban(abTransaction, "DE02500105170137075030");
-    AB_Transaction_SetRemoteIban(abTransaction, "DE02120300000000202051");
-    AB_Transaction_SetRemoteName(abTransaction, "Klaus Anders");
-    AB_Transaction_SetRemoteAccountNumber(abTransaction, "0137075030");
+    // Another party has to change it. Under the old rule it did not. Only the
+    // name differs from the one above, so nothing else can account for it.
+    const auto other = TransactionHelpers::transactionFromBackend(
+        {.remoteName = QStringLiteral("Klaus Anders")});
 
-    const QScopedPointer<Transaction> other(new Transaction(abTransaction));
-    AB_Transaction_free(abTransaction);
-
-    QVERIFY(hashOf(other.data()) != hashOf(first.data()));
+    QVERIFY(hashOf(other.get()) != hashOf(first.get()));
 }
 
 /**

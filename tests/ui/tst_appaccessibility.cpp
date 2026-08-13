@@ -21,6 +21,8 @@
 #include "ui/App.h"
 #include "ui/AppCentralWidget.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 #include <QtGui/QAccessible>
@@ -40,6 +42,8 @@ using namespace olbaflinx::core::storage;
 using namespace olbaflinx::ui;
 
 namespace olbaflinx::ui::tests {
+
+using namespace olbaflinx::core::tests;
 
 namespace {
 
@@ -71,9 +75,7 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxAppAccessibilityTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxAppAccessibilityTest"));
     }
 
     /**

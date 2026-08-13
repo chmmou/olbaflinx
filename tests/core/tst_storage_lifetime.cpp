@@ -18,12 +18,16 @@
 #include "core/ApplicationInfo.h"
 #include "core/Storage/Storage.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
 
 namespace olbaflinx::core::storage::tests {
+
+using namespace olbaflinx::core::tests;
 
 class StorageLifetimeTest final : public QObject
 {
@@ -32,9 +36,7 @@ class StorageLifetimeTest final : public QObject
 private:
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxStorageLifetimeTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxStorageLifetimeTest"));
     }
 
 private Q_SLOTS:

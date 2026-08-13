@@ -22,6 +22,8 @@
 #include "ui/AppCentralWidget.h"
 #include "ui/Storage/StorageDialog.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 #include <QtWidgets/QMenuBar>
@@ -38,6 +40,8 @@ using namespace olbaflinx::ui;
 
 namespace olbaflinx::ui::tests {
 
+using namespace olbaflinx::core::tests;
+
 /**
  * The dock areas used to sit in the source as a comment, and the window showed
  * the two views side by side in a plain layout. These tests hold the arrangement
@@ -50,9 +54,7 @@ class AppDockLayoutTest final : public QObject
 private:
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxAppDockLayoutTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxAppDockLayoutTest"));
     }
 
     /**

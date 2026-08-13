@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include "core/ApplicationInfo.h"
 #include "core/Banking/Account/Account.h"
 
 #include <QtCore/QMap>
@@ -26,13 +27,49 @@
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking::account;
 
 namespace olbaflinx::core::tests {
 
+/**
+ * What every test needs: the way past Storage into the file, the pass phrase,
+ * the application details, and an account to write.
+ *
+ * Three further headers sit beside this one, each for one subject. A helper
+ * belongs here when it fits none of them:
+ *
+ * - TransactionHelpers.h builds a booking, in either of the two forms.
+ * - BankingHelpers.h builds what the banking backend hands over.
+ * - ../ui/UiTestHelpers.h reaches the window and its models, which the core
+ *   targets deliberately cannot see: they link no Widgets.
+ */
 class TestHelpers
 {
 public:
+    /**
+     * The pass phrase every storage of a test is opened with. It meets the
+     * guideline of the core and carries a quote, a backslash and a slash, so a
+     * test file is also a test of the escaping.
+     */
+    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+
+    /**
+     * The shortest pass phrase the guideline still accepts: twelve characters
+     * with one of each class. What tests the boundary rather than the escaping.
+     */
+    static QString minimalPassword() { return QStringLiteral("Aa1!Aa1!Aa1!"); }
+
+    /**
+     * The application details of a test. Organisation and version are the same
+     * everywhere; the name is what keeps the settings of two test binaries
+     * apart, so it is the one thing a caller says.
+     */
+    static ApplicationInfo applicationInfo(const QString &name)
+    {
+        return {QStringLiteral("de.chm-projects.olbaflinx.test"), name, QStringLiteral("1.0.0")};
+    }
+
     /**
      * Runs one statement against a storage file, past Storage, and hands back
      * the first value of the first row. An invalid QVariant means the file would
@@ -100,80 +137,19 @@ public:
     }
 
     /**
-     * Puts transactions into a storage past Storage, hung on the identifier the
-     * institution assigns. This epic fetches none from a bank, so whoever reads
-     * them has to write them first.
+     * The number of rows a table holds, read past Storage. What a failed run
+     * left behind is exactly what Storage offers no way to ask.
      *
-     * They all share their account_id and differ in unique_account_id. That is
-     * what tells a read over the right column from one over the wrong one.
+     * @return The count, or -1 when the file would not open or the table is not
+     *  there.
      */
-    static bool putTransactions(const QString &file,
-                                const QString &key,
-                                quint32 uniqueAccountId,
-                                int count,
-                                const QString &purpose)
+    static int rowCount(const QString &file, const QString &key, const QString &table)
     {
-        return storageScalar(file,
-                             key,
-                             QStringLiteral(
-                                 "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM "
-                                 "seq WHERE n < %2) INSERT INTO transactions (account_id, "
-                                 "unique_account_id, purpose) SELECT 1, %1, '%3 ' || n FROM seq "
-                                 "RETURNING unique_account_id;")
-                                 .arg(uniqueAccountId)
-                                 .arg(count)
-                                 .arg(purpose))
-            .isValid();
-    }
+        const auto value = storageScalar(file,
+                                         key,
+                                         QStringLiteral("SELECT COUNT(*) FROM %1;").arg(table));
 
-    /**
-     * Puts transactions that carry a date, an amount and a counterparty, each of
-     * them one step apart from the record before it.
-     *
-     * putTransactions writes none of the three, so a read over it has no expected
-     * order in any column but the purpose. Ordering by a column needs values that
-     * differ, and it needs them to differ the same way in every column, so that
-     * one answer is right for all four.
-     *
-     * The rows go in even numbers first and odd numbers after, so that the order
-     * of the row ids is neither the order of the values nor its reverse. Written
-     * in the plain order, a read that ignores the chosen column and falls back on
-     * the row id would answer exactly as one that honours it, and a test over it
-     * would pass against an implementation that does not order at all.
-     *
-     * Each record carries its amount as its unique_id as well, so that a run over
-     * several pages can be checked by the set of identifiers it delivered.
-     *
-     * @param firstDate The day of the record that carries the smallest amount, in
-     *  ISO form. Every further record moves dayStep days on, so a span that
-     *  crosses a month or a year is a matter of choosing the day.
-     * @param dayStep Days between two records. Zero puts every one of them on the
-     *  same day, which is what leaves the order to the second criterion alone.
-     */
-    static bool putOrderedTransactions(const QString &file,
-                                       const QString &key,
-                                       quint32 uniqueAccountId,
-                                       int count,
-                                       const QString &firstDate = QStringLiteral("2026-01-01"),
-                                       int dayStep = 1)
-    {
-        return storageScalar(file,
-                             key,
-                             QStringLiteral(
-                                 "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM "
-                                 "seq WHERE n < %2) INSERT INTO transactions (account_id, "
-                                 "unique_account_id, unique_id, purpose, remote_name, `date`, "
-                                 "`value`) "
-                                 "SELECT 1, %1, v, 'Buchung ' || v, 'Partner ' || v, "
-                                 "date('%3', '+' || ((v - 1) * %4) || ' days'), v * 1.0 FROM "
-                                 "(SELECT CASE WHEN n <= %2 / 2 THEN n * 2 "
-                                 "ELSE (n - %2 / 2) * 2 - 1 END AS v FROM seq) "
-                                 "RETURNING unique_account_id;")
-                                 .arg(uniqueAccountId)
-                                 .arg(count)
-                                 .arg(firstDate)
-                                 .arg(dayStep))
-            .isValid();
+        return value.isValid() ? value.toInt() : -1;
     }
 
     static std::shared_ptr<Account> createFakeAccount(const int accountType = 1)
@@ -206,6 +182,46 @@ public:
         map[QStringLiteral("balance")] = generator()->bounded(1000.0);
 
         return map;
+    }
+
+    /**
+     * An account under an identifier the caller chooses, with a balance it
+     * chooses. Where a test has to find its account again, or to hang a balance
+     * on it, the random identifier of the map above is of no use.
+     */
+    static QMap<QString, QVariant> accountMapWith(quint32 uniqueId, double balance)
+    {
+        auto map = createFakeAccountMap();
+
+        map[QStringLiteral("unique_id")] = uniqueId;
+        map[QStringLiteral("balance")] = balance;
+
+        return map;
+    }
+
+    /**
+     * An account whose every field is a value one can read in a message. What a
+     * test of a view needs: the random name of the map above says nothing when a
+     * comparison over it fails, and a tree ordered by bank needs banks that are
+     * named.
+     */
+    static QMap<QString, QVariant> namedAccountMap(
+        const QString &accountName = QStringLiteral("Girokonto"),
+        const QString &bankName = QStringLiteral("ING-DiBa"),
+        quint32 uniqueId = 4711)
+    {
+        return {{QStringLiteral("type"), 1},
+                {QStringLiteral("unique_id"), uniqueId},
+                {QStringLiteral("backend_name"), QStringLiteral("aqhbci")},
+                {QStringLiteral("owner_name"), QStringLiteral("Max Mustermann")},
+                {QStringLiteral("account_name"), accountName},
+                {QStringLiteral("currency"), QStringLiteral("EUR")},
+                {QStringLiteral("iban"), QStringLiteral("DE02500105170137075030")},
+                {QStringLiteral("bic"), QStringLiteral("INGDDEFF")},
+                {QStringLiteral("bank_code"), QStringLiteral("50010517")},
+                {QStringLiteral("bank_name"), bankName},
+                {QStringLiteral("account_number"), QStringLiteral("0137075030")},
+                {QStringLiteral("balance"), 12.5}};
     }
 
     /**

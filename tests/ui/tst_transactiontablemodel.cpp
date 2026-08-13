@@ -22,6 +22,7 @@
 #include "core/Storage/Storage.h"
 
 #include "TestHelpers.h"
+#include "TransactionHelpers.h"
 
 #include <QtTest/QtTest>
 
@@ -50,18 +51,8 @@ private:
 
     static QMap<QString, QVariant> transactionMap(const QString &purpose, double value)
     {
-        QMap<QString, QVariant> map = {};
-
-        map[QStringLiteral("type")] = 1;
-        map[QStringLiteral("unique_id")] = 4711;
-        map[QStringLiteral("date")] = bookingDate();
-        map[QStringLiteral("purpose")] = purpose;
-        map[QStringLiteral("value")] = value;
-        map[QStringLiteral("currency")] = QStringLiteral("EUR");
-        map[QStringLiteral("remote_name")] = QStringLiteral("Erika Musterfrau");
-        map[QStringLiteral("remote_iban")] = QStringLiteral("DE02120300000000202051");
-
-        return map;
+        return TransactionHelpers::transactionMap(
+            {.date = bookingDate(), .value = value, .purpose = purpose});
     }
 
     /**
@@ -83,7 +74,7 @@ private:
 
     std::unique_ptr<QTemporaryDir> workingDirectory;
 
-    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+    static QString password() { return TestHelpers::password(); }
 
     /**
      * The upper bound a wait may take before the test counts as failed. It is
@@ -108,9 +99,7 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxTransactionTableModelTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxTransactionTableModelTest"));
     }
 
     [[nodiscard]] bool openStorage(Storage &storage) const
@@ -128,11 +117,11 @@ private:
                                        int count,
                                        const QString &purpose = QStringLiteral("Buchung")) const
     {
-        return TestHelpers::putTransactions(storageFile(),
-                                            password(),
-                                            uniqueAccountId,
-                                            count,
-                                            purpose);
+        return TransactionHelpers::putTransactions(storageFile(),
+                                                   password(),
+                                                   uniqueAccountId,
+                                                   count,
+                                                   purpose);
     }
 
     [[nodiscard]] bool putOrderedTransactions(
@@ -141,12 +130,12 @@ private:
         const QString &firstDate = QStringLiteral("2026-01-01"),
         int dayStep = 1) const
     {
-        return TestHelpers::putOrderedTransactions(storageFile(),
-                                                   password(),
-                                                   uniqueAccountId,
-                                                   count,
-                                                   firstDate,
-                                                   dayStep);
+        return TransactionHelpers::putOrderedTransactions(storageFile(),
+                                                          password(),
+                                                          uniqueAccountId,
+                                                          count,
+                                                          firstDate,
+                                                          dayStep);
     }
 
     /**

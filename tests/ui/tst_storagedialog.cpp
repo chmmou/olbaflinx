@@ -22,6 +22,8 @@
 #include "ui/Storage/NewStorageDialog.h"
 #include "ui/Storage/NewStorageItem.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 #include <QtCore/QTimer>
@@ -47,6 +49,8 @@ using namespace olbaflinx::ui::storage;
 
 namespace olbaflinx::ui::storage::tests {
 
+using namespace olbaflinx::core::tests;
+
 class StorageDialogTest final : public QObject
 {
     Q_OBJECT
@@ -54,14 +58,10 @@ class StorageDialogTest final : public QObject
 private:
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxStorageDialogTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxStorageDialogTest"));
     }
 
-    // Twelve characters with a lower and an upper case letter, a digit and a
-    // special character, which is what the core asks of a pass phrase.
-    static QString password() { return QStringLiteral("Aa1!Aa1!Aa1!"); }
+    static QString password() { return TestHelpers::minimalPassword(); }
 
     static QLineEdit *fieldOf(const QWidget *dialog, const QString &name)
     {

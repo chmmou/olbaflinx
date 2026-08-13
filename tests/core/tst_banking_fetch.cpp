@@ -21,12 +21,10 @@
 #include "core/Banking/Transaction/Transaction.h"
 #include "core/Error.h"
 
-#include <aqbanking/banking.h>
-#include <aqbanking/types/balance.h>
-#include <aqbanking/types/imexporter_context.h>
-#include <aqbanking/types/value.h>
+#include "BankingHelpers.h"
+#include "TestHelpers.h"
 
-#include <gwenhywfar/gwendate.h>
+#include <aqbanking/banking.h>
 
 #include <QtTest/QtTest>
 
@@ -40,6 +38,8 @@ using namespace olbaflinx::core::banking::transaction;
 
 namespace olbaflinx::core::banking::tests {
 
+using namespace olbaflinx::core::tests;
+
 class BankingFetchTest final : public QObject
 {
     Q_OBJECT
@@ -49,9 +49,7 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxBankingFetchTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxBankingFetchTest"));
     }
 
 private Q_SLOTS:
@@ -71,153 +69,6 @@ namespace {
 
 constexpr quint32 testAccountId = 4711;
 constexpr int bookingCount = 5;
-
-/**
- * The non-interactive interface of gwenhywfar. Banking refuses to come up
- * without one, and this one answers no prompt and shows no dialog.
- *
- * Ownership stays here. Banking takes the pointer and never frees it.
- */
-class ScopedConsoleGui
-{
-public:
-    ScopedConsoleGui()
-        : m_gui(GWEN_Gui_new())
-    {}
-
-    ~ScopedConsoleGui() { GWEN_Gui_free(m_gui); }
-
-    ScopedConsoleGui(const ScopedConsoleGui &) = delete;
-    ScopedConsoleGui &operator=(const ScopedConsoleGui &) = delete;
-
-    [[nodiscard]] GWEN_GUI *get() const { return m_gui; }
-
-private:
-    GWEN_GUI *m_gui;
-};
-
-/**
- * An account the way AqBanking reports one. The backend name decides whether
- * the account has online access at all.
- */
-std::shared_ptr<Account> makeAccount(quint32 uniqueId, const char *backendName)
-{
-    AB_ACCOUNT_SPEC *spec = AB_AccountSpec_new();
-
-    AB_AccountSpec_SetUniqueId(spec, uniqueId);
-    AB_AccountSpec_SetBackendName(spec, backendName);
-    AB_AccountSpec_SetAccountName(spec, "Girokonto");
-    AB_AccountSpec_SetOwnerName(spec, "Erika Mustermann");
-    AB_AccountSpec_SetIban(spec, "DE02120300000000202051");
-    AB_AccountSpec_SetBankCode(spec, "12030000");
-    AB_AccountSpec_SetAccountNumber(spec, "0000202051");
-    AB_AccountSpec_SetCurrency(spec, "EUR");
-
-    auto account = std::make_shared<Account>(spec);
-    AB_AccountSpec_free(spec);
-
-    return account;
-}
-
-/** One balance of the response container. */
-struct BalanceSpec
-{
-    AB_BALANCE_TYPE type;
-    QDate date;
-    double value;
-};
-
-/**
- * The container a session would have filled. Every test builds its own, which
- * is what makes the evaluation measurable without a bank.
- *
- * The caller owns the result and releases it with AB_ImExporterContext_free.
- */
-AB_IMEXPORTER_CONTEXT *makeContext(quint32 uniqueId,
-                                   int transactionCount,
-                                   const QList<BalanceSpec> &balances)
-{
-    AB_IMEXPORTER_CONTEXT *context = AB_ImExporterContext_new();
-
-    AB_IMEXPORTER_ACCOUNTINFO *info
-        = AB_ImExporterContext_GetOrAddAccountInfo(context,
-                                                   uniqueId,
-                                                   "DE02120300000000202051",
-                                                   "12030000",
-                                                   "0000202051",
-                                                   AB_AccountType_Checking);
-
-    for (int index = 0; index < transactionCount; ++index) {
-        AB_TRANSACTION *transaction = AB_Transaction_new();
-
-        AB_Transaction_SetType(transaction, AB_Transaction_TypeStatement);
-        AB_Transaction_SetUniqueAccountId(transaction, uniqueId);
-        AB_Transaction_SetUniqueId(transaction, static_cast<uint32_t>(index) + 1);
-
-        const auto purpose = QStringLiteral("Booking %1").arg(index + 1).toUtf8();
-        AB_Transaction_SetPurpose(transaction, purpose.constData());
-
-        AB_ImExporterAccountInfo_AddTransaction(info, transaction);
-    }
-
-    for (const BalanceSpec &spec : balances) {
-        AB_BALANCE *balance = AB_Balance_new();
-
-        AB_Balance_SetType(balance, spec.type);
-
-        const auto text = spec.date.toString(QStringLiteral("yyyyMMdd")).toLatin1();
-        GWEN_DATE *date = GWEN_Date_fromString(text.constData());
-        AB_Balance_SetDate(balance, date);
-        GWEN_Date_free(date);
-
-        AB_VALUE *value = AB_Value_fromDouble(spec.value);
-        AB_Value_SetCurrency(value, "EUR");
-        AB_Balance_SetValue(balance, value);
-        AB_Value_free(value);
-
-        AB_ImExporterAccountInfo_AddBalance(info, balance);
-    }
-
-    return context;
-}
-
-/** The command of the given kind, or null if the list carries none. */
-AB_TRANSACTION *commandOfKind(AB_TRANSACTION_LIST2 *commands, AB_TRANSACTION_COMMAND kind)
-{
-    AB_TRANSACTION_LIST2_ITERATOR *iterator = AB_Transaction_List2_First(commands);
-    if (iterator == nullptr) {
-        return nullptr;
-    }
-
-    AB_TRANSACTION *found = nullptr;
-
-    AB_TRANSACTION *command = AB_Transaction_List2Iterator_Data(iterator);
-    while (command != nullptr) {
-        if (AB_Transaction_GetCommand(command) == kind) {
-            found = command;
-            break;
-        }
-        command = AB_Transaction_List2Iterator_Next(iterator);
-    }
-
-    AB_Transaction_List2Iterator_free(iterator);
-
-    return found;
-}
-
-/** The items of the given type, in the order the core reported them. */
-BankingItems itemsOfType(const BankingItems &items, const QString &type)
-{
-    BankingItems found;
-
-    for (const BankingItemPtr &item : items) {
-        if (item->itemType() == type) {
-            found.append(item);
-        }
-    }
-
-    return found;
-}
 
 } // namespace
 
@@ -246,15 +97,17 @@ void BankingFetchTest::cleanupTestCase()
  */
 void BankingFetchTest::commandsCarryBothRequestsAndTheIdOfTheGivenAccount()
 {
-    const auto account = makeAccount(testAccountId, "aqhbci");
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
 
     AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
     QVERIFY(commands != nullptr);
 
     QCOMPARE(AB_Transaction_List2_GetSize(commands), 2u);
 
-    AB_TRANSACTION *transactions = commandOfKind(commands, AB_Transaction_CommandGetTransactions);
-    AB_TRANSACTION *balance = commandOfKind(commands, AB_Transaction_CommandGetBalance);
+    AB_TRANSACTION *transactions
+        = BankingHelpers::commandOfKind(commands, AB_Transaction_CommandGetTransactions);
+    AB_TRANSACTION *balance = BankingHelpers::commandOfKind(commands,
+                                                            AB_Transaction_CommandGetBalance);
 
     QVERIFY(transactions != nullptr);
     QVERIFY(balance != nullptr);
@@ -275,7 +128,7 @@ void BankingFetchTest::commandsCarryBothRequestsAndTheIdOfTheGivenAccount()
  */
 void BankingFetchTest::commandsLeaveTheFieldTheBackendKeepsEmpty()
 {
-    const auto account = makeAccount(testAccountId, "aqhbci");
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
 
     AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
     QVERIFY(commands != nullptr);
@@ -301,24 +154,24 @@ void BankingFetchTest::commandsLeaveTheFieldTheBackendKeepsEmpty()
  */
 void BankingFetchTest::fiveBookingsAndABookedBalanceArriveAsFiveTransactionsAndOneBalance()
 {
-    const auto account = makeAccount(testAccountId, "aqhbci");
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
 
     AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
 
-    AB_IMEXPORTER_CONTEXT *context = makeContext(testAccountId,
-                                                 bookingCount,
-                                                 {{AB_Balance_TypeNoted, QDate(2026, 2, 2), 17.50},
-                                                  {AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 1),
-                                                   1234.56}});
+    AB_IMEXPORTER_CONTEXT *context
+        = BankingHelpers::responseContext(testAccountId,
+                                          bookingCount,
+                                          {{AB_Balance_TypeNoted, QDate(2026, 2, 2), 17.50},
+                                           {AB_Balance_TypeBooked, QDate(2026, 2, 1), 1234.56}});
 
     const BankingItems items = Banking::itemsFromContext(context, commands);
 
     AB_ImExporterContext_free(context);
     AB_Transaction_List2_freeAll(commands);
 
-    const BankingItems transactions = itemsOfType(items, QStringLiteral("Transaction"));
-    const BankingItems balances = itemsOfType(items, QStringLiteral("Balance"));
+    const BankingItems transactions = BankingHelpers::itemsOfType(items,
+                                                                  QStringLiteral("Transaction"));
+    const BankingItems balances = BankingHelpers::itemsOfType(items, QStringLiteral("Balance"));
 
     QCOMPARE(transactions.size(), bookingCount);
     QCOMPARE(balances.size(), 1);
@@ -341,7 +194,7 @@ void BankingFetchTest::fiveBookingsAndABookedBalanceArriveAsFiveTransactionsAndO
  */
 void BankingFetchTest::anEmptyContainerAnswersWithAnEmptyResult()
 {
-    const auto account = makeAccount(testAccountId, "aqhbci");
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
 
     AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
     AB_IMEXPORTER_CONTEXT *context = AB_ImExporterContext_new();
@@ -360,19 +213,20 @@ void BankingFetchTest::anEmptyContainerAnswersWithAnEmptyResult()
  */
 void BankingFetchTest::aFailedCommandDropsTheWholeAccount()
 {
-    const auto account = makeAccount(testAccountId, "aqhbci");
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
 
     AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
 
-    AB_TRANSACTION *balanceCommand = commandOfKind(commands, AB_Transaction_CommandGetBalance);
+    AB_TRANSACTION *balanceCommand = BankingHelpers::commandOfKind(commands,
+                                                                   AB_Transaction_CommandGetBalance);
     QVERIFY(balanceCommand != nullptr);
     AB_Transaction_SetStatus(balanceCommand, AB_Transaction_StatusError);
 
-    AB_IMEXPORTER_CONTEXT *context = makeContext(testAccountId,
-                                                 bookingCount,
-                                                 {{AB_Balance_TypeBooked,
-                                                   QDate(2026, 2, 1),
-                                                   1234.56}});
+    AB_IMEXPORTER_CONTEXT *context = BankingHelpers::responseContext(testAccountId,
+                                                                     bookingCount,
+                                                                     {{AB_Balance_TypeBooked,
+                                                                       QDate(2026, 2, 1),
+                                                                       1234.56}});
 
     const BankingItems items = Banking::itemsFromContext(context, commands);
 
@@ -389,23 +243,26 @@ void BankingFetchTest::aFailedCommandDropsTheWholeAccount()
  */
 void BankingFetchTest::aCommandThatBringsNothingLeavesTheTransactionsAlone()
 {
-    const auto account = makeAccount(testAccountId, "aqhbci");
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
 
     AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
 
-    AB_TRANSACTION *balanceCommand = commandOfKind(commands, AB_Transaction_CommandGetBalance);
+    AB_TRANSACTION *balanceCommand = BankingHelpers::commandOfKind(commands,
+                                                                   AB_Transaction_CommandGetBalance);
     QVERIFY(balanceCommand != nullptr);
     AB_Transaction_SetStatus(balanceCommand, AB_Transaction_StatusAccepted);
 
-    AB_IMEXPORTER_CONTEXT *context = makeContext(testAccountId, bookingCount, {});
+    AB_IMEXPORTER_CONTEXT *context = BankingHelpers::responseContext(testAccountId,
+                                                                     bookingCount,
+                                                                     {});
 
     const BankingItems items = Banking::itemsFromContext(context, commands);
 
     AB_ImExporterContext_free(context);
     AB_Transaction_List2_freeAll(commands);
 
-    QCOMPARE(itemsOfType(items, QStringLiteral("Transaction")).size(), bookingCount);
-    QVERIFY(itemsOfType(items, QStringLiteral("Balance")).isEmpty());
+    QCOMPARE(BankingHelpers::itemsOfType(items, QStringLiteral("Transaction")).size(), bookingCount);
+    QVERIFY(BankingHelpers::itemsOfType(items, QStringLiteral("Balance")).isEmpty());
 }
 
 /**
@@ -431,7 +288,7 @@ void BankingFetchTest::anAccountWithoutOnlineAccessIsSkippedWithAReason()
     QSignalSpy itemsSpy(&banking, &Banking::itemsReceived);
     QSignalSpy finishedSpy(&banking, &Banking::finished);
 
-    const auto account = makeAccount(testAccountId, "");
+    const auto account = BankingHelpers::accountFromBackend(testAccountId, "");
 
     banking.fetchAccount(*account, QDate(2026, 1, 1));
 

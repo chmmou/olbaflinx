@@ -22,6 +22,8 @@
 #include "ui/App.h"
 #include "ui/ErrorMessage.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 #include <QtWidgets/QStatusBar>
@@ -32,6 +34,8 @@ using namespace olbaflinx::core::storage;
 using namespace olbaflinx::ui;
 
 namespace olbaflinx::ui::tests {
+
+using namespace olbaflinx::core::tests;
 
 /**
  * The errors of core used to be sent through a signal that had no receiver in
@@ -44,9 +48,7 @@ class AppErrorHandlingTest final : public QObject
 private:
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxAppErrorHandlingTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxAppErrorHandlingTest"));
     }
 
 private Q_SLOTS:

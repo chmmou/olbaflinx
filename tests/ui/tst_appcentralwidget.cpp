@@ -27,6 +27,8 @@
 #include "ui/Storage/StorageDialog.h"
 
 #include "TestHelpers.h"
+#include "TransactionHelpers.h"
+#include "UiTestHelpers.h"
 
 #include <QtTest/QtTest>
 
@@ -53,6 +55,8 @@ using namespace olbaflinx::ui::models;
 using namespace olbaflinx::ui::storage;
 
 namespace olbaflinx::ui::tests {
+
+using namespace olbaflinx::core::tests;
 
 /**
  * The central area used to be a single page with two widgets on fixed
@@ -116,27 +120,10 @@ private:
         return widget.findChild<QPushButton *>(QStringLiteral("pushButtonTransactionsNoticeReset"));
     }
 
-    /**
-     * The index of the first account under the first bank, the one a click in
-     * the tree would land on.
-     */
-    static QModelIndex firstAccountOf(const AccountTreeModel &model)
-    {
-        return model.index(0, 0, model.index(0, 0));
-    }
+    static QString password() { return TestHelpers::password(); }
 
-    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
-
-    /**
-     * How long a spy waits for a signal a worker thread has to produce first.
-     * The call returns the moment the signal arrives, so no test sleeps for it.
-     */
-    static constexpr auto workerTimeout = std::chrono::seconds{30};
-
-    /**
-     * The same bound where a macro needs it in milliseconds.
-     */
-    static constexpr int workerTimeoutMs = 30000;
+    static constexpr auto workerTimeout = UiTestHelpers::workerTimeout;
+    static constexpr int workerTimeoutMs = UiTestHelpers::workerTimeoutMs;
 
     [[nodiscard]] bool openStorage(Storage &storage) const
     {
@@ -147,30 +134,6 @@ private:
         storage.setStorageFile(storageFile());
 
         return !storage.initialize(true).isError();
-    }
-
-    /**
-     * Brings the accounts of the storage onto the screen the way the application
-     * does it, over the core and not by handing the model a list.
-     */
-    static bool readAccountsInto(App &app, Storage &storage)
-    {
-        auto *const overview = app.findChild<StorageDialog *>();
-        if (overview == nullptr) {
-            return false;
-        }
-
-        // For this one read, the way the dialog does it. A standing connection
-        // would hand the transactions of an account to the account tree as well
-        // and leave it empty.
-        connect(&storage, &Storage::itemsReceived, &app, &App::setAccounts, Qt::SingleShotConnection);
-
-        Q_EMIT overview->storageOpened();
-
-        QSignalSpy finishedSpy(&storage, &Storage::finished);
-        storage.receiveItems({.type = Storage::StorageAccount});
-
-        return finishedSpy.wait(workerTimeout);
     }
 
     [[nodiscard]] QString storageFile() const
@@ -188,22 +151,6 @@ private:
     static QAction *actionOf(const App &app, const QString &name)
     {
         return app.findChild<QAction *>(name);
-    }
-
-    static QMap<QString, QVariant> accountMap()
-    {
-        return {{QStringLiteral("type"), 1},
-                {QStringLiteral("unique_id"), 4711},
-                {QStringLiteral("backend_name"), QStringLiteral("aqhbci")},
-                {QStringLiteral("owner_name"), QStringLiteral("Max Mustermann")},
-                {QStringLiteral("account_name"), QStringLiteral("Girokonto")},
-                {QStringLiteral("currency"), QStringLiteral("EUR")},
-                {QStringLiteral("iban"), QStringLiteral("DE02500105170137075030")},
-                {QStringLiteral("bic"), QStringLiteral("INGDDEFF")},
-                {QStringLiteral("bank_code"), QStringLiteral("50010517")},
-                {QStringLiteral("bank_name"), QStringLiteral("ING-DiBa")},
-                {QStringLiteral("account_number"), QStringLiteral("0137075030")},
-                {QStringLiteral("balance"), 12.5}};
     }
 
 private Q_SLOTS:
@@ -313,13 +260,13 @@ void AppCentralWidgetTest::choosingAnAccountShowsItsTransactionsAndABankClearsTh
 
     QVERIFY(openStorage(storage));
 
-    const auto account = Account::fromMap(accountMap());
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
     QVERIFY(!storage.storeItem(account.get()).isError());
-    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                 password(),
-                                                                 4711,
-                                                                 3,
-                                                                 QStringLiteral("Buchung")));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                3,
+                                                QStringLiteral("Buchung")));
 
     App app(&logger, &storage);
     app.initialize();
@@ -332,7 +279,7 @@ void AppCentralWidgetTest::choosingAnAccountShowsItsTransactionsAndABankClearsTh
     QVERIFY(treeModel != nullptr);
     QVERIFY(transactionModel != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
     QCOMPARE(treeModel->rowCount(), 1);
 
     auto *pages = transactionPagesOf(*central);
@@ -343,7 +290,7 @@ void AppCentralWidgetTest::choosingAnAccountShowsItsTransactionsAndABankClearsTh
     const QString headlineWithoutAnAccount = headline->text();
 
     auto *view = central->accountWidget();
-    view->setCurrentIndex(firstAccountOf(*treeModel));
+    view->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
 
     QCOMPARE(transactionModel->accountId(), 4711u);
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
@@ -370,13 +317,13 @@ void AppCentralWidgetTest::anAccountThatBecomesInactiveTakesTheSelectionWithIt()
 
     QVERIFY(openStorage(storage));
 
-    const auto account = Account::fromMap(accountMap());
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
     QVERIFY(!storage.storeItem(account.get()).isError());
-    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                 password(),
-                                                                 4711,
-                                                                 3,
-                                                                 QStringLiteral("Buchung")));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                3,
+                                                QStringLiteral("Buchung")));
 
     App app(&logger, &storage);
     app.initialize();
@@ -389,9 +336,9 @@ void AppCentralWidgetTest::anAccountThatBecomesInactiveTakesTheSelectionWithIt()
     QVERIFY(treeModel != nullptr);
     QVERIFY(transactionModel != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
-    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
 
     // The wizard turns the account down. What reaches the window is the run of
@@ -418,13 +365,13 @@ void AppCentralWidgetTest::openingAStorageLeavesNoAccountSelected()
 
     QVERIFY(openStorage(storage));
 
-    const auto account = Account::fromMap(accountMap());
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
     QVERIFY(!storage.storeItem(account.get()).isError());
-    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                 password(),
-                                                                 4711,
-                                                                 3,
-                                                                 QStringLiteral("Buchung")));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                3,
+                                                QStringLiteral("Buchung")));
 
     App app(&logger, &storage);
     app.initialize();
@@ -437,9 +384,9 @@ void AppCentralWidgetTest::openingAStorageLeavesNoAccountSelected()
     QVERIFY(treeModel != nullptr);
     QVERIFY(transactionModel != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
-    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
 
     app.closeStorage();
@@ -472,7 +419,7 @@ void AppCentralWidgetTest::aStorageWithoutAccountsSaysSoWithoutAMessage()
 
     const QString noticeOfAnEmptyStorage = notice->text();
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
     QCOMPARE(app.statusBar()->currentMessage(), QString());
     QCOMPARE(notice->text(), noticeOfAnEmptyStorage);
@@ -490,7 +437,7 @@ void AppCentralWidgetTest::anAccountWithoutTransactionsSaysSoWithoutAMessage()
 
     QVERIFY(openStorage(storage));
 
-    const auto account = Account::fromMap(accountMap());
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
     QVERIFY(!storage.storeItem(account.get()).isError());
 
     App app(&logger, &storage);
@@ -504,7 +451,7 @@ void AppCentralWidgetTest::anAccountWithoutTransactionsSaysSoWithoutAMessage()
     QVERIFY(treeModel != nullptr);
     QVERIFY(transactionModel != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
     auto *headline = transactionHeadlineOf(*central);
     QVERIFY(headline != nullptr);
@@ -512,7 +459,7 @@ void AppCentralWidgetTest::anAccountWithoutTransactionsSaysSoWithoutAMessage()
     const QString headlineWithoutAnAccount = headline->text();
 
     QSignalSpy finishedSpy(&storage, &Storage::finished);
-    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
 
     QVERIFY(finishedSpy.wait(workerTimeout));
 
@@ -561,13 +508,13 @@ void AppCentralWidgetTest::aFilterWithoutAMatchGetsAnEmptyStateOfItsOwnWithAButt
 
     QVERIFY(openStorage(storage));
 
-    const auto account = Account::fromMap(accountMap());
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
     QVERIFY(!storage.storeItem(account.get()).isError());
-    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                 password(),
-                                                                 4711,
-                                                                 3,
-                                                                 QStringLiteral("Miete")));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                3,
+                                                QStringLiteral("Miete")));
 
     App app(&logger, &storage);
     app.initialize();
@@ -580,9 +527,9 @@ void AppCentralWidgetTest::aFilterWithoutAMatchGetsAnEmptyStateOfItsOwnWithAButt
     QVERIFY(treeModel != nullptr);
     QVERIFY(transactionModel != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
-    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
 
     auto *headline = transactionHeadlineOf(*central);
@@ -626,18 +573,18 @@ void AppCentralWidgetTest::theCounterNamesWhatTheFilterLeaves()
 
     QVERIFY(openStorage(storage));
 
-    const auto account = Account::fromMap(accountMap());
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
     QVERIFY(!storage.storeItem(account.get()).isError());
-    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                 password(),
-                                                                 4711,
-                                                                 120,
-                                                                 QStringLiteral("Miete")));
-    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                 password(),
-                                                                 4711,
-                                                                 80,
-                                                                 QStringLiteral("Gehalt")));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                120,
+                                                QStringLiteral("Miete")));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                80,
+                                                QStringLiteral("Gehalt")));
 
     App app(&logger, &storage);
     app.initialize();
@@ -650,14 +597,14 @@ void AppCentralWidgetTest::theCounterNamesWhatTheFilterLeaves()
     QVERIFY(treeModel != nullptr);
     QVERIFY(transactionModel != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
     auto *counter = counterOf(*central);
     auto *search = searchFieldOf(*central);
     QVERIFY(counter != nullptr);
     QVERIFY(search != nullptr);
 
-    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
 
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->totalRows(), 200, workerTimeoutMs);
     QVERIFY(counter->text().contains(QStringLiteral("200")));
@@ -690,13 +637,13 @@ void AppCentralWidgetTest::closingTheStorageTakesTheFilterWithIt()
 
     QVERIFY(openStorage(storage));
 
-    const auto account = Account::fromMap(accountMap());
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
     QVERIFY(!storage.storeItem(account.get()).isError());
-    QVERIFY(olbaflinx::core::tests::TestHelpers::putTransactions(storageFile(),
-                                                                 password(),
-                                                                 4711,
-                                                                 3,
-                                                                 QStringLiteral("Miete")));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                3,
+                                                QStringLiteral("Miete")));
 
     App app(&logger, &storage);
     app.initialize();
@@ -709,9 +656,9 @@ void AppCentralWidgetTest::closingTheStorageTakesTheFilterWithIt()
     QVERIFY(treeModel != nullptr);
     QVERIFY(transactionModel != nullptr);
 
-    QVERIFY(readAccountsInto(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
-    central->accountWidget()->setCurrentIndex(firstAccountOf(*treeModel));
+    central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
     QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
 
     auto *search = searchFieldOf(*central);
@@ -765,7 +712,7 @@ void AppCentralWidgetTest::anEmptyModelPutsTheNoticeInPlaceOfTheTree()
     QVERIFY(!notice->text().isEmpty());
 
     BankingItems items;
-    items << Account::fromMap(accountMap());
+    items << Account::fromMap(TestHelpers::namedAccountMap());
     model.setItems(items);
 
     QCOMPARE(pages->currentWidget(), widget.accountWidget()->parentWidget());
@@ -780,12 +727,12 @@ void AppCentralWidgetTest::anEntryCarriesTheAccountNameTheIbanAndTheBalance()
 {
     AccountTreeModel model;
 
-    auto withoutIban = accountMap();
+    auto withoutIban = TestHelpers::namedAccountMap();
     withoutIban[QStringLiteral("account_name")] = QStringLiteral("Tagesgeld");
     withoutIban[QStringLiteral("iban")] = QString();
 
     BankingItems items;
-    items << Account::fromMap(accountMap()) << Account::fromMap(withoutIban);
+    items << Account::fromMap(TestHelpers::namedAccountMap()) << Account::fromMap(withoutIban);
     model.setItems(items);
 
     const QModelIndex bank = model.index(0, 0);
@@ -840,7 +787,7 @@ void AppCentralWidgetTest::aFailedReadDoesNotLookLikeAnEmptyStorage()
 
     // With a holding on screen the failure takes nothing off it.
     BankingItems items;
-    items << Account::fromMap(accountMap());
+    items << Account::fromMap(TestHelpers::namedAccountMap());
     model.setItems(items);
 
     widget.showAccountsUnreadable(failure);
@@ -863,7 +810,7 @@ void AppCentralWidgetTest::aReadThatOutlivesItsStorageReachesNoView()
     QVERIFY(!storage.initialize(true).isError());
 
     for (int i = 0; i < 5; ++i) {
-        const auto account = olbaflinx::core::tests::TestHelpers::createFakeAccount();
+        const auto account = TestHelpers::createFakeAccount();
         QVERIFY(!storage.storeItem(account.get()).isError());
     }
 
@@ -972,7 +919,7 @@ void AppCentralWidgetTest::closingAStorageReturnsToTheOverviewAndDropsTheAccount
     QVERIFY(overview != nullptr);
 
     BankingItems items;
-    items << Account::fromMap(accountMap());
+    items << Account::fromMap(TestHelpers::namedAccountMap());
     app.setAccounts(items);
 
     // The way the overview reports a storage it got open. Going through the

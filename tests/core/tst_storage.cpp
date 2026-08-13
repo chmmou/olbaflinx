@@ -22,6 +22,7 @@
 #include "core/Storage/Storage.h"
 
 #include "TestHelpers.h"
+#include "TransactionHelpers.h"
 
 #include <QtCore/QList>
 #include <QtSql/QSqlDatabase>
@@ -55,12 +56,10 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxStorageTest"),
-                QStringLiteral("1.0.0")};
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxStorageTest"));
     }
 
-    static QString password() { return QStringLiteral("M'yF13\"stP\\$44W0$3d/"); }
+    static QString password() { return TestHelpers::password(); }
 
     /**
      * How long a spy waits for a signal a worker thread has to produce first.
@@ -78,39 +77,9 @@ private:
         return workingDirectory->filePath(QStringLiteral("storage.obfx"));
     }
 
-    /**
-     * Runs one statement against the store, past Storage, and hands back the
-     * first value of the first row. An invalid QVariant means the file would not
-     * open, the statement failed, or it returned no row.
-     *
-     * The tests use it for what Storage offers no way to ask: what a column
-     * actually holds after a write, and how many rows a table carries.
-     */
     static QVariant scalarOf(const QString &file, const QString &statement)
     {
-        auto value = QVariant();
-
-        {
-            auto database = QSqlDatabase::addDatabase(QStringLiteral("QSQLCIPHER"),
-                                                      QStringLiteral("StorageTestDirect"));
-            database.setDatabaseName(file);
-
-            if (database.open()) {
-                auto key = password();
-                key.replace(QLatin1Char('\''), QLatin1StringView("''"));
-
-                QSqlQuery query(database);
-                if (query.exec(QStringLiteral("PRAGMA key='%1';").arg(key)) && query.exec(statement)
-                    && query.next()) {
-                    value = query.value(0);
-                }
-
-                database.close();
-            }
-        }
-        QSqlDatabase::removeDatabase(QStringLiteral("StorageTestDirect"));
-
-        return value;
+        return TestHelpers::storageScalar(file, password(), statement);
     }
 
     static bool putTransactions(const QString &file,
@@ -118,12 +87,9 @@ private:
                                 int count,
                                 const QString &purpose)
     {
-        return TestHelpers::putTransactions(file, password(), uniqueAccountId, count, purpose);
+        return TransactionHelpers::putTransactions(file, password(), uniqueAccountId, count, purpose);
     }
 
-    /**
-     * One transaction carrying everything the filter looks at.
-     */
     static bool putTransaction(const QString &file,
                                quint32 uniqueAccountId,
                                const QString &purpose,
@@ -131,14 +97,13 @@ private:
                                const QDate &date,
                                double value)
     {
-        return scalarOf(file,
-                        QStringLiteral("INSERT INTO transactions (account_id, unique_account_id, "
-                                       "purpose, remote_name, date, value) VALUES (1, %1, '%2', "
-                                       "'%3', '%4', %5) RETURNING unique_account_id;")
-                            .arg(uniqueAccountId)
-                            .arg(purpose, remoteName, date.toString(Qt::ISODate))
-                            .arg(value))
-            .isValid();
+        return TransactionHelpers::putTransaction(file,
+                                                  password(),
+                                                  uniqueAccountId,
+                                                  purpose,
+                                                  remoteName,
+                                                  date,
+                                                  value);
     }
 
     /**
