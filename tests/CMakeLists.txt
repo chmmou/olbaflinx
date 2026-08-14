@@ -86,6 +86,11 @@ olbaflinx_add_test(tst_appaccessibility ui/tst_appaccessibility.cpp
 olbaflinx_add_test(tst_appkeyboard ui/tst_appkeyboard.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 
+# It runs a callback from a thread of its own, which is what the interface is
+# there for.
+olbaflinx_add_test(tst_bankinggui ui/tst_bankinggui.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets Qt6::Concurrent)
+
 # The only test that reaches for the docking library itself. OlbaFlinxUi links
 # it privately, which carries the symbols but not the right to name its types.
 olbaflinx_add_test(tst_appdocklayout ui/tst_appdocklayout.cpp

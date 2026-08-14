@@ -119,6 +119,8 @@ qt_add_library(OlbaFlinxUi STATIC
         ui/AppCentralWidget.cpp
         ui/AppCentralWidget.h
         ui/AppCentralWidget.ui
+        ui/BankingGui.cpp
+        ui/BankingGui.h
         ui/ErrorMessage.cpp
         ui/ErrorMessage.h
         ui/Logging.cpp
@@ -156,16 +158,17 @@ target_link_libraries(OlbaFlinxUi
         PUBLIC
         OlbaFlinxCore::OlbaFlinxCore
         Qt6::Widgets
-        PRIVATE
-        Qt6::Gui
-        Qt6::Svg
-        ads::qtadvanceddocking-qt6
         # The Qt implementation of the gwenhywfar user interface. It carries Qt
         # Widgets in its own DT_NEEDED, along with Designer, UiTools and Help,
         # so every consumer loads them. That is why it sits here and not with
         # the core: a core test would otherwise pull a display library it has
-        # no use for.
+        # no use for. It is public rather than private because BankingGui.h
+        # derives from its interface, and whoever includes that header needs it.
         PkgConfig::PKG_GWENHYWFAR_QT
+        PRIVATE
+        Qt6::Gui
+        Qt6::Svg
+        ads::qtadvanceddocking-qt6
 )
 
 # ----------------------------------------------------------------------------
