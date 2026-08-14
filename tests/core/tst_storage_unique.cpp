@@ -134,6 +134,7 @@ private Q_SLOTS:
     void theYoungestStoredBookingDecidesTheDate();
     void aBookingWithoutABookingDateCountsThroughItsValutaDate();
     void theDateComesFromOneRowAndNotFromTheHolding();
+    void aStorageThatIsNotOpenAnswersWithAFailure();
 };
 
 namespace {
@@ -913,6 +914,23 @@ void StorageUniqueTest::theDateComesFromOneRowAndNotFromTheHolding()
     QCOMPARE(countedSpy.count(), 0);
 
     storage.close();
+}
+
+/**
+ * The failure the caller has to tell from an empty answer. An account without a
+ * booking and a storage that was never opened both hand back no date, and only
+ * the result says which of the two it was.
+ */
+void StorageUniqueTest::aStorageThatIsNotOpenAnswersWithAFailure()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+
+    const auto latest = storage.latestTransactionDate(testAccountId);
+
+    QVERIFY(!latest.hasValue());
+    QVERIFY(latest.error().isError());
 }
 
 } // namespace olbaflinx::core::storage::tests
