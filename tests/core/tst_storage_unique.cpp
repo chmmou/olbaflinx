@@ -129,6 +129,11 @@ private Q_SLOTS:
     void aFileAtSchemaThreeIsTakenAndCarriesTheIndex();
     void duplicateBookingsAreRemovedAndTheFirstRowStays();
     void rowsWithoutAFingerprintSurviveTheStep();
+
+    void anAccountWithoutABookingHasNoDate();
+    void theYoungestStoredBookingDecidesTheDate();
+    void aBookingWithoutABookingDateCountsThroughItsValutaDate();
+    void theDateComesFromOneRowAndNotFromTheHolding();
 };
 
 namespace {
@@ -788,6 +793,126 @@ void StorageUniqueTest::rowsWithoutAFingerprintSurviveTheStep()
 
     QCOMPARE(rowsOf(file, QStringLiteral("transactions")), 500);
     QCOMPARE(indexCountOf(file, password()), 1);
+}
+
+/**
+ * A fetch that has nothing to build on. The answer is an invalid date and not a
+ * failure: there is nothing wrong with an account nobody has fetched yet.
+ */
+void StorageUniqueTest::anAccountWithoutABookingHasNoDate()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto latest = storage.latestTransactionDate(testAccountId);
+
+    QVERIFY(latest.hasValue());
+    QVERIFY(!latest.value().isValid());
+
+    storage.close();
+}
+
+/**
+ * What the storage reports is the day the holding ends on, not the day a fetch
+ * starts at. The thirty days of lead time belong to the order, not here.
+ */
+void StorageUniqueTest::theYoungestStoredBookingDecidesTheDate()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto items = BankingItems();
+    items << makeTransaction(1, QStringLiteral("Older"));
+    items << makeTransaction(2, QStringLiteral("Youngest"));
+
+    QCOMPARE(storeAndWait(storage, items), 2);
+
+    const auto latest = storage.latestTransactionDate(testAccountId);
+
+    QVERIFY(latest.hasValue());
+    QCOMPARE(latest.value(), QDate(2026, 1, 3));
+
+    storage.close();
+}
+
+/**
+ * The booking date is optional in the format the bank delivers, the valuta date
+ * is not. A booking that carries only the second is therefore still the
+ * youngest one, and a read over the booking date alone would look past it.
+ */
+void StorageUniqueTest::aBookingWithoutABookingDateCountsThroughItsValutaDate()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto items = BankingItems();
+    items << TransactionHelpers::transactionFromMap({
+        .type = AB_Transaction_TypeStatement,
+        .uniqueId = 1,
+        .uniqueAccountId = testAccountId,
+        .date = QDate(2026, 6, 1),
+        .valutaDate = QDate(2026, 6, 1),
+        .purpose = QStringLiteral("With a booking date"),
+    });
+    items << TransactionHelpers::transactionFromMap({
+        .type = AB_Transaction_TypeStatement,
+        .uniqueId = 2,
+        .uniqueAccountId = testAccountId,
+        .valutaDate = QDate(2026, 7, 15),
+        .purpose = QStringLiteral("Without a booking date"),
+    });
+
+    QCOMPARE(storeAndWait(storage, items), 2);
+
+    const auto latest = storage.latestTransactionDate(testAccountId);
+
+    QVERIFY(latest.hasValue());
+    QCOMPARE(latest.value(), QDate(2026, 7, 15));
+
+    storage.close();
+}
+
+/**
+ * Three thousand bookings and one date. The call does not go through the read
+ * path of the views: nothing is counted, no record is built, and no signal
+ * arrives, which is what keeps it usable while a view is reading.
+ */
+void StorageUniqueTest::theDateComesFromOneRowAndNotFromTheHolding()
+{
+    const auto file = storageFile();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    constexpr int bookings = 3000;
+    const auto firstDay = QStringLiteral("2020-01-01");
+
+    QVERIFY(TransactionHelpers::putOrderedTransactions(file,
+                                                       password(),
+                                                       testAccountId,
+                                                       bookings,
+                                                       firstDay));
+
+    QSignalSpy receivedSpy(&storage, &Storage::itemsReceived);
+    QSignalSpy countedSpy(&storage, &Storage::itemsCounted);
+
+    const auto latest = storage.latestTransactionDate(testAccountId);
+
+    QVERIFY(latest.hasValue());
+    QCOMPARE(latest.value(), QDate::fromString(firstDay, Qt::ISODate).addDays(bookings - 1));
+
+    QCOMPARE(receivedSpy.count(), 0);
+    QCOMPARE(countedSpy.count(), 0);
+
+    storage.close();
 }
 
 } // namespace olbaflinx::core::storage::tests

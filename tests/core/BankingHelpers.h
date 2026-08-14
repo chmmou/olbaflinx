@@ -109,10 +109,15 @@ public:
      * which is what makes the evaluation measurable without a bank.
      *
      * The caller owns the result and releases it with AB_ImExporterContext_free.
+     *
+     * @param firstBookingDate The day of the first booking, every further one a
+     *  day on. Left invalid, the bookings carry no date at all, which is what a
+     *  test that does not look at the period wants.
      */
     static AB_IMEXPORTER_CONTEXT *responseContext(quint32 uniqueId,
                                                   int transactionCount,
-                                                  const QList<BalanceSpec> &balances)
+                                                  const QList<BalanceSpec> &balances,
+                                                  const QDate &firstBookingDate = {})
     {
         AB_IMEXPORTER_CONTEXT *context = AB_ImExporterContext_new();
 
@@ -133,6 +138,11 @@ public:
 
             const auto purpose = QStringLiteral("Booking %1").arg(index + 1).toUtf8();
             AB_Transaction_SetPurpose(transaction, purpose.constData());
+
+            if (firstBookingDate.isValid()) {
+                AB_Transaction_SetDate(transaction,
+                                       gwenDateOf(firstBookingDate.addDays(index)).get());
+            }
 
             AB_ImExporterAccountInfo_AddTransaction(info, transaction);
         }

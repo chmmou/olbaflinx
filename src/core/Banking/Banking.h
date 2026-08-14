@@ -113,8 +113,10 @@ public:
      * the id of the account it belongs to and told apart by its item type.
      *
      * @param account The account to fetch. It stays with its caller.
-     * @param firstDate The day the fetch starts at. An invalid date fetches
-     *  everything the bank offers.
+     * @param latestStoredDate The day the stored holding of the account ends
+     *  on, as Storage::latestTransactionDate reports it. The fetch starts a
+     *  fixed lead time before it. An invalid date fetches everything the bank
+     *  offers, which is what the first fetch of an account does.
      *
      * Preconditions: the backend is initialized, and the thread that calls this
      *  has a user interface of the banking backend set. Without one the library
@@ -128,20 +130,26 @@ public:
      *  PIN and a TAN included. An instance of this class belongs to one thread,
      *  and so does every record it hands out.
      */
-    void fetchAccount(const Account &account, const QDate &firstDate = {});
+    void fetchAccount(const Account &account, const QDate &latestStoredDate = {});
 
     /**
      * @brief Build the two orders of a fetch, without sending them.
      *
      * Separate from the session so that the orders can be read before they go
-     * out, which is what makes them measurable without a bank.
+     * out, which is what makes them measurable without a bank. The lead time is
+     * subtracted here for that reason: a session cannot be run without one.
+     *
+     * @param account The account the orders are built for.
+     * @param latestStoredDate The day the stored holding ends on. The orders
+     *  start a fixed lead time before it, and carry no starting point at all
+     *  when it is invalid.
      *
      * @return A list of two orders, one for the transactions and one for the
      *  balance. The caller owns it and releases it, orders included, with
      *  AB_Transaction_List2_freeAll.
      */
     [[nodiscard]] static AB_TRANSACTION_LIST2 *buildFetchCommands(const Account &account,
-                                                                  const QDate &firstDate);
+                                                                  const QDate &latestStoredDate);
 
     /**
      * @brief Read the answer of a session out of its container.

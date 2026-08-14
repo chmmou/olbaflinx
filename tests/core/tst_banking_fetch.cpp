@@ -63,6 +63,10 @@ private Q_SLOTS:
     void aFailedCommandDropsTheWholeAccount();
     void aCommandThatBringsNothingLeavesTheTransactionsAlone();
     void anAccountWithoutOnlineAccessIsSkippedWithAReason();
+
+    void bothOrdersStartThirtyDaysBeforeTheYoungestStoredBooking();
+    void withoutAStoredBookingTheOrdersCarryNoStartingPoint();
+    void aPeriodNarrowerThanAskedForIsNoFailure();
 };
 
 namespace {
@@ -302,6 +306,89 @@ void BankingFetchTest::anAccountWithoutOnlineAccessIsSkippedWithAReason()
     QVERIFY(!arguments.at(1).toString().isEmpty());
 
     banking.finalize();
+}
+
+/**
+ * The lead time of thirty days, measured where it is formed. A bank corrects
+ * bookings after it has reported them, so a fetch that started where the
+ * holding ends would never see the correction.
+ */
+void BankingFetchTest::bothOrdersStartThirtyDaysBeforeTheYoungestStoredBooking()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 6, 1));
+    QVERIFY(commands != nullptr);
+
+    AB_TRANSACTION *transactions
+        = BankingHelpers::commandOfKind(commands, AB_Transaction_CommandGetTransactions);
+    AB_TRANSACTION *balance = BankingHelpers::commandOfKind(commands,
+                                                            AB_Transaction_CommandGetBalance);
+
+    QVERIFY(transactions != nullptr);
+    QVERIFY(balance != nullptr);
+
+    QCOMPARE(Transaction(transactions).firstDate(), QDate(2026, 5, 2));
+    QCOMPARE(Transaction(balance).firstDate(), QDate(2026, 5, 2));
+
+    AB_Transaction_List2_freeAll(commands);
+}
+
+/**
+ * The first fetch of an account. Without a starting point the bank delivers
+ * what it holds, and nothing is subtracted from a date that is not there.
+ */
+void BankingFetchTest::withoutAStoredBookingTheOrdersCarryNoStartingPoint()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate());
+    QVERIFY(commands != nullptr);
+
+    AB_TRANSACTION *transactions
+        = BankingHelpers::commandOfKind(commands, AB_Transaction_CommandGetTransactions);
+    AB_TRANSACTION *balance = BankingHelpers::commandOfKind(commands,
+                                                            AB_Transaction_CommandGetBalance);
+
+    QVERIFY(transactions != nullptr);
+    QVERIFY(balance != nullptr);
+
+    QVERIFY(AB_Transaction_GetFirstDate(transactions) == nullptr);
+    QVERIFY(AB_Transaction_GetFirstDate(balance) == nullptr);
+
+    AB_Transaction_List2_freeAll(commands);
+}
+
+/**
+ * A bank may deliver less than it was asked for. What comes back is taken as it
+ * is: the core compares no period and reports no failure over one.
+ */
+void BankingFetchTest::aPeriodNarrowerThanAskedForIsNoFailure()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 6, 1));
+
+    // Asked for from 2 May on, answered from 20 June on.
+    AB_IMEXPORTER_CONTEXT *context = BankingHelpers::responseContext(testAccountId,
+                                                                     bookingCount,
+                                                                     {},
+                                                                     QDate(2026, 6, 20));
+
+    const BankingItems items = Banking::itemsFromContext(context, commands);
+
+    const BankingItems transactions = BankingHelpers::itemsOfType(items,
+                                                                  QStringLiteral("Transaction"));
+
+    QCOMPARE(transactions.size(), bookingCount);
+
+    for (const BankingItemPtr &item : transactions) {
+        const auto transaction = std::static_pointer_cast<Transaction>(item);
+        QVERIFY(transaction->date() >= QDate(2026, 6, 20));
+    }
+
+    AB_ImExporterContext_free(context);
+    AB_Transaction_List2_freeAll(commands);
 }
 
 } // namespace olbaflinx::core::banking::tests
