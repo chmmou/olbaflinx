@@ -66,6 +66,13 @@ namespace {
 constexpr auto offlineBackendName = QLatin1StringView("aqnone");
 
 /**
+ * How far a fetch reaches back behind the holding it already has. A bank
+ * corrects bookings after it has reported them, and a fetch that started where
+ * the holding ends would never see the correction.
+ */
+constexpr int fetchLeadDays = 30;
+
+/**
  * The C structures of the backend, held so that every path out of a function
  * releases them: the success, the failure and the abort alike.
  */
@@ -455,10 +462,17 @@ void Banking::accounts()
     Q_EMIT finished();
 }
 
-AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account, const QDate &firstDate)
+AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account,
+                                                  const QDate &latestStoredDate)
 {
-    const auto addCommand = [&account, &firstDate](AB_TRANSACTION_LIST2 *list,
-                                                   AB_TRANSACTION_COMMAND kind) {
+    // An account without a stored booking keeps an invalid date, and the order
+    // then goes out without a starting point at all.
+    const QDate startingPoint = latestStoredDate.isValid()
+                                    ? latestStoredDate.addDays(-fetchLeadDays)
+                                    : QDate();
+
+    const auto addCommand = [&account, &startingPoint](AB_TRANSACTION_LIST2 *list,
+                                                       AB_TRANSACTION_COMMAND kind) {
         AB_TRANSACTION *command = AB_Transaction_new();
 
         AB_Transaction_SetCommand(command, kind);
@@ -472,7 +486,7 @@ AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account, const 
         // standing orders by its name, but the FinTS backend reads it as the day
         // a fetch starts at. No end date is set, so the bank delivers up to what
         // it holds today.
-        if (const GwenDatePtr first = fromDate(firstDate); first) {
+        if (const GwenDatePtr first = fromDate(startingPoint); first) {
             AB_Transaction_SetFirstDate(command, first.get());
         }
 
@@ -546,7 +560,7 @@ BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
     return items;
 }
 
-void Banking::fetchAccount(const Account &account, const QDate &firstDate)
+void Banking::fetchAccount(const Account &account, const QDate &latestStoredDate)
 {
     const auto reportError = [this](ErrorCode code, const QString &message) {
         qCCritical(lcBanking) << message;
@@ -576,7 +590,7 @@ void Banking::fetchAccount(const Account &account, const QDate &firstDate)
         return;
     }
 
-    const CommandListPtr commands(buildFetchCommands(account, firstDate));
+    const CommandListPtr commands(buildFetchCommands(account, latestStoredDate));
     const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
 
     const int rv = AB_Banking_SendCommands(d_ptr->aqBanking, commands.get(), context.get());

@@ -22,6 +22,7 @@
 #include "core/ApplicationInfo.h"
 #include "core/Banking/BankingItem.h"
 #include "core/Error.h"
+#include "core/Result.h"
 
 #include <QtCore/QDate>
 #include <QtCore/QObject>
@@ -267,6 +268,30 @@ public:
      * @param query What to read. See ItemQuery.
      */
     void receiveItems(const ItemQuery &query);
+
+    /**
+     * @brief The day the stored holding of one account ends on.
+     *
+     * What a fetch builds its starting point from. The lead time belongs to the
+     * order and is not subtracted here, so what comes back is the date that
+     * stands in the row and nothing else.
+     *
+     * The booking date decides. A booking that carries none counts through its
+     * valuta date: the first is optional in the format a bank delivers, the
+     * second is not, and a read over the booking date alone would look past
+     * such a row.
+     *
+     * One row is read, not the holding. The call does not go through
+     * receiveItems, so it neither counts the records nor emits a signal, and a
+     * view that is reading at the same time is not in its way.
+     *
+     * @param uniqueAccountId The account, as the institution assigns it.
+     *
+     * @return The date, or an invalid one for an account without a single
+     *  stored booking. An account nobody has fetched yet is not a failure; a
+     *  failure is what keeps the read from running.
+     */
+    [[nodiscard]] Result<QDate> latestTransactionDate(quint32 uniqueAccountId);
 
     /**
      * @brief Stores a run of records without holding the calling thread.

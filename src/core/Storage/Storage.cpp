@@ -2304,3 +2304,42 @@ void Storage::receiveItems(const ItemQuery &query)
                                                      columnList,
                                                      query));
 }
+
+Result<QDate> Storage::latestTransactionDate(quint32 uniqueAccountId)
+{
+    QSqlQuery query;
+    if (const auto error = d_ptr->openQuery(query); error.isError()) {
+        return error;
+    }
+
+    // The valuta date stands in for a missing booking date. Both forms of a
+    // date that is not there are caught: a row written by the application
+    // carries an empty text, one written past it carries no value at all.
+    //
+    // Neither index of the two columns bears on the expression, so the read
+    // sorts. Over a window of one row that is the cheaper of the two against an
+    // index over an expression that no other read would use.
+    if (!query.prepare(QStringLiteral(
+            "SELECT COALESCE(NULLIF(`date`, ''), valuta_date) AS booking_date FROM transactions "
+            "WHERE unique_account_id = :accountId ORDER BY booking_date DESC LIMIT 1;"))) {
+        return Error(ErrorCode::DatabaseFailure,
+                     QStringLiteral("Could not prepare the read of the latest booking date: %1")
+                         .arg(query.lastError().text()));
+    }
+
+    query.bindValue(QStringLiteral(":accountId"), uniqueAccountId);
+
+    if (!query.exec()) {
+        return Error(ErrorCode::DatabaseFailure,
+                     QStringLiteral("Could not read the latest booking date: %1")
+                         .arg(query.lastError().text()));
+    }
+
+    // An account without a single stored booking. Nothing went wrong, there is
+    // just no day to start from, and the fetch runs without one.
+    if (!query.next()) {
+        return QDate();
+    }
+
+    return query.value(0).toDate();
+}
