@@ -39,6 +39,10 @@
 #include <aqbanking/types/account_spec.h>
 #include <aqbanking/types/balance.h>
 
+#include <QtConcurrent/QtConcurrentRun>
+
+#include <QtCore/QFutureWatcher>
+#include <QtCore/QMetaObject>
 #include <QtCore/QSet>
 
 #include <memory>
@@ -184,6 +188,19 @@ const AB_BALANCE *chooseBalance(const AB_BALANCE_LIST *balances)
     return chosen;
 }
 
+/**
+ * What one run of a session hands back to the thread that started it.
+ *
+ * It carries the answer already read out of the container: the container and the
+ * orders belong to the session and are gone by the time this arrives.
+ */
+struct SessionResult
+{
+    FetchOutcome outcome = FetchOutcome::Failed;
+    BankingItems items;
+    QString reason;
+};
+
 } // namespace
 
 class Banking::Private
@@ -276,8 +293,101 @@ public:
         return {};
     }
 
+    /**
+     * The session, run in a thread of its own.
+     *
+     * Takes over the orders and releases them, the container with them, on every
+     * way out. What leaves here are records of the core, which no longer touch
+     * the banking backend.
+     */
+    SessionResult runSession(AB_TRANSACTION_LIST2 *orders, quint32 uniqueAccountId)
+    {
+        const CommandListPtr commands(orders);
+        const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
+
+        // The interface of gwenhywfar lives per thread. The one set where
+        // initialize ran does not reach this thread, and without one here the
+        // library would abort the process instead of reporting a failure.
+        GWEN_Gui_SetGui(gwenGui);
+
+        const int rv = AB_Banking_SendCommands(aqBanking, commands.get(), context.get());
+
+        // Detached before anything else happens, so that the thread leaves the
+        // interface as it found it whichever way the session ended.
+        GWEN_Gui_SetGui(nullptr);
+
+        SessionResult result;
+        result.outcome = Banking::outcomeOfSession(rv, commands.get(), uniqueAccountId);
+
+        switch (result.outcome) {
+        case FetchOutcome::Received:
+            result.items = Banking::itemsFromContext(context.get(), commands.get());
+            break;
+
+        case FetchOutcome::Aborted:
+            // Nothing of an aborted account is handed over. The user stopped
+            // before the answer was complete, and half an answer is worse than
+            // none.
+            break;
+
+        case FetchOutcome::Failed:
+            result.reason = rv != AB_SUCCESS
+                                ? QStringLiteral("AB_Banking_SendCommands failed with %1").arg(rv)
+                                : QStringLiteral("An order of account %1 was refused")
+                                      .arg(uniqueAccountId);
+            break;
+        }
+
+        return result;
+    }
+
+    /** The answer of a session, reported in the thread this object belongs to. */
+    void deliverSessionResult()
+    {
+        const SessionResult result = fetchWatcher.result();
+
+        m_isFetching = false;
+
+        switch (result.outcome) {
+        case FetchOutcome::Received:
+            qCDebug(lcBanking) << "fetched" << result.items.size() << "records";
+            Q_EMIT q_ptr->itemsReceived(result.items);
+            break;
+
+        case FetchOutcome::Aborted:
+            qCInfo(lcBanking) << "the fetch was aborted by the user";
+            Q_EMIT q_ptr->aborted();
+            break;
+
+        case FetchOutcome::Failed:
+            qCCritical(lcBanking) << result.reason;
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, result.reason);
+            break;
+        }
+
+        Q_EMIT q_ptr->finished();
+    }
+
+    bool isFetching() const { return m_isFetching; }
+
+    void startFetch(AB_TRANSACTION_LIST2 *orders, quint32 uniqueAccountId)
+    {
+        m_isFetching = true;
+
+        fetchWatcher.setFuture(QtConcurrent::run(
+            [this, orders, uniqueAccountId] { return runSession(orders, uniqueAccountId); }));
+    }
+
     void finalize()
     {
+        // A session reaches into the banking backend from its own thread.
+        // Pulling the backend away under it would leave it writing into freed
+        // memory, so the shutdown waits for it. The window keeps this from
+        // happening in the first place: it puts off closing while a fetch runs
+        // and points at the progress dialog for stopping it.
+        fetchWatcher.waitForFinished();
+        m_isFetching = false;
+
         if (isInitialized()) {
             AB_Gui_Unextend(gwenGui);
 
@@ -372,8 +482,10 @@ public:
 
     GWEN_GUI *gwenGui;
     AB_BANKING *aqBanking;
+    QFutureWatcher<SessionResult> fetchWatcher;
 
 private:
+    bool m_isFetching = false;
     bool m_isInitialized;
     LC_CLIENT *m_chipCardClient;
     ApplicationInfo m_applicationInfo;
@@ -386,10 +498,22 @@ Banking::Banking(ApplicationInfo applicationInfo, QObject *parent)
     : QObject(parent)
 {
     d_ptr = new Private(this, std::move(applicationInfo));
+
+    // The answer of a session crosses back here, into the thread this object
+    // belongs to. Every signal of a fetch leaves from there and none from the
+    // session itself.
+    connect(&d_ptr->fetchWatcher, &QFutureWatcherBase::finished, this, [this] {
+        d_ptr->deliverSessionResult();
+    });
 }
 
 Banking::~Banking()
 {
+    // The watcher may still hold a queued end of a session for this object.
+    // Cutting the connection before the private part goes keeps it from being
+    // delivered into freed memory.
+    disconnect(&d_ptr->fetchWatcher, nullptr, this, nullptr);
+
     delete d_ptr;
 }
 
@@ -560,18 +684,60 @@ BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
     return items;
 }
 
+FetchOutcome Banking::outcomeOfSession(int sessionResult,
+                                       AB_TRANSACTION_LIST2 *commands,
+                                       quint32 uniqueAccountId)
+{
+    // The user stopping the session is the one non-zero result that is no
+    // failure. A session cut in the middle, say because the far end went away,
+    // answers with something else and stays a failure.
+    if (sessionResult == GWEN_ERROR_USER_ABORTED) {
+        return FetchOutcome::Aborted;
+    }
+
+    if (sessionResult != AB_SUCCESS) {
+        return FetchOutcome::Failed;
+    }
+
+    // A session can come back successful and still carry an order the bank
+    // refused. Without this the account would answer with an empty list, and a
+    // refusal would read like an account with nothing new.
+    if (accountsOfFailedCommands(commands).contains(uniqueAccountId)) {
+        return FetchOutcome::Failed;
+    }
+
+    return FetchOutcome::Received;
+}
+
 void Banking::fetchAccount(const Account &account, const QDate &latestStoredDate)
 {
-    const auto reportError = [this](ErrorCode code, const QString &message) {
-        qCCritical(lcBanking) << message;
-
-        Q_EMIT errorOccurred(code, message);
-        Q_EMIT finished();
+    // Reported through the event loop rather than from here, so that every fetch
+    // answers after it has returned. A caller that sets its own state after the
+    // call would otherwise see the end of a fetch before its start.
+    const auto reportLater = [this](auto report) {
+        QMetaObject::invokeMethod(this, std::move(report), Qt::QueuedConnection);
     };
 
+    if (d_ptr->isFetching()) {
+        const QString reason = QStringLiteral("A fetch is already running");
+
+        qCWarning(lcBanking) << reason;
+
+        // No finished here. It belongs to the fetch that is running, and a
+        // second one would declare that one over.
+        reportLater([this, reason] { Q_EMIT errorOccurred(ErrorCode::InvalidInput, reason); });
+        return;
+    }
+
     if (!d_ptr->isInitialized()) {
-        reportError(ErrorCode::BankingFailure,
-                    QStringLiteral("The banking backend is not initialized"));
+        const QString reason = QStringLiteral("The banking backend is not initialized");
+
+        qCCritical(lcBanking) << reason;
+
+        reportLater([this, reason] {
+            Q_EMIT errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT finished();
+        });
         return;
     }
 
@@ -582,40 +748,19 @@ void Banking::fetchAccount(const Account &account, const QDate &latestStoredDate
     const QString backendName = account.backendName();
     if (backendName.isEmpty() || backendName.compare(offlineBackendName, Qt::CaseInsensitive) == 0) {
         const QString reason = tr("The account has no online access");
+        const quint32 uniqueAccountId = account.uniqueId();
 
-        qCInfo(lcBanking) << "account" << account.uniqueId() << "skipped, no online access";
+        qCInfo(lcBanking) << "account" << uniqueAccountId << "skipped, no online access";
 
-        Q_EMIT accountSkipped(account.uniqueId(), reason);
-        Q_EMIT finished();
+        reportLater([this, uniqueAccountId, reason] {
+            Q_EMIT accountSkipped(uniqueAccountId, reason);
+            Q_EMIT finished();
+        });
         return;
     }
 
-    const CommandListPtr commands(buildFetchCommands(account, latestStoredDate));
-    const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
-
-    const int rv = AB_Banking_SendCommands(d_ptr->aqBanking, commands.get(), context.get());
-    if (rv != AB_SUCCESS) {
-        reportError(ErrorCode::BankingFailure,
-                    QStringLiteral("AB_Banking_SendCommands failed with %1").arg(rv));
-        return;
-    }
-
-    // A session can come back successful and still carry an order the bank
-    // refused. Without this the account would answer with an empty list, and a
-    // refusal would read like an account with nothing new.
-    if (accountsOfFailedCommands(commands.get()).contains(account.uniqueId())) {
-        reportError(ErrorCode::BankingFailure,
-                    QStringLiteral("An order of account %1 was refused").arg(account.uniqueId()));
-        return;
-    }
-
-    const BankingItems items = itemsFromContext(context.get(), commands.get());
-
-    qCDebug(lcBanking) << "fetched" << items.size() << "records for account" << account.uniqueId();
-
-    // An account with nothing new reports an empty list. That is not an error,
-    // and it is where a fetch parts from a read of the storage.
-    Q_EMIT itemsReceived(items);
-
-    Q_EMIT finished();
+    // Built here and handed over: the orders need nothing of the backend, and
+    // the account they are built from belongs to the caller and must not be
+    // reached into once this call has returned.
+    d_ptr->startFetch(buildFetchCommands(account, latestStoredDate), account.uniqueId());
 }

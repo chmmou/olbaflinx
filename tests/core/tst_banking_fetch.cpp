@@ -26,9 +26,12 @@
 
 #include <aqbanking/banking.h>
 
+#include <gwenhywfar/error.h>
+
 #include <QtTest/QtTest>
 
 #include <memory>
+#include <utility>
 
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
@@ -52,6 +55,15 @@ private:
         return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxBankingFetchTest"));
     }
 
+    /** The backend, brought up against the given interface. */
+    static Error initialized(Banking &banking, GWEN_GUI *gui)
+    {
+        return banking.initialize(QStringLiteral("OlbaFlinxBankingFetchTest"),
+                                  QStringLiteral("1.0.0"),
+                                  QStringLiteral("0123456789ABCDEF"),
+                                  gui);
+    }
+
 private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
@@ -67,12 +79,28 @@ private Q_SLOTS:
     void bothOrdersStartThirtyDaysBeforeTheYoungestStoredBooking();
     void withoutAStoredBookingTheOrdersCarryNoStartingPoint();
     void aPeriodNarrowerThanAskedForIsNoFailure();
+
+    void aFetchAnswersOnlyAfterItHasReturned();
+    void theSessionRunsBesideTheCallerAndAsksTheInterfaceItWasGiven();
+    void aSecondFetchIsRefusedWhileOneRunsAndNeverReachesTheBackend();
+    void aFetchIsTakenAgainOnceTheRunningOneHasEnded();
+    void theBackendGoesDownAfterASessionHasEnded();
+
+    void anAbortByTheUserIsToldApartFromAFailure();
+    void aSessionCutInTheMiddleIsAFailureAndNoAbort();
+    void aRefusedOrderIsAFailureOfItsAccountAndNoEmptyResult();
 };
 
 namespace {
 
 constexpr quint32 testAccountId = 4711;
 constexpr int bookingCount = 5;
+
+/**
+ * How long a spy waits for something a session has to produce first. The call
+ * returns the moment the signal arrives, so nothing sleeps for it.
+ */
+constexpr int sessionTimeoutMs = 30000;
 
 } // namespace
 
@@ -279,13 +307,7 @@ void BankingFetchTest::anAccountWithoutOnlineAccessIsSkippedWithAReason()
     Banking banking(applicationInfo());
 
     const ScopedConsoleGui gui;
-
-    QVERIFY(!banking
-                 .initialize(QStringLiteral("OlbaFlinxBankingFetchTest"),
-                             QStringLiteral("1.0.0"),
-                             QStringLiteral("0123456789ABCDEF"),
-                             gui.get())
-                 .isError());
+    QVERIFY(!initialized(banking, gui.get()).isError());
 
     QSignalSpy skippedSpy(&banking, &Banking::accountSkipped);
     QSignalSpy errorSpy(&banking, &Banking::errorOccurred);
@@ -295,6 +317,9 @@ void BankingFetchTest::anAccountWithoutOnlineAccessIsSkippedWithAReason()
     const auto account = BankingHelpers::accountFromBackend(testAccountId, "");
 
     banking.fetchAccount(*account, QDate(2026, 1, 1));
+
+    // Reported through the event loop, like every other way out of a fetch.
+    QVERIFY(skippedSpy.wait(sessionTimeoutMs));
 
     QCOMPARE(skippedSpy.count(), 1);
     QCOMPARE(errorSpy.count(), 0);
@@ -391,8 +416,229 @@ void BankingFetchTest::aPeriodNarrowerThanAskedForIsNoFailure()
     AB_Transaction_List2_freeAll(commands);
 }
 
+/**
+ * The promise is that a fetch returns at once and answers later. A caller that
+ * sets its own state after the call would otherwise see the end of a fetch
+ * before its start.
+ *
+ * No clock is measured here. A session cannot be held to a duration, and the
+ * clock would then be measuring the bank.
+ */
+void BankingFetchTest::aFetchAnswersOnlyAfterItHasReturned()
+{
+    Banking banking(applicationInfo());
+
+    const ScopedConsoleGui gui;
+    QVERIFY(!initialized(banking, gui.get()).isError());
+
+    QSignalSpy finishedSpy(&banking, &Banking::finished);
+
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    banking.fetchAccount(*account, QDate(2026, 1, 1));
+
+    // Back here with nothing reported yet, and the thread that asked goes on.
+    QCOMPARE(finishedSpy.count(), 0);
+
+    QVERIFY(finishedSpy.wait(sessionTimeoutMs));
+
+    banking.finalize();
+}
+
+/**
+ * The interface of gwenhywfar lives per thread. The one set where initialize
+ * ran does not reach the session, and without one there the library aborts the
+ * process instead of reporting a failure. What shows that the session set it is
+ * that the interface answers at all, and it answers from another thread.
+ */
+void BankingFetchTest::theSessionRunsBesideTheCallerAndAsksTheInterfaceItWasGiven()
+{
+    Banking banking(applicationInfo());
+
+    const ScopedHoldingGui gui;
+    QVERIFY(!initialized(banking, gui.get()).isError());
+
+    QSignalSpy finishedSpy(&banking, &Banking::finished);
+
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    banking.fetchAccount(*account, QDate(2026, 1, 1));
+
+    QTRY_COMPARE_WITH_TIMEOUT(ScopedHoldingGui::progressCount(), 1, sessionTimeoutMs);
+
+    QVERIFY(ScopedHoldingGui::sessionThread() != nullptr);
+    QVERIFY(ScopedHoldingGui::sessionThread() != QThread::currentThread());
+
+    ScopedHoldingGui::release();
+    QVERIFY(finishedSpy.wait(sessionTimeoutMs));
+
+    banking.finalize();
+}
+
+/**
+ * Two fetches do not run at once. The refused one is told so and gets no
+ * finished of its own: that one belongs to the fetch that is running and would
+ * declare it over.
+ */
+void BankingFetchTest::aSecondFetchIsRefusedWhileOneRunsAndNeverReachesTheBackend()
+{
+    Banking banking(applicationInfo());
+
+    const ScopedHoldingGui gui;
+    QVERIFY(!initialized(banking, gui.get()).isError());
+
+    QSignalSpy errorSpy(&banking, &Banking::errorOccurred);
+    QSignalSpy finishedSpy(&banking, &Banking::finished);
+
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    banking.fetchAccount(*account, QDate(2026, 1, 1));
+
+    // The session stands at its first progress from here on.
+    QTRY_COMPARE_WITH_TIMEOUT(ScopedHoldingGui::progressCount(), 1, sessionTimeoutMs);
+
+    banking.fetchAccount(*account, QDate(2026, 1, 1));
+
+    QVERIFY(errorSpy.wait(sessionTimeoutMs));
+    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(errorSpy.first().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+    QCOMPARE(finishedSpy.count(), 0);
+
+    // The refused fetch never opened a session of its own: nothing has been
+    // released yet, so a second one would be standing here too.
+    QCOMPARE(ScopedHoldingGui::progressCount(), 1);
+
+    ScopedHoldingGui::release();
+    QVERIFY(finishedSpy.wait(sessionTimeoutMs));
+
+    banking.finalize();
+}
+
+/**
+ * What is refused while a fetch runs is taken once it has ended, and no run is
+ * left behind that would keep the next one out.
+ */
+void BankingFetchTest::aFetchIsTakenAgainOnceTheRunningOneHasEnded()
+{
+    Banking banking(applicationInfo());
+
+    const ScopedHoldingGui gui;
+    QVERIFY(!initialized(banking, gui.get()).isError());
+
+    QSignalSpy errorSpy(&banking, &Banking::errorOccurred);
+    QSignalSpy finishedSpy(&banking, &Banking::finished);
+
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    banking.fetchAccount(*account, QDate(2026, 1, 1));
+    QTRY_COMPARE_WITH_TIMEOUT(ScopedHoldingGui::progressCount(), 1, sessionTimeoutMs);
+
+    ScopedHoldingGui::release();
+    QVERIFY(finishedSpy.wait(sessionTimeoutMs));
+
+    const int afterTheFirst = ScopedHoldingGui::progressCount();
+
+    errorSpy.clear();
+    finishedSpy.clear();
+
+    banking.fetchAccount(*account, QDate(2026, 1, 1));
+    QVERIFY(finishedSpy.wait(sessionTimeoutMs));
+
+    // Taken, not refused: the second one opened a session of its own, and no
+    // refusal was reported for it.
+    QVERIFY(ScopedHoldingGui::progressCount() > afterTheFirst);
+    for (const QList<QVariant> &arguments : std::as_const(errorSpy)) {
+        QVERIFY(arguments.at(0).value<ErrorCode>() != ErrorCode::InvalidInput);
+    }
+
+    banking.finalize();
+}
+
+/**
+ * A session reaches into the backend from a thread of its own. Taking the
+ * backend away under it would leave it writing into freed memory, so the
+ * shutdown has to be safe once the session has ended.
+ */
+void BankingFetchTest::theBackendGoesDownAfterASessionHasEnded()
+{
+    auto banking = std::make_unique<Banking>(applicationInfo());
+
+    const ScopedConsoleGui gui;
+    QVERIFY(!initialized(*banking, gui.get()).isError());
+
+    QSignalSpy finishedSpy(banking.get(), &Banking::finished);
+
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    banking->fetchAccount(*account, QDate(2026, 1, 1));
+    QVERIFY(finishedSpy.wait(sessionTimeoutMs));
+
+    // The backend first, the interface after it.
+    banking.reset();
+
+    QVERIFY(true);
+}
+
+/**
+ * The user interface needs the abort told apart from the failure: it says
+ * something else, and it keeps what an earlier account of the same run had
+ * already brought.
+ */
+void BankingFetchTest::anAbortByTheUserIsToldApartFromAFailure()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
+
+    QCOMPARE(Banking::outcomeOfSession(GWEN_ERROR_USER_ABORTED, commands, testAccountId),
+             FetchOutcome::Aborted);
+
+    AB_Transaction_List2_freeAll(commands);
+}
+
+/**
+ * A session that is cut in the middle, say because the far end went away,
+ * answers with something else than the abort and stays a failure. Reading it as
+ * an abort would tell the user they stopped something they did not.
+ */
+void BankingFetchTest::aSessionCutInTheMiddleIsAFailureAndNoAbort()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
+
+    QCOMPARE(Banking::outcomeOfSession(GWEN_ERROR_IO, commands, testAccountId),
+             FetchOutcome::Failed);
+
+    AB_Transaction_List2_freeAll(commands);
+}
+
+/**
+ * A session can come back successful and still carry an order the bank refused.
+ * Without the distinction the account would answer with an empty list, and a
+ * refusal would read like an account with nothing new.
+ */
+void BankingFetchTest::aRefusedOrderIsAFailureOfItsAccountAndNoEmptyResult()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
+
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, testAccountId),
+             FetchOutcome::Received);
+
+    AB_TRANSACTION *balanceCommand = BankingHelpers::commandOfKind(commands,
+                                                                   AB_Transaction_CommandGetBalance);
+    QVERIFY(balanceCommand != nullptr);
+    AB_Transaction_SetStatus(balanceCommand, AB_Transaction_StatusRejected);
+
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, testAccountId), FetchOutcome::Failed);
+
+    AB_Transaction_List2_freeAll(commands);
+}
+
 } // namespace olbaflinx::core::banking::tests
 
-QTEST_APPLESS_MAIN(olbaflinx::core::banking::tests::BankingFetchTest)
+QTEST_GUILESS_MAIN(olbaflinx::core::banking::tests::BankingFetchTest)
 
 #include "tst_banking_fetch.moc"

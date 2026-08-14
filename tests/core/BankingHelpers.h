@@ -23,12 +23,16 @@
 #include <aqbanking/types/value.h>
 
 #include <gwenhywfar/gui.h>
+#include <gwenhywfar/gui_be.h>
 #include <gwenhywfar/gwendate.h>
 
 #include <QtCore/QDate>
 #include <QtCore/QList>
+#include <QtCore/QSemaphore>
 #include <QtCore/QString>
+#include <QtCore/QThread>
 
+#include <atomic>
 #include <memory>
 
 using namespace olbaflinx::core::banking;
@@ -245,6 +249,91 @@ public:
     [[nodiscard]] GWEN_GUI *get() const { return m_gui; }
 
 private:
+    GWEN_GUI *m_gui;
+};
+
+/**
+ * An interface that holds a session at its very first step.
+ *
+ * AB_Banking_SendCommands opens a progress before it does anything else. An
+ * interface that does not come back from there leaves the session standing, and
+ * that is what makes the promises around a running fetch measurable without a
+ * bank: a second fetch is refused while one runs, and the thread that asked for
+ * it goes on in the meantime.
+ *
+ * Only one instance is in play at a time, which is why the gate is where it is:
+ * the callback of gwenhywfar carries no place to hang anything on.
+ *
+ * Ownership stays with the instance. Banking takes the pointer and never frees
+ * it. Whoever builds one releases the session before letting it go, or the
+ * thread of the session is still standing in it.
+ */
+class ScopedHoldingGui
+{
+public:
+    ScopedHoldingGui()
+        : m_gui(GWEN_Gui_new())
+    {
+        // The release of a former instance leaves permits behind. Without
+        // taking them back, the next session would walk straight through the
+        // hold and the count would be measuring nothing.
+        s_gate.tryAcquire(s_gate.available());
+
+        s_progresses = 0;
+        s_sessionThread = nullptr;
+        GWEN_Gui_SetProgressStartFn(m_gui, &ScopedHoldingGui::holdAtProgressStart);
+    }
+
+    ~ScopedHoldingGui()
+    {
+        release();
+        GWEN_Gui_free(m_gui);
+    }
+
+    ScopedHoldingGui(const ScopedHoldingGui &) = delete;
+    ScopedHoldingGui &operator=(const ScopedHoldingGui &) = delete;
+    ScopedHoldingGui(ScopedHoldingGui &&) = delete;
+    ScopedHoldingGui &operator=(ScopedHoldingGui &&) = delete;
+
+    [[nodiscard]] GWEN_GUI *get() const { return m_gui; }
+
+    /**
+     * How many progresses have been opened.
+     *
+     * A session opens several of them, one below the other, and the first of a
+     * session is the one that stands here until it is released. As long as
+     * nothing is released, the count is the number of sessions that started, and
+     * that is what shows a refused fetch never got as far as the backend.
+     */
+    [[nodiscard]] static int progressCount() { return s_progresses.load(); }
+
+    /**
+     * The thread the first callback arrived in.
+     *
+     * It is the interface of that thread the backend asked, so this is where a
+     * session actually ran. Null until a session has reached the hold.
+     */
+    [[nodiscard]] static QThread *sessionThread() { return s_sessionThread.load(); }
+
+    /** Lets every session that is waiting go on. */
+    static void release() { s_gate.release(64); }
+
+private:
+    static uint32_t GWENHYWFAR_CB
+    holdAtProgressStart(GWEN_GUI *, uint32_t, const char *, const char *, uint64_t, uint32_t)
+    {
+        ++s_progresses;
+        s_sessionThread = QThread::currentThread();
+        s_gate.acquire();
+
+        // Any id will do. Nothing here reads it back.
+        return 1;
+    }
+
+    inline static QSemaphore s_gate{0};
+    inline static std::atomic_int s_progresses{0};
+    inline static std::atomic<QThread *> s_sessionThread{nullptr};
+
     GWEN_GUI *m_gui;
 };
 
