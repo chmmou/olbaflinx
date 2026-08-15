@@ -67,6 +67,19 @@ public:
     void setAccounts(const BankingItems &items);
 
     /**
+     * @brief Reads the accounts of the open storage again and shows what is
+     *  there now.
+     *
+     * For whoever wrote into the storage from outside the window, the wizard
+     * above all. The window does not learn of such a write on its own, and the
+     * tree would stand as it was until the storage is closed and opened again.
+     *
+     * The choice of the user and the transactions shown are kept. Does nothing
+     * of consequence while no storage is open.
+     */
+    void refreshAccounts();
+
+    /**
      * @brief Turns an error from core into something the user can act on.
      *
      * The technical message goes to the log, the status bar carries the short

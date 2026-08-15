@@ -96,6 +96,11 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
 
     const int total = static_cast<int>(accounts.size());
 
+    // What the user is told about are the accounts he picked. The run writes the
+    // ones he turned down as well, and saying so would report a number he never
+    // asked for and cannot see afterwards: the tree shows the chosen ones alone.
+    const int kept = static_cast<int>(chosenIds.size());
+
     // Single shot, because this run is the only one this connection is for. The
     // storage outlives the window and would otherwise report every later run
     // into a message about the wizard.
@@ -107,10 +112,10 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
         &storage,
         &Storage::itemsStored,
         &app,
-        [&app, total](int stored) {
+        [&app, total, kept](int stored) {
             if (stored == total) {
                 app.showMessage(
-                    QCoreApplication::translate("main", "%n account(s) set up.", nullptr, stored));
+                    QCoreApplication::translate("main", "%n account(s) set up.", nullptr, kept));
                 return;
             }
 
@@ -121,6 +126,17 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
                                 stored)
                                 .arg(total));
         },
+        Qt::SingleShotConnection);
+
+    // The window is not told of a write that goes past it, and the tree would
+    // stand as it was until the storage is closed and opened again. Hung on the
+    // end of the run rather than on the count, because a run that failed halfway
+    // has changed the storage as well.
+    QObject::connect(
+        &storage,
+        &Storage::finished,
+        &app,
+        [&app] { app.refreshAccounts(); },
         Qt::SingleShotConnection);
 
     storage.storeItems(accounts);
