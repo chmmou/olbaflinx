@@ -83,6 +83,12 @@ protected:
 
         return 0;
     }
+
+    // No widget tree was built above, so the two calls that follow an open one
+    // are answered here as well. Left to the base class they would look for the
+    // dialog it never got.
+    int runDialog(GWEN_DIALOG *, int) override { return 0; }
+    int closeDialog(GWEN_DIALOG *) override { return 0; }
 };
 
 /** A dialog of the backend, with no widget in it. */

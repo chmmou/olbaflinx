@@ -42,6 +42,48 @@ BankingGui *ownerOf(GWEN_GUI *gui)
     return gui == nullptr ? nullptr : GWEN_INHERIT_GETDATA(GWEN_GUI, BankingGui, gui);
 }
 
+/**
+ * Makes an interface the one of the current thread while it lives and puts back
+ * what was there before.
+ *
+ * gwenhywfar holds its interface per thread and looks it up in the thread a
+ * call runs in, not in the one it was made from. A progress that was handed
+ * over therefore arrives in a thread that knows nothing of the session, and the
+ * dialogs it wants to open would answer that no interface is there.
+ */
+class ThreadInterface
+{
+public:
+    explicit ThreadInterface(GWEN_GUI *gui)
+        : m_previous(GWEN_Gui_GetGui())
+    {
+        // Held over the change: setting a new interface releases the one it
+        // replaces, and that one is what has to go back afterwards.
+        if (m_previous != nullptr) {
+            GWEN_Gui_Attach(m_previous);
+        }
+
+        GWEN_Gui_SetGui(gui);
+    }
+
+    ~ThreadInterface()
+    {
+        GWEN_Gui_SetGui(m_previous);
+
+        if (m_previous != nullptr) {
+            GWEN_Gui_free(m_previous);
+        }
+    }
+
+    ThreadInterface(const ThreadInterface &) = delete;
+    ThreadInterface &operator=(const ThreadInterface &) = delete;
+    ThreadInterface(ThreadInterface &&) = delete;
+    ThreadInterface &operator=(ThreadInterface &&) = delete;
+
+private:
+    GWEN_GUI *m_previous;
+};
+
 } // namespace
 
 BankingGui::BankingGui(int passwordCacheLifetimeMs)
@@ -97,6 +139,8 @@ uint32_t BankingGui::forwardProgressStart(GWEN_GUI *gui,
     }
 
     return self->callOnOwnerThread([self, gui, progressFlags, title, text, total, guiid] {
+        const ThreadInterface interface(gui);
+
         return self->m_progressStart(gui, progressFlags, title, text, total, guiid);
     });
 }
@@ -108,8 +152,11 @@ int BankingGui::forwardProgressAdvance(GWEN_GUI *gui, uint32_t id, uint64_t prog
         return GWEN_ERROR_NOT_SUPPORTED;
     }
 
-    return self->callOnOwnerThread(
-        [self, gui, id, progress] { return self->m_progressAdvance(gui, id, progress); });
+    return self->callOnOwnerThread([self, gui, id, progress] {
+        const ThreadInterface interface(gui);
+
+        return self->m_progressAdvance(gui, id, progress);
+    });
 }
 
 int BankingGui::forwardProgressSetTotal(GWEN_GUI *gui, uint32_t id, uint64_t total)
@@ -119,8 +166,11 @@ int BankingGui::forwardProgressSetTotal(GWEN_GUI *gui, uint32_t id, uint64_t tot
         return GWEN_ERROR_NOT_SUPPORTED;
     }
 
-    return self->callOnOwnerThread(
-        [self, gui, id, total] { return self->m_progressSetTotal(gui, id, total); });
+    return self->callOnOwnerThread([self, gui, id, total] {
+        const ThreadInterface interface(gui);
+
+        return self->m_progressSetTotal(gui, id, total);
+    });
 }
 
 int BankingGui::forwardProgressLog(GWEN_GUI *gui,
@@ -133,8 +183,11 @@ int BankingGui::forwardProgressLog(GWEN_GUI *gui,
         return GWEN_ERROR_NOT_SUPPORTED;
     }
 
-    return self->callOnOwnerThread(
-        [self, gui, id, level, text] { return self->m_progressLog(gui, id, level, text); });
+    return self->callOnOwnerThread([self, gui, id, level, text] {
+        const ThreadInterface interface(gui);
+
+        return self->m_progressLog(gui, id, level, text);
+    });
 }
 
 int BankingGui::forwardProgressEnd(GWEN_GUI *gui, uint32_t id)
@@ -144,7 +197,11 @@ int BankingGui::forwardProgressEnd(GWEN_GUI *gui, uint32_t id)
         return GWEN_ERROR_NOT_SUPPORTED;
     }
 
-    return self->callOnOwnerThread([self, gui, id] { return self->m_progressEnd(gui, id); });
+    return self->callOnOwnerThread([self, gui, id] {
+        const ThreadInterface interface(gui);
+
+        return self->m_progressEnd(gui, id);
+    });
 }
 
 void BankingGui::holdPasswordCache()
