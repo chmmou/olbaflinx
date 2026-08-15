@@ -84,6 +84,8 @@ private Q_SLOTS:
 
     void aCallFromAWorkerThreadWaitsForTheOwningThread();
     void aCallFromTheOwningThreadAnswersOnTheSpotAndDoesNotDeadlock();
+    void aProgressFromAWorkerThreadWaitsForTheOwningThread();
+    void aProgressFromTheOwningThreadAnswersOnTheSpotAndDoesNotDeadlock();
     void theInterfaceAndTheBackendComeUpAndGoDownRepeatedly();
 
     void theCachedCredentialIsGoneWhenTheSpanHasRun();
@@ -152,6 +154,72 @@ void BankingGuiTest::aCallFromTheOwningThreadAnswersOnTheSpotAndDoesNotDeadlock(
     // No event loop runs during this call. A forwarded one would never come
     // back, and the test would time out instead of finishing.
     gui.openDialog(dialog.get(), 0);
+
+    QVERIFY(true);
+}
+
+/**
+ * The progress of a session is the second way into the widgets, next to the
+ * dialogs, and the one a fetch takes on every run: the backend reports its
+ * course from the thread of the session, and the report reaches the log of the
+ * progress dialog. Measured the same way as the dialogs above, by a call that
+ * cannot finish while the owning thread does nothing.
+ *
+ * The delay flag keeps the dialog from being shown, so what is left to measure
+ * is the handover alone.
+ */
+void BankingGuiTest::aProgressFromAWorkerThreadWaitsForTheOwningThread()
+{
+    ProbeGui gui;
+
+    QThread *ownerThread = QThread::currentThread();
+    QThread *callThread = nullptr;
+
+    QFuture<void> handed = QtConcurrent::run([&gui, &callThread] {
+        callThread = QThread::currentThread();
+
+        // The interface of gwenhywfar lives per thread, and a session sets it
+        // in its own the same way before it reports anything.
+        GWEN_Gui_SetGui(gui.getCInterface());
+
+        const uint32_t progress = GWEN_Gui_ProgressStart(GWEN_GUI_PROGRESS_DELAY,
+                                                         "probe",
+                                                         "probe",
+                                                         1,
+                                                         0);
+        GWEN_Gui_ProgressLog(progress, GWEN_LoggerLevel_Info, "probe");
+        GWEN_Gui_ProgressEnd(progress);
+
+        GWEN_Gui_SetGui(nullptr);
+    });
+
+    QThread::msleep(100);
+    QVERIFY(!handed.isFinished());
+
+    QTRY_VERIFY_WITH_TIMEOUT(handed.isFinished(), 5000);
+
+    QVERIFY(callThread != nullptr);
+    QVERIFY(callThread != ownerThread);
+}
+
+/**
+ * The counterpart of the dialog case: a progress reported from the thread that
+ * owns the interface is answered on the spot. Handing it over would wait for a
+ * thread that is waiting for itself.
+ */
+void BankingGuiTest::aProgressFromTheOwningThreadAnswersOnTheSpotAndDoesNotDeadlock()
+{
+    ProbeGui gui;
+
+    GWEN_Gui_SetGui(gui.getCInterface());
+
+    // No event loop runs during these calls. A forwarded one would never come
+    // back, and the test would time out instead of finishing.
+    const uint32_t progress = GWEN_Gui_ProgressStart(GWEN_GUI_PROGRESS_DELAY, "probe", "probe", 1, 0);
+    GWEN_Gui_ProgressLog(progress, GWEN_LoggerLevel_Info, "probe");
+    GWEN_Gui_ProgressEnd(progress);
+
+    GWEN_Gui_SetGui(nullptr);
 
     QVERIFY(true);
 }

@@ -200,6 +200,7 @@ private Q_SLOTS:
 
     void theCloseEntryCannotBeInvokedWhileAFetchRuns();
     void theWindowIsNotClosedWhileAFetchRuns();
+    void theQuitEntryGoesThroughTheSameRefusalAsClosing();
     void theRegistrationKeyIsNotEmptyWhenTheBankingLayerComesUp();
     void theWindowComesUpBesideAnInstanceOfTheWizard();
     void theSpanOfTheCachedCredentialRunsAfterAFetchAndNotDuringIt();
@@ -588,6 +589,39 @@ void AppFetchTest::theWindowIsNotClosedWhileAFetchRuns()
     Q_EMIT fetch->ended(AccountFetch::Outcome::Aborted, 0, QString());
 
     QVERIFY(app.close());
+}
+
+/**
+ * The entry in the menu takes the same way as the button of the window manager.
+ * Ending the application past it would leave the shutdown of the banking layer
+ * waiting for a session that is waiting for this thread.
+ */
+void AppFetchTest::theQuitEntryGoesThroughTheSameRefusalAsClosing()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putAccount(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    QVERIFY(UiTestHelpers::showTheWindow(app));
+
+    auto *const fetch = fetchOf(app);
+    QVERIFY(fetch != nullptr);
+
+    auto *const quitAction = app.findChild<QAction *>(QStringLiteral("appQuitAction"));
+    QVERIFY(quitAction != nullptr);
+
+    Q_EMIT fetch->started();
+
+    quitAction->trigger();
+    QVERIFY(app.isVisible());
+
+    Q_EMIT fetch->ended(AccountFetch::Outcome::Aborted, 0, QString());
+
+    quitAction->trigger();
+    QVERIFY(!app.isVisible());
 }
 
 /**

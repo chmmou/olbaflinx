@@ -21,8 +21,28 @@
 
 #include <gwenhywfar/db.h>
 #include <gwenhywfar/gui.h>
+#include <gwenhywfar/inherit.h>
 
 using namespace olbaflinx::ui;
+
+// Lets an instance be found from the C interface it belongs to. The binding
+// this class derives from does the same for itself, and the two are kept apart
+// by the type name the macro builds its key from.
+GWEN_INHERIT(GWEN_GUI, BankingGui)
+
+namespace {
+
+/**
+ * The instance an interface belongs to, or nothing where the interface is not
+ * one of ours. gwenhywfar hands a callback the interface and no further
+ * context, and this is what turns the one into the other.
+ */
+BankingGui *ownerOf(GWEN_GUI *gui)
+{
+    return gui == nullptr ? nullptr : GWEN_INHERIT_GETDATA(GWEN_GUI, BankingGui, gui);
+}
+
+} // namespace
 
 BankingGui::BankingGui(int passwordCacheLifetimeMs)
 {
@@ -32,14 +52,99 @@ BankingGui::BankingGui(int passwordCacheLifetimeMs)
     QObject::connect(&m_passwordCacheExpiry, &QTimer::timeout, &m_ownerThread, [this] {
         clearPasswordCache();
     });
+
+    GWEN_GUI *gui = getCInterface();
+
+    GWEN_INHERIT_SETDATA(GWEN_GUI, BankingGui, gui, this, nullptr);
+
+    m_progressStart = GWEN_Gui_SetProgressStartFn(gui, &BankingGui::forwardProgressStart);
+    m_progressAdvance = GWEN_Gui_SetProgressAdvanceFn(gui, &BankingGui::forwardProgressAdvance);
+    m_progressSetTotal = GWEN_Gui_SetProgressSetTotalFn(gui, &BankingGui::forwardProgressSetTotal);
+    m_progressLog = GWEN_Gui_SetProgressLogFn(gui, &BankingGui::forwardProgressLog);
+    m_progressEnd = GWEN_Gui_SetProgressEndFn(gui, &BankingGui::forwardProgressEnd);
 }
 
 BankingGui::~BankingGui()
 {
+    GWEN_GUI *gui = getCInterface();
+
+    // Put back before the link is given up. A callback that arrived afterwards
+    // would otherwise look for an instance that is no longer there.
+    GWEN_Gui_SetProgressStartFn(gui, m_progressStart);
+    GWEN_Gui_SetProgressAdvanceFn(gui, m_progressAdvance);
+    GWEN_Gui_SetProgressSetTotalFn(gui, m_progressSetTotal);
+    GWEN_Gui_SetProgressLogFn(gui, m_progressLog);
+    GWEN_Gui_SetProgressEndFn(gui, m_progressEnd);
+
+    GWEN_INHERIT_UNLINK(GWEN_GUI, BankingGui, gui)
+
     // Whatever is still cached goes with the interface. gwenhywfar releases the
     // cache without overwriting it, so the last thing this class does is empty
     // it itself.
     clearPasswordCache();
+}
+
+uint32_t BankingGui::forwardProgressStart(GWEN_GUI *gui,
+                                          uint32_t progressFlags,
+                                          const char *title,
+                                          const char *text,
+                                          uint64_t total,
+                                          uint32_t guiid)
+{
+    BankingGui *self = ownerOf(gui);
+    if (self == nullptr || self->m_progressStart == nullptr) {
+        return 0;
+    }
+
+    return self->callOnOwnerThread([self, gui, progressFlags, title, text, total, guiid] {
+        return self->m_progressStart(gui, progressFlags, title, text, total, guiid);
+    });
+}
+
+int BankingGui::forwardProgressAdvance(GWEN_GUI *gui, uint32_t id, uint64_t progress)
+{
+    BankingGui *self = ownerOf(gui);
+    if (self == nullptr || self->m_progressAdvance == nullptr) {
+        return GWEN_ERROR_NOT_SUPPORTED;
+    }
+
+    return self->callOnOwnerThread(
+        [self, gui, id, progress] { return self->m_progressAdvance(gui, id, progress); });
+}
+
+int BankingGui::forwardProgressSetTotal(GWEN_GUI *gui, uint32_t id, uint64_t total)
+{
+    BankingGui *self = ownerOf(gui);
+    if (self == nullptr || self->m_progressSetTotal == nullptr) {
+        return GWEN_ERROR_NOT_SUPPORTED;
+    }
+
+    return self->callOnOwnerThread(
+        [self, gui, id, total] { return self->m_progressSetTotal(gui, id, total); });
+}
+
+int BankingGui::forwardProgressLog(GWEN_GUI *gui,
+                                   uint32_t id,
+                                   GWEN_LOGGER_LEVEL level,
+                                   const char *text)
+{
+    BankingGui *self = ownerOf(gui);
+    if (self == nullptr || self->m_progressLog == nullptr) {
+        return GWEN_ERROR_NOT_SUPPORTED;
+    }
+
+    return self->callOnOwnerThread(
+        [self, gui, id, level, text] { return self->m_progressLog(gui, id, level, text); });
+}
+
+int BankingGui::forwardProgressEnd(GWEN_GUI *gui, uint32_t id)
+{
+    BankingGui *self = ownerOf(gui);
+    if (self == nullptr || self->m_progressEnd == nullptr) {
+        return GWEN_ERROR_NOT_SUPPORTED;
+    }
+
+    return self->callOnOwnerThread([self, gui, id] { return self->m_progressEnd(gui, id); });
 }
 
 void BankingGui::holdPasswordCache()
