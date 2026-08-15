@@ -139,6 +139,13 @@ QVariant AccountTreeModel::data(const QModelIndex &index, int role) const
     }
 }
 
+std::shared_ptr<Account> AccountTreeModel::accountAt(const QModelIndex &index) const
+{
+    Q_UNUSED(index)
+
+    return {};
+}
+
 QHash<int, QByteArray> AccountTreeModel::roleNames() const
 {
     return {

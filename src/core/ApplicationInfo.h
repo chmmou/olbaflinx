@@ -24,6 +24,19 @@
 namespace olbaflinx::core {
 
 /**
+ * The FinTS registration key of this product. It names the application to the
+ * bank servers; it authenticates no user and grants access to no account, so it
+ * is not a secret and losing it costs nothing but the identification.
+ *
+ * A key in the source is normally forbidden without qualification. This one is
+ * kept there on purpose, because moving a value that identifies the build into
+ * a build time variable would hide it without protecting anything. The value
+ * has been public in this repository since it was first committed; taking it
+ * out would not make it secret again.
+ */
+inline constexpr auto FinTsRegistrationKey = QLatin1StringView("3E1B97FF72A24783EC2215B12");
+
+/**
  * @brief The application details core needs for its settings and for signing on
  *  to the banking backend.
  *
@@ -36,6 +49,17 @@ struct OLBAFLINX_CORE_EXPORT ApplicationInfo
     QString organization;
     QString name;
     QString version;
+
+    /**
+     * The key the application signs on to a bank with, FinTsRegistrationKey
+     * above. It is a field rather than a constant read where it is needed,
+     * because a test signs on under a key of its own.
+     *
+     * An aggregate that names only the three fields above leaves this one empty
+     * without a word from any compiler, and the application would then reach a
+     * bank without identifying itself. Whoever builds one names all four.
+     */
+    QString registrationKey;
 };
 
 } // namespace olbaflinx::core

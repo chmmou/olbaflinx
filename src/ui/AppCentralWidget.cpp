@@ -526,6 +526,10 @@ void AppCentralWidget::resetTransactionFilter()
     d_ptr->resetTransactionFilter();
 }
 
+void AppCentralWidget::refreshTransactions()
+{
+}
+
 void AppCentralWidget::setTransactionNotice(TransactionNotice notice)
 {
     d_ptr->setTransactionNotice(notice);

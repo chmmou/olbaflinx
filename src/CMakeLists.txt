@@ -113,6 +113,8 @@ install(TARGETS OlbaFlinxCore
 # ----------------------------------------------------------------------------
 
 qt_add_library(OlbaFlinxUi STATIC
+        ui/AccountFetch.cpp
+        ui/AccountFetch.h
         ui/App.cpp
         ui/App.h
         ui/App.ui

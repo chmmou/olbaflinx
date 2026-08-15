@@ -18,6 +18,7 @@
 #include "core/Banking/Banking.h"
 #include "core/Logger/Logger.h"
 #include "core/Storage/Storage.h"
+#include "ui/AccountFetch.h"
 #include "ui/AppCentralWidget.h"
 #include "ui/Assistant/SetupAssistant.h"
 #include "ui/ErrorMessage.h"
@@ -32,6 +33,7 @@
 
 #include <QtGui/QAccessible>
 #include <QtGui/QAccessibleAnnouncementEvent>
+#include <QtGui/QCloseEvent>
 
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QLayout>
@@ -94,11 +96,12 @@ using namespace ads;
 class App::Private
 {
 public:
-    explicit Private(App *app, Logger *appLogger, Storage *appStorage)
+    explicit Private(App *app, Logger *appLogger, Storage *appStorage, ApplicationInfo info)
         : logger(appLogger)
         , storage(appStorage)
         , accountTreeModel(new AccountTreeModel(app))
         , transactionTableModel(new TransactionTableModel(app))
+        , fetch(new AccountFetch(std::move(info), appStorage, app))
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
@@ -482,6 +485,12 @@ public:
     Storage *storage;
     AccountTreeModel *accountTreeModel;
     TransactionTableModel *transactionTableModel;
+
+    // Owned by the window through the object hierarchy. It holds the banking
+    // instance of the window and comes up on the first fetch, so a window that
+    // never fetches never reaches the banking layer.
+    AccountFetch *fetch;
+
     Ui::UiApp *ui;
 
     // Owned by the second page through the widget hierarchy. The two areas are
@@ -501,9 +510,13 @@ private:
     App *q_ptr;
 };
 
-App::App(Logger *logger, Storage *storage, QWidget *parent, const Qt::WindowFlags &flags)
+App::App(Logger *logger,
+         Storage *storage,
+         ApplicationInfo applicationInfo,
+         QWidget *parent,
+         const Qt::WindowFlags &flags)
     : QMainWindow(parent, flags)
-    , d_ptr(new Private(this, logger, storage))
+    , d_ptr(new Private(this, logger, storage, std::move(applicationInfo)))
 {
     // Messages reach the bar from four places, and it swaps its text without a
     // sound. This signal is the one point all four pass through. An empty text
@@ -630,4 +643,9 @@ void App::resizeEvent(QResizeEvent *event)
 {
     d_ptr->storage->storeSetting(SizeKey, event->size(), WindowGroup);
     QMainWindow::resizeEvent(event);
+}
+
+void App::closeEvent(QCloseEvent *event)
+{
+    QMainWindow::closeEvent(event);
 }

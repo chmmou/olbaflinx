@@ -32,23 +32,6 @@
 using namespace olbaflinx::core;
 using namespace olbaflinx::ui::assistant::pages;
 
-namespace {
-
-/**
- * The FinTS registration key of this product. It names the application to the
- * bank servers; it authenticates no user and grants access to no account, so it
- * is not a secret and losing it costs nothing but the identification.
- *
- * A key in the source is normally forbidden without qualification. This one is
- * kept there on purpose, because moving a value that identifies the build into
- * a build time variable would hide it without protecting anything. The value
- * has been public in this repository since it was first committed; taking it
- * out would not make it secret again.
- */
-constexpr auto FinTsRegistrationKey = QLatin1StringView("3E1B97FF72A24783EC2215B12");
-
-} // namespace
-
 class OptionBankingPage::Private
 {
 public:
@@ -90,7 +73,7 @@ public:
 
         if (const auto error = banking->initialize(applicationInfo.name,
                                                    applicationInfo.version,
-                                                   FinTsRegistrationKey,
+                                                   applicationInfo.registrationKey,
                                                    qtGui->getCInterface());
             error.isError()) {
             qCWarning(lcUi) << "could not initialize the banking backend:" << error.message();

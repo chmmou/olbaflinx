@@ -239,6 +239,10 @@ void TransactionTableModel::setAccountId(quint32 accountId)
     startOver();
 }
 
+void TransactionTableModel::refresh()
+{
+}
+
 void TransactionTableModel::sort(int column, Qt::SortOrder order)
 {
     if (column < 0 || column >= ColumnCount) {
