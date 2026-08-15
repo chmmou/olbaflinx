@@ -259,7 +259,7 @@ public:
                                  // The refresh asks it whether it is reading,
                                  // and an answer given before that queue is
                                  // empty is out of date.
-                                 QTimer::singleShot(0, q_ptr, [this] { refreshAfterFetch(); });
+                                 QTimer::singleShot(0, q_ptr, [this] { refreshFromStorage(); });
                              }
                          });
     }
@@ -318,7 +318,8 @@ public:
     }
 
     /**
-     * Brings what a fetch stored onto the screen.
+     * Brings what was written into the storage onto the screen, whoever wrote
+     * it: a fetch of this window, or the wizard from outside it.
      *
      * The accounts first and the transactions after them: both go over the read
      * path of the storage, and that takes one run at a time. The accounts carry
@@ -326,7 +327,7 @@ public:
      * of the user with it - so the choice is put back before the transactions
      * are asked for.
      */
-    void refreshAfterFetch()
+    void refreshFromStorage()
     {
         // The storage takes one read at a time and answers a second one with a
         // failure, right where it was asked. A read of the transactions may well
@@ -338,7 +339,7 @@ public:
         // connection made now would not be among the receivers it was emitted
         // to. The wait would then never end.
         if (transactionTableModel->isReading()) {
-            QTimer::singleShot(RefreshRetryMs, q_ptr, [this] { refreshAfterFetch(); });
+            QTimer::singleShot(RefreshRetryMs, q_ptr, [this] { refreshFromStorage(); });
             return;
         }
 
@@ -770,6 +771,14 @@ void App::initialize()
 void App::setAccounts(const BankingItems &items)
 {
     d_ptr->accountTreeModel->setItems(items);
+}
+
+void App::refreshAccounts()
+{
+    // Through the event loop, so that whatever the storage still has queued is
+    // delivered first. The read asks it whether it is busy, and an answer given
+    // before that queue is empty is out of date.
+    QTimer::singleShot(0, this, [this] { d_ptr->refreshFromStorage(); });
 }
 
 void App::closeStorage()

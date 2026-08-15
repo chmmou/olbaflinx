@@ -128,15 +128,13 @@ private:
      * One account, under the identifier every run here works with.
      *
      * Without online access, and that is not a detail: an account that has it
-     * sends a session, and the session puts up the progress dialog the banking
-     * library brings. Under the offscreen platform that dialog takes the process
-     * down while it paints, so no run here may bring one about. What the banking
+     * sends a session to a bank, which no run here can reach. What the banking
      * layer does with such an account is measurable all the same: it passes it
      * over by its identifier, before anything is sent.
      */
-    [[nodiscard]] bool putAccount(Storage &storage) const
+    [[nodiscard]] bool putAccount(Storage &storage, quint32 uniqueId = testAccountId) const
     {
-        auto map = TestHelpers::accountMapWith(testAccountId, storedBalance);
+        auto map = TestHelpers::accountMapWith(uniqueId, storedBalance);
         map[QStringLiteral("backend_name")] = QStringLiteral("aqnone");
 
         const auto account = Account::fromMap(map);
@@ -201,6 +199,7 @@ private Q_SLOTS:
     void theCloseEntryCannotBeInvokedWhileAFetchRuns();
     void theWindowIsNotClosedWhileAFetchRuns();
     void theQuitEntryGoesThroughTheSameRefusalAsClosing();
+    void theAccountTreeTakesUpWhatWasWrittenPastTheWindow();
     void theRegistrationKeyIsNotEmptyWhenTheBankingLayerComesUp();
     void theWindowComesUpBesideAnInstanceOfTheWizard();
     void theSpanOfTheCachedCredentialRunsAfterAFetchAndNotDuringIt();
@@ -622,6 +621,40 @@ void AppFetchTest::theQuitEntryGoesThroughTheSameRefusalAsClosing()
 
     quitAction->trigger();
     QVERIFY(!app.isVisible());
+}
+
+/**
+ * The wizard writes its accounts into the storage from outside the window, and
+ * the window has no way of knowing it happened. Without a read of its own the
+ * tree stays as it was until the storage is closed and opened again.
+ */
+void AppFetchTest::theAccountTreeTakesUpWhatWasWrittenPastTheWindow()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putAccount(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    QVERIFY(UiTestHelpers::showTheWindow(app));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    auto *const treeModel = app.findChild<AccountTreeModel *>();
+    QVERIFY(treeModel != nullptr);
+    QCOMPARE(treeModel->rowCount(), 1);
+
+    const QModelIndex bank = treeModel->index(0, 0);
+    QCOMPARE(treeModel->rowCount(bank), 1);
+
+    // The second account arrives the way the wizard puts one there: straight
+    // into the storage, with nothing telling the window about it.
+    QVERIFY(putAccount(storage, testAccountId + 1));
+    QCOMPARE(treeModel->rowCount(treeModel->index(0, 0)), 1);
+
+    app.refreshAccounts();
+
+    QTRY_COMPARE_WITH_TIMEOUT(treeModel->rowCount(treeModel->index(0, 0)), 2, 5000);
 }
 
 /**
