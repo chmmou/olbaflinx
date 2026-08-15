@@ -70,6 +70,9 @@ private Q_SLOTS:
 
     void commandsCarryBothRequestsAndTheIdOfTheGivenAccount();
     void commandsLeaveTheFieldTheBackendKeepsEmpty();
+    void anAccountThatOffersNoTransactionsIsAskedForItsBalanceAlone();
+    void anAccountThatOffersNothingIsAskedForNothing();
+    void aDescriptionThatNamesNoOrderRefusesNone();
     void fiveBookingsAndABookedBalanceArriveAsFiveTransactionsAndOneBalance();
     void anEmptyContainerAnswersWithAnEmptyResult();
     void aFailedCommandDropsTheWholeAccount();
@@ -178,6 +181,132 @@ void BankingFetchTest::commandsLeaveTheFieldTheBackendKeepsEmpty()
 
     AB_Transaction_List2Iterator_free(iterator);
     AB_Transaction_List2_freeAll(commands);
+}
+
+namespace {
+
+/** The description the backend holds, carrying limits for the given orders. */
+AB_ACCOUNT_SPEC *descriptionOffering(std::initializer_list<AB_TRANSACTION_COMMAND> commands)
+{
+    AB_ACCOUNT_SPEC *spec = AB_AccountSpec_new();
+    AB_AccountSpec_SetUniqueId(spec, testAccountId);
+
+    AB_TRANSACTION_LIMITS_LIST *limits = AB_TransactionLimits_List_new();
+
+    for (const auto command : commands) {
+        AB_TRANSACTION_LIMITS *entry = AB_TransactionLimits_new();
+        AB_TransactionLimits_SetCommand(entry, command);
+        AB_TransactionLimits_List_Add(entry, limits);
+    }
+
+    // The setter takes the list over, it does not copy it. Releasing it here
+    // would leave the description pointing at freed memory.
+    AB_AccountSpec_SetTransactionLimitsList(spec, limits);
+
+    return spec;
+}
+
+/** The kinds of order in a list, in the order they were put in. */
+QList<AB_TRANSACTION_COMMAND> commandsIn(AB_TRANSACTION_LIST2 *commands)
+{
+    QList<AB_TRANSACTION_COMMAND> kinds;
+
+    AB_TRANSACTION_LIST2_ITERATOR *iterator = AB_Transaction_List2_First(commands);
+    if (iterator == nullptr) {
+        return kinds;
+    }
+
+    AB_TRANSACTION *command = AB_Transaction_List2Iterator_Data(iterator);
+    while (command != nullptr) {
+        kinds << AB_Transaction_GetCommand(command);
+        command = AB_Transaction_List2Iterator_Next(iterator);
+    }
+
+    AB_Transaction_List2Iterator_free(iterator);
+
+    return kinds;
+}
+
+} // namespace
+
+/**
+ * An order the backend cannot build for an account never reaches the bank: it is
+ * marked as failed while the queue is filled, and that failure counts against
+ * the whole account. The balance the same session brought would go down with it.
+ *
+ * The backend says beforehand which orders it holds, by writing their limits
+ * into the description of the account.
+ */
+void BankingFetchTest::anAccountThatOffersNoTransactionsIsAskedForItsBalanceAlone()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_ACCOUNT_SPEC *offered = descriptionOffering({AB_Transaction_CommandGetBalance});
+
+    QVERIFY(!Banking::accountOffers(offered, AB_Transaction_CommandGetTransactions));
+    QVERIFY(Banking::accountOffers(offered, AB_Transaction_CommandGetBalance));
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account,
+                                                                 QDate(2026, 1, 1),
+                                                                 offered);
+    QVERIFY(commands != nullptr);
+
+    const auto kinds = commandsIn(commands);
+    QCOMPARE(kinds.size(), 1);
+    QCOMPARE(kinds.at(0), AB_Transaction_CommandGetBalance);
+
+    AB_Transaction_List2_freeAll(commands);
+    AB_AccountSpec_free(offered);
+}
+
+/**
+ * The counterpart, and the one the caller has to tell apart: nothing is left to
+ * send, so no session is worth running for this account. A description that
+ * names other orders and neither of these two is what says so.
+ */
+void BankingFetchTest::anAccountThatOffersNothingIsAskedForNothing()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_ACCOUNT_SPEC *offered = descriptionOffering({AB_Transaction_CommandSepaTransfer});
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account,
+                                                                 QDate(2026, 1, 1),
+                                                                 offered);
+    QVERIFY(commands != nullptr);
+    QVERIFY(commandsIn(commands).isEmpty());
+
+    AB_Transaction_List2_freeAll(commands);
+    AB_AccountSpec_free(offered);
+}
+
+/**
+ * Silence is not a refusal, and the difference decides whether a fetch happens
+ * at all. The field is documented as one a backend may leave empty, and the
+ * description a stored account carries is empty in exactly that way.
+ */
+void BankingFetchTest::aDescriptionThatNamesNoOrderRefusesNone()
+{
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    // Nothing at all: the backend does not hold this account.
+    QVERIFY(Banking::accountOffers(nullptr, AB_Transaction_CommandGetTransactions));
+    QVERIFY(Banking::accountOffers(nullptr, AB_Transaction_CommandGetBalance));
+
+    // Held, but naming no order.
+    AB_ACCOUNT_SPEC *silent = descriptionOffering({});
+
+    QVERIFY(Banking::accountOffers(silent, AB_Transaction_CommandGetTransactions));
+    QVERIFY(Banking::accountOffers(silent, AB_Transaction_CommandGetBalance));
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account,
+                                                                 QDate(2026, 1, 1),
+                                                                 silent);
+    QVERIFY(commands != nullptr);
+    QCOMPARE(commandsIn(commands).size(), 2);
+
+    AB_Transaction_List2_freeAll(commands);
+    AB_AccountSpec_free(silent);
 }
 
 /**

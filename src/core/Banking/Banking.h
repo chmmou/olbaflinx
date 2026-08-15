@@ -164,13 +164,38 @@ public:
      * @param latestStoredDate The day the stored holding ends on. The orders
      *  start a fixed lead time before it, and carry no starting point at all
      *  when it is invalid.
+     * @param offered What the backend currently holds for this account, or
+     *  nothing. Where it names the orders it holds, only those are built. Where
+     *  it is missing or names none at all, both orders are built: the
+     *  description that comes with a stored account carries no such names, and
+     *  reading its silence as a refusal would leave every fetch empty.
      *
-     * @return A list of two orders, one for the transactions and one for the
-     *  balance. The caller owns it and releases it, orders included, with
-     *  AB_Transaction_List2_freeAll.
+     * @return A list of the orders that are to go out, at most one for the
+     *  transactions and one for the balance. The caller owns it and releases it,
+     *  orders included, with AB_Transaction_List2_freeAll.
      */
-    [[nodiscard]] static AB_TRANSACTION_LIST2 *buildFetchCommands(const Account &account,
-                                                                  const QDate &latestStoredDate);
+    [[nodiscard]] static AB_TRANSACTION_LIST2 *buildFetchCommands(
+        const Account &account,
+        const QDate &latestStoredDate,
+        const AB_ACCOUNT_SPEC *offered = nullptr);
+
+    /**
+     * @brief Whether the backend holds an order of this kind for the account.
+     *
+     * The backend writes the limits of an order into the description of an
+     * account exactly where it can build that order, and leaves them out where
+     * it cannot. Asking beforehand is what keeps an order out of a session that
+     * would come back as a failure of the whole account.
+     *
+     * @param offered The description the backend holds. Nothing, or a
+     *  description that names no order at all, means nothing is known: the field
+     *  is documented as one a backend may leave empty, so everything is taken as
+     *  offered. Only a description that names other orders and not this one is a
+     *  refusal of it.
+     * @param command The kind of order.
+     */
+    [[nodiscard]] static bool accountOffers(const AB_ACCOUNT_SPEC *offered,
+                                            AB_TRANSACTION_COMMAND command);
 
     /**
      * @brief Read the answer of a session out of its container.
@@ -227,6 +252,20 @@ Q_SIGNALS:
      * @param reason Why it was passed over. It carries no account data.
      */
     void accountSkipped(quint32 uniqueAccountId, const QString &reason);
+
+    /**
+     * @brief This signal is emitted for an account the bank holds no order for
+     *  transactions for.
+     *
+     * Not an error and not a skipped account: the fetch goes on and brings the
+     * balance. What it says is that no booking can arrive for this account, so
+     * that an empty result is not read as an account with nothing new.
+     *
+     * It arrives before the session starts, and finished still ends the fetch.
+     *
+     * @param uniqueAccountId The account, as the banking backend keeps it.
+     */
+    void transactionsNotOffered(quint32 uniqueAccountId);
 
     /**
      * @brief This signal is emitted when the user stopped a session.

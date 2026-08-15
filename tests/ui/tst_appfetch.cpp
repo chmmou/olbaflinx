@@ -843,8 +843,17 @@ void AppFetchTest::aFetchWithoutNewBookingsSaysSo()
     QVERIFY(withSeven.contains(QStringLiteral("7")));
     QVERIFY(withSeven != withoutAny);
 
+    // An account the bank holds no order for the bookings of. It brought a
+    // balance and no booking, and saying "no new transactions" would send the
+    // user looking for a fetch that went wrong.
+    Q_EMIT fetch->ended(AccountFetch::Outcome::BalanceOnly, 0, QString());
+
+    const QString balanceOnly = app.statusBar()->currentMessage();
+    QVERIFY(!balanceOnly.isEmpty());
+    QVERIFY(balanceOnly != withoutAny);
+
     // Neither of them names an account or an amount.
-    for (const QString &message : {withoutAny, withSeven}) {
+    for (const QString &message : {withoutAny, withSeven, balanceOnly}) {
         QVERIFY(!message.contains(QStringLiteral("DE02")));
         QVERIFY(!message.contains(QStringLiteral("0137075030")));
         QVERIFY(!message.contains(QStringLiteral("12,5")));

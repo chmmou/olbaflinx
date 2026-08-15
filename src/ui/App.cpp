@@ -253,7 +253,8 @@ public:
 
                              q_ptr->statusBar()->showMessage(outcomeMessage(outcome, storedCount));
 
-                             if (outcome == AccountFetch::Outcome::Received) {
+                             if (outcome == AccountFetch::Outcome::Received
+                                 || outcome == AccountFetch::Outcome::BalanceOnly) {
                                  // Through the event loop, so that whatever the
                                  // storage still has queued is delivered first.
                                  // The refresh asks it whether it is reading,
@@ -281,6 +282,9 @@ public:
                        : App::tr("The fetch is through. %n new transaction(s) came in.",
                                  "",
                                  storedCount);
+        case AccountFetch::Outcome::BalanceOnly:
+            return App::tr("The balance is up to date. Your bank offers no transactions for this "
+                           "account.");
         case AccountFetch::Outcome::Skipped:
             return App::tr("This account has no online access, so nothing was fetched.");
         case AccountFetch::Outcome::Aborted:
