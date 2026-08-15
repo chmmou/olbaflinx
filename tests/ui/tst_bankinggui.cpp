@@ -61,6 +61,30 @@ public:
     using BankingGui::openDialog;
 };
 
+/**
+ * Notes where a request to open a dialog arrived and answers without building
+ * one. What it measures is that the request arrives at all: gwenhywfar reaches
+ * for the interface of the thread a call runs in, so a progress that was handed
+ * to another thread has to carry that interface with it.
+ */
+class CountingGui final : public BankingGui
+{
+public:
+    using BankingGui::BankingGui;
+
+    int openedDialogs = 0;
+    QThread *openThread = nullptr;
+
+protected:
+    int openDialog(GWEN_DIALOG *, uint32_t) override
+    {
+        ++openedDialogs;
+        openThread = QThread::currentThread();
+
+        return 0;
+    }
+};
+
 /** A dialog of the backend, with no widget in it. */
 using DialogPtr = std::unique_ptr<GWEN_DIALOG, decltype(&GWEN_Dialog_free)>;
 
@@ -86,6 +110,7 @@ private Q_SLOTS:
     void aCallFromTheOwningThreadAnswersOnTheSpotAndDoesNotDeadlock();
     void aProgressFromAWorkerThreadWaitsForTheOwningThread();
     void aProgressFromTheOwningThreadAnswersOnTheSpotAndDoesNotDeadlock();
+    void theProgressWindowIsOpenedFromASessionInAThreadOfItsOwn();
     void theInterfaceAndTheBackendComeUpAndGoDownRepeatedly();
 
     void theCachedCredentialIsGoneWhenTheSpanHasRun();
@@ -222,6 +247,45 @@ void BankingGuiTest::aProgressFromTheOwningThreadAnswersOnTheSpotAndDoesNotDeadl
     GWEN_Gui_SetGui(nullptr);
 
     QVERIFY(true);
+}
+
+/**
+ * The window a user watches a fetch in, and stops it in. It is opened by the
+ * progress functions of the library, and those now run in the thread of the
+ * window while the session that triggers them runs beside it.
+ *
+ * gwenhywfar keeps its interface per thread and looks it up in the thread the
+ * call runs in. A handover that leaves that behind reaches no interface at all,
+ * and the request to open the window answers "not implemented" without anything
+ * appearing on the screen.
+ */
+void BankingGuiTest::theProgressWindowIsOpenedFromASessionInAThreadOfItsOwn()
+{
+    CountingGui gui;
+
+    QThread *ownerThread = QThread::currentThread();
+
+    QFuture<void> handed = QtConcurrent::run([&gui] {
+        GWEN_Gui_SetGui(gui.getCInterface());
+
+        // No delay flag: the window is to be shown at once, which is what makes
+        // the request to open it happen inside this call.
+        const uint32_t progress = GWEN_Gui_ProgressStart(GWEN_GUI_PROGRESS_SHOW_PROGRESS
+                                                             | GWEN_GUI_PROGRESS_SHOW_LOG,
+                                                         "probe",
+                                                         "probe",
+                                                         1,
+                                                         0);
+        GWEN_Gui_ProgressLog(progress, GWEN_LoggerLevel_Info, "probe");
+        GWEN_Gui_ProgressEnd(progress);
+
+        GWEN_Gui_SetGui(nullptr);
+    });
+
+    QTRY_VERIFY_WITH_TIMEOUT(handed.isFinished(), 5000);
+
+    QVERIFY(gui.openedDialogs > 0);
+    QCOMPARE(gui.openThread, ownerThread);
 }
 
 /**
