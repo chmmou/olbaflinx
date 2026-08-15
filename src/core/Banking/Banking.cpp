@@ -88,6 +88,7 @@ struct CommandListDeleter
 using CommandListPtr = std::unique_ptr<AB_TRANSACTION_LIST2, CommandListDeleter>;
 using ContextPtr = std::unique_ptr<AB_IMEXPORTER_CONTEXT, decltype(&AB_ImExporterContext_free)>;
 using GwenDatePtr = std::unique_ptr<GWEN_DATE, decltype(&GWEN_Date_free)>;
+using AccountSpecPtr = std::unique_ptr<AB_ACCOUNT_SPEC, decltype(&AB_AccountSpec_free)>;
 
 /**
  * Hands a date to the banking backend. Ownership stays with the caller, the
@@ -199,6 +200,12 @@ struct SessionResult
     FetchOutcome outcome = FetchOutcome::Failed;
     BankingItems items;
     QString reason;
+
+    /** Whether the backend holds an order for the bookings of this account. */
+    bool offersTransactions = true;
+
+    /** Whether it holds none at all, in which case no session was run. */
+    bool offersNothing = false;
 };
 
 } // namespace
@@ -296,19 +303,45 @@ public:
     /**
      * The session, run in a thread of its own.
      *
-     * Takes over the orders and releases them, the container with them, on every
-     * way out. What leaves here are records of the core, which no longer touch
-     * the banking backend.
+     * Builds the orders here rather than taking them: which orders the account
+     * carries is read out of the configuration of the backend, and that read
+     * locks a group and reports a progress while it waits. Neither belongs in
+     * the thread of a window.
+     *
+     * What leaves here are records of the core, which no longer touch the
+     * banking backend.
      */
-    SessionResult runSession(AB_TRANSACTION_LIST2 *orders, quint32 uniqueAccountId)
+    SessionResult runSession(const std::shared_ptr<Account> &account, const QDate &latestStoredDate)
     {
-        const CommandListPtr commands(orders);
-        const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
+        const quint32 uniqueAccountId = account->uniqueId();
 
         // The interface of gwenhywfar lives per thread. The one set where
         // initialize ran does not reach this thread, and without one here the
         // library would abort the process instead of reporting a failure.
         GWEN_Gui_SetGui(gwenGui);
+
+        AB_ACCOUNT_SPEC *offered = nullptr;
+        AB_Banking_GetAccountSpecByUniqueId(aqBanking, uniqueAccountId, &offered);
+
+        const AccountSpecPtr held(offered, &AB_AccountSpec_free);
+
+        SessionResult result;
+        result.offersTransactions = Banking::accountOffers(offered,
+                                                           AB_Transaction_CommandGetTransactions);
+
+        if (!result.offersTransactions
+            && !Banking::accountOffers(offered, AB_Transaction_CommandGetBalance)) {
+            GWEN_Gui_SetGui(nullptr);
+
+            result.outcome = FetchOutcome::Received;
+            result.offersNothing = true;
+
+            return result;
+        }
+
+        const CommandListPtr commands(
+            Banking::buildFetchCommands(*account, latestStoredDate, offered));
+        const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
 
         const int rv = AB_Banking_SendCommands(aqBanking, commands.get(), context.get());
 
@@ -316,7 +349,6 @@ public:
         // interface as it found it whichever way the session ended.
         GWEN_Gui_SetGui(nullptr);
 
-        SessionResult result;
         result.outcome = Banking::outcomeOfSession(rv, commands.get(), uniqueAccountId);
 
         switch (result.outcome) {
@@ -348,6 +380,25 @@ public:
 
         m_isFetching = false;
 
+        // Said before the answer, because it decides how the answer reads. An
+        // account the bank holds no order for the bookings of brings a balance
+        // and nothing else, and that is no account without new bookings.
+        if (result.offersNothing) {
+            qCInfo(lcBanking) << "account" << m_fetchedAccountId << "carries no order at all";
+
+            Q_EMIT q_ptr->accountSkipped(m_fetchedAccountId,
+                                         tr("The bank offers no fetch for this account"));
+            Q_EMIT q_ptr->finished();
+            return;
+        }
+
+        if (!result.offersTransactions) {
+            qCInfo(lcBanking) << "account" << m_fetchedAccountId
+                              << "carries no order for transactions";
+
+            Q_EMIT q_ptr->transactionsNotOffered(m_fetchedAccountId);
+        }
+
         switch (result.outcome) {
         case FetchOutcome::Received:
             qCDebug(lcBanking) << "fetched" << result.items.size() << "records";
@@ -370,12 +421,18 @@ public:
 
     bool isFetching() const { return m_isFetching; }
 
-    void startFetch(AB_TRANSACTION_LIST2 *orders, quint32 uniqueAccountId)
+    /**
+     * @param account A copy of its own. The account of the caller must not be
+     *  reached into once fetchAccount has returned, and the session outlives
+     *  that call.
+     */
+    void startFetch(const std::shared_ptr<Account> &account, const QDate &latestStoredDate)
     {
         m_isFetching = true;
+        m_fetchedAccountId = account->uniqueId();
 
         fetchWatcher.setFuture(QtConcurrent::run(
-            [this, orders, uniqueAccountId] { return runSession(orders, uniqueAccountId); }));
+            [this, account, latestStoredDate] { return runSession(account, latestStoredDate); }));
     }
 
     void finalize()
@@ -495,6 +552,7 @@ public:
 
 private:
     bool m_isFetching = false;
+    quint32 m_fetchedAccountId = 0;
     bool m_isInitialized;
     LC_CLIENT *m_chipCardClient;
     ApplicationInfo m_applicationInfo;
@@ -595,8 +653,26 @@ void Banking::accounts()
     Q_EMIT finished();
 }
 
+bool Banking::accountOffers(const AB_ACCOUNT_SPEC *offered, AB_TRANSACTION_COMMAND command)
+{
+    if (offered == nullptr) {
+        return true;
+    }
+
+    // A list that holds nothing is no statement. The field is documented as one
+    // a backend may leave empty or incomplete, and reading its silence as a
+    // refusal would stop a fetch the backend would have run.
+    const AB_TRANSACTION_LIMITS_LIST *limits = AB_AccountSpec_GetTransactionLimitsList(offered);
+    if (limits == nullptr || AB_TransactionLimits_List_GetCount(limits) == 0) {
+        return true;
+    }
+
+    return AB_AccountSpec_GetTransactionLimitsForCommand(offered, command) != nullptr;
+}
+
 AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account,
-                                                  const QDate &latestStoredDate)
+                                                  const QDate &latestStoredDate,
+                                                  const AB_ACCOUNT_SPEC *offered)
 {
     // An account without a stored booking keeps an invalid date, and the order
     // then goes out without a starting point at all.
@@ -631,8 +707,16 @@ AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account,
 
     AB_TRANSACTION_LIST2 *commands = AB_Transaction_List2_new();
 
-    addCommand(commands, AB_Transaction_CommandGetTransactions);
-    addCommand(commands, AB_Transaction_CommandGetBalance);
+    // Only what the account carries. An order the backend cannot build for it
+    // never reaches the bank: it is marked as failed while the queue is filled,
+    // and that failure counts against the whole account, balance included.
+    if (accountOffers(offered, AB_Transaction_CommandGetTransactions)) {
+        addCommand(commands, AB_Transaction_CommandGetTransactions);
+    }
+
+    if (accountOffers(offered, AB_Transaction_CommandGetBalance)) {
+        addCommand(commands, AB_Transaction_CommandGetBalance);
+    }
 
     return commands;
 }
@@ -768,8 +852,10 @@ void Banking::fetchAccount(const Account &account, const QDate &latestStoredDate
         return;
     }
 
-    // Built here and handed over: the orders need nothing of the backend, and
-    // the account they are built from belongs to the caller and must not be
-    // reached into once this call has returned.
-    d_ptr->startFetch(buildFetchCommands(account, latestStoredDate), account.uniqueId());
+    // A copy of its own, and that is what the session works on: the account of
+    // the caller must not be reached into once this call has returned, and the
+    // orders are no longer built here. Which of them the account carries is read
+    // out of the configuration of the backend, and that read locks a group and
+    // reports a progress while it waits.
+    d_ptr->startFetch(std::make_shared<Account>(account.accountSpec()), latestStoredDate);
 }

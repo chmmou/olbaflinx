@@ -69,6 +69,12 @@ public:
 
     void takeSessionResult(const BankingItems &items) { received = items; }
 
+    /** Whether the session brought something that is to be written. */
+    [[nodiscard]] bool sessionDelivered() const
+    {
+        return outcome == Outcome::Received || outcome == Outcome::BalanceOnly;
+    }
+
     /**
      * The end of the session, whichever way it went. Only a session that came
      * back with records goes on to the storage.
@@ -79,7 +85,7 @@ public:
             return;
         }
 
-        if (outcome != Outcome::Received) {
+        if (!sessionDelivered()) {
             finish(outcome, reason);
             return;
         }
@@ -101,7 +107,7 @@ public:
         // An account the bank had nothing new for. Nothing is written, and the
         // outcome says so with a count of nought.
         if (bookings.isEmpty() && balances.isEmpty()) {
-            finish(Outcome::Received, {});
+            finish(outcome, {});
             return;
         }
 
@@ -158,7 +164,10 @@ public:
         }
 
         phase = StorePhase::None;
-        finish(Outcome::Received, {});
+
+        // Whatever the session said it delivered, which is what the user is told
+        // apart: a balance alone is not an account without new bookings.
+        finish(outcome, {});
     }
 
     void finish(Outcome ended, const QString &endedReason)
@@ -253,6 +262,13 @@ Error AccountFetch::initialize()
 
     connect(d_ptr->banking.get(), &Banking::accountSkipped, this, [this](quint32, const QString &) {
         d_ptr->outcome = Outcome::Skipped;
+    });
+
+    // Arrives before the session and says that no booking can come in for this
+    // account. Without it an empty result would read like an account the bank
+    // had nothing new for.
+    connect(d_ptr->banking.get(), &Banking::transactionsNotOffered, this, [this](quint32) {
+        d_ptr->outcome = Outcome::BalanceOnly;
     });
 
     connect(d_ptr->banking.get(), &Banking::aborted, this, [this] {

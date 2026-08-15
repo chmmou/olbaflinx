@@ -56,13 +56,16 @@ public:
     /**
      * @brief How a fetch ended.
      *
-     * Five ways out and each says something else to the user. Skipped is no
+     * Six ways out and each says something else to the user. Skipped is no
      * failure: an account without online access is passed over before anything
-     * is sent. StoreFailed is one, and the only one where the session was fine
-     * and what it brought is lost.
+     * is sent. BalanceOnly is none either: the bank holds no order for the
+     * bookings of this account, so the fetch brought the balance alone.
+     * StoreFailed is a failure, and the only one where the session was fine and
+     * what it brought is lost.
      */
     enum class Outcome {
         Received,
+        BalanceOnly,
         Skipped,
         Aborted,
         Failed,
