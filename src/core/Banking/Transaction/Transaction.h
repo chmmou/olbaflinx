@@ -49,6 +49,23 @@ class OLBAFLINX_CORE_EXPORT Transaction : public BankingItem
 {
 public:
     explicit Transaction(const AB_TRANSACTION *transaction = nullptr);
+
+    /**
+     * @brief A transaction that is told which account it belongs to.
+     *
+     * A statement that came over the wire names no account: the importer of the
+     * backend fills the fields of the booking and leaves that one empty, and
+     * only the entry of the response container it sits in carries it. Without
+     * it the booking is stored under no account and is never read again.
+     *
+     * @param uniqueAccountId The account, as the banking backend keeps it. It is
+     *  used only where the record names none of its own; a booking that carries
+     *  one keeps it.
+     * @param transaction The record. It stays with its caller, a copy of it is
+     *  kept here.
+     */
+    Transaction(quint32 uniqueAccountId, const AB_TRANSACTION *transaction);
+
     ~Transaction() override;
 
     /**
