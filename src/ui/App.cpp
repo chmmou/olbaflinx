@@ -18,6 +18,7 @@
 #include "core/Banking/Banking.h"
 #include "core/Logger/Logger.h"
 #include "core/Storage/Storage.h"
+#include "ui/AccountFetch.h"
 #include "ui/AppCentralWidget.h"
 #include "ui/Assistant/SetupAssistant.h"
 #include "ui/ErrorMessage.h"
@@ -29,9 +30,12 @@
 #include "ui_App.h"
 
 #include <QtCore/QDir>
+#include <QtCore/QScopeGuard>
+#include <QtCore/QTimer>
 
 #include <QtGui/QAccessible>
 #include <QtGui/QAccessibleAnnouncementEvent>
+#include <QtGui/QCloseEvent>
 
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QLayout>
@@ -77,6 +81,15 @@ const QString DockLayoutKey = QStringLiteral("DockLayout");
  */
 constexpr int DockLayoutVersion = 1;
 
+/**
+ * How long the refresh after a fetch waits before it asks again whether the
+ * storage is free.
+ *
+ * Short enough to pass unnoticed, long enough not to ask a thousand times over
+ * a read that takes a moment.
+ */
+constexpr int RefreshRetryMs = 50;
+
 } // namespace
 
 using namespace olbaflinx::core;
@@ -94,11 +107,12 @@ using namespace ads;
 class App::Private
 {
 public:
-    explicit Private(App *app, Logger *appLogger, Storage *appStorage)
+    explicit Private(App *app, Logger *appLogger, Storage *appStorage, ApplicationInfo info)
         : logger(appLogger)
         , storage(appStorage)
         , accountTreeModel(new AccountTreeModel(app))
         , transactionTableModel(new TransactionTableModel(app))
+        , fetch(new AccountFetch(std::move(info), appStorage, app))
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
@@ -156,10 +170,6 @@ public:
 
     /**
      * Wires the menu and fills the tool bar.
-     *
-     * One entry has no story behind it yet and stays disabled: fetching
-     * transactions belongs to the next epic. It is created here so that the menu
-     * keeps its shape once it is switched on.
      */
     void setUpActions()
     {
@@ -194,12 +204,184 @@ public:
             resetDockLayout();
         });
 
-        ui->appFetchTransactionsAction->setEnabled(false);
+        QObject::connect(ui->appFetchTransactionsAction, &QAction::triggered, q_ptr, [this] {
+            fetchTheChosenAccount();
+        });
+
+        // The key the platform offers for fetching something anew, rather than
+        // one chosen here. None of the other entries carries it.
+        ui->appFetchTransactionsAction->setShortcut(QKeySequence::Refresh);
+
+        // The third way to the command, beside the menu and the tool bar. A
+        // plain addAction would leave it unreachable: the tree stands on the
+        // default policy and shows no menu of its own for the actions it holds.
+        auto *const accountView = ui->appCentralWidget->accountWidget();
+        accountView->addAction(ui->appFetchTransactionsAction);
+        accountView->setContextMenuPolicy(Qt::ActionsContextMenu);
+
+        setUpFetch();
 
         ui->appToolBar->addAction(ui->appSetupAssistantAction);
         ui->appToolBar->addAction(ui->appFetchTransactionsAction);
         ui->appToolBar->addSeparator();
         ui->appToolBar->addAction(ui->appCloseStorageAction);
+    }
+
+    /**
+     * Takes the outcome of a fetch and turns it into what the window shows.
+     *
+     * The state of the entries is held here rather than asked of the fetch: what
+     * the window switches off is decided by the two moments, not by a second
+     * reading of a state that lives elsewhere.
+     */
+    void setUpFetch()
+    {
+        QObject::connect(fetch, &AccountFetch::started, q_ptr, [this] {
+            fetchIsRunning = true;
+            applyActionStates();
+        });
+
+        QObject::connect(fetch,
+                         &AccountFetch::ended,
+                         q_ptr,
+                         [this](AccountFetch::Outcome outcome, int storedCount, const QString &) {
+                             fetchIsRunning = false;
+                             applyActionStates();
+
+                             q_ptr->statusBar()->showMessage(outcomeMessage(outcome, storedCount));
+
+                             if (outcome == AccountFetch::Outcome::Received) {
+                                 // Through the event loop, so that whatever the
+                                 // storage still has queued is delivered first.
+                                 // The refresh asks it whether it is reading,
+                                 // and an answer given before that queue is
+                                 // empty is out of date.
+                                 QTimer::singleShot(0, q_ptr, [this] { refreshAfterFetch(); });
+                             }
+                         });
+    }
+
+    /**
+     * What the status bar carries once a fetch is over.
+     *
+     * Never an IBAN, an account number or an amount: the bar is read out to
+     * assistive tools, and what is spoken in a room is not the place for them.
+     */
+    static QString outcomeMessage(AccountFetch::Outcome outcome, int storedCount)
+    {
+        switch (outcome) {
+        case AccountFetch::Outcome::Received:
+            // Nought is said in words of its own. The same sentence with a nought
+            // in it reads like a fetch that went wrong.
+            return storedCount == 0
+                       ? App::tr("The fetch is through. No new transactions came in.")
+                       : App::tr("The fetch is through. %n new transaction(s) came in.",
+                                 "",
+                                 storedCount);
+        case AccountFetch::Outcome::Skipped:
+            return App::tr("This account has no online access, so nothing was fetched.");
+        case AccountFetch::Outcome::Aborted:
+            return App::tr("The fetch was stopped. Nothing of this account was stored.");
+        case AccountFetch::Outcome::StoreFailed:
+            return App::tr("The fetch could not be stored and nothing of it was kept. Please "
+                           "fetch again.");
+        case AccountFetch::Outcome::Failed:
+            return App::tr("The fetch failed. Your bank could not be reached, or it refused the "
+                           "request.");
+        }
+
+        return {};
+    }
+
+    /** The account the tree has chosen, or an empty pointer for anything else. */
+    [[nodiscard]] std::shared_ptr<Account> chosenAccount() const
+    {
+        return accountTreeModel->accountAt(ui->appCentralWidget->accountWidget()->currentIndex());
+    }
+
+    void fetchTheChosenAccount()
+    {
+        const auto account = chosenAccount();
+        if (account == nullptr) {
+            return;
+        }
+
+        // Said before anything goes out. Reading the starting point takes a
+        // moment, and until the progress window of the banking layer stands the
+        // command would otherwise be unacknowledged.
+        q_ptr->statusBar()->showMessage(App::tr("Your bank is being contacted."));
+
+        fetch->start(account);
+    }
+
+    /**
+     * Brings what a fetch stored onto the screen.
+     *
+     * The accounts first and the transactions after them: both go over the read
+     * path of the storage, and that takes one run at a time. The accounts carry
+     * the new balance, and reading them empties the tree, which takes the choice
+     * of the user with it - so the choice is put back before the transactions
+     * are asked for.
+     */
+    void refreshAfterFetch()
+    {
+        // The storage takes one read at a time and answers a second one with a
+        // failure, right where it was asked. A read of the transactions may well
+        // be going here, and its failure would land in the status bar over the
+        // outcome of the fetch, while the new balance stayed invisible.
+        //
+        // Asked again after a moment rather than hung on the end of that read:
+        // its signal may already be in the queue when this runs, and a
+        // connection made now would not be among the receivers it was emitted
+        // to. The wait would then never end.
+        if (transactionTableModel->isReading()) {
+            QTimer::singleShot(RefreshRetryMs, q_ptr, [this] { refreshAfterFetch(); });
+            return;
+        }
+
+        const quint32 chosen = transactionTableModel->accountId();
+
+        QObject::connect(storage,
+                         &Storage::itemsReceived,
+                         q_ptr,
+                         &App::setAccounts,
+                         Qt::SingleShotConnection);
+
+        QObject::connect(
+            storage,
+            &Storage::finished,
+            q_ptr,
+            [this, chosen] {
+                restoreSelection(chosen);
+                ui->appCentralWidget->refreshTransactions();
+            },
+            Qt::SingleShotConnection);
+
+        storage->receiveItems({.type = Storage::StorageAccount});
+    }
+
+    /**
+     * Puts the choice of the user back on the account it stood on.
+     *
+     * The tree is rebuilt from the ground up by a read, and an index of the run
+     * before points nowhere afterwards. The identifier survives it, which is
+     * what the account is found again by.
+     */
+    void restoreSelection(quint32 uniqueAccountId)
+    {
+        if (uniqueAccountId == 0) {
+            return;
+        }
+
+        const auto matches = accountTreeModel->match(accountTreeModel->index(0, 0),
+                                                     AccountTreeModel::UniqueIdRole,
+                                                     uniqueAccountId,
+                                                     1,
+                                                     Qt::MatchExactly | Qt::MatchRecursive);
+
+        if (!matches.isEmpty()) {
+            ui->appCentralWidget->accountWidget()->setCurrentIndex(matches.constFirst());
+        }
     }
 
     /**
@@ -222,12 +404,8 @@ public:
         const bool storageIsOpen = page == AppCentralWidget::Page::Banking;
 
         ui->appToolBar->setVisible(storageIsOpen);
-        ui->appCloseStorageAction->setEnabled(storageIsOpen);
-        ui->appSetupAssistantAction->setEnabled(storageIsOpen);
 
-        // The areas only stand on the second page, so there is nothing to put
-        // back on the first.
-        ui->appResetLayoutAction->setEnabled(storageIsOpen);
+        applyActionStates();
 
         // Where the keyboard starts on this page. The focus chain is a ring, so
         // which of the two areas comes first is decided by where the walk
@@ -253,6 +431,34 @@ public:
     }
 
     /**
+     * Which commands grip right now.
+     *
+     * Every one of them needs an open storage, and the fetch needs an account
+     * on top of that. None of them is taken away while it does not grip: an
+     * entry that turns grey tells an assistive tool that the command exists and
+     * that it does not apply, and one that is gone tells it nothing.
+     *
+     * A running fetch switches off everything that could pull the ground from
+     * under it: closing the storage would leave the half stored account the
+     * writing path goes to lengths to prevent, and the wizard holds a banking
+     * instance of its own, which must not run beside a fetch.
+     */
+    void applyActionStates()
+    {
+        const bool storageIsOpen = ui->appCentralWidget->page() == AppCentralWidget::Page::Banking;
+        const bool idle = !fetchIsRunning;
+
+        ui->appCloseStorageAction->setEnabled(storageIsOpen && idle);
+        ui->appSetupAssistantAction->setEnabled(storageIsOpen && idle);
+        ui->appFetchTransactionsAction->setEnabled(storageIsOpen && idle
+                                                   && chosenAccount() != nullptr);
+
+        // The areas only stand on the second page, so there is nothing to put
+        // back on the first. A fetch does not touch them.
+        ui->appResetLayoutAction->setEnabled(storageIsOpen);
+    }
+
+    /**
      * Turns what is picked in the tree into the account the transactions are
      * shown for.
      *
@@ -264,6 +470,10 @@ public:
     void applySelection(const QModelIndex &index)
     {
         const QVariant uniqueId = accountTreeModel->data(index, AccountTreeModel::UniqueIdRole);
+
+        // The fetch hangs on the choice, so every way through this function ends
+        // with the entries in the state the new choice leaves them in.
+        const auto applyStatesAtTheEnd = qScopeGuard([this] { applyActionStates(); });
 
         if (!index.isValid()) {
             transactionTableModel->setAccountId(0);
@@ -482,6 +692,12 @@ public:
     Storage *storage;
     AccountTreeModel *accountTreeModel;
     TransactionTableModel *transactionTableModel;
+
+    // Owned by the window through the object hierarchy. It holds the banking
+    // instance of the window and comes up on the first fetch, so a window that
+    // never fetches never reaches the banking layer.
+    AccountFetch *fetch;
+
     Ui::UiApp *ui;
 
     // Owned by the second page through the widget hierarchy. The two areas are
@@ -493,6 +709,12 @@ public:
     QByteArray defaultDockLayout;
     bool dockLayoutFellBack = false;
 
+    // Whether a fetch the user started is still going. It steers the entries and
+    // the close command, and it is set from the two signals of the fetch rather
+    // than read back from it: what the window switches off follows those two
+    // moments.
+    bool fetchIsRunning = false;
+
     // The first page of the central area. Owned by the window through the widget
     // hierarchy; kept here because the menu reaches into it.
     StorageDialog *overview;
@@ -501,9 +723,13 @@ private:
     App *q_ptr;
 };
 
-App::App(Logger *logger, Storage *storage, QWidget *parent, const Qt::WindowFlags &flags)
+App::App(Logger *logger,
+         Storage *storage,
+         ApplicationInfo applicationInfo,
+         QWidget *parent,
+         const Qt::WindowFlags &flags)
     : QMainWindow(parent, flags)
-    , d_ptr(new Private(this, logger, storage))
+    , d_ptr(new Private(this, logger, storage, std::move(applicationInfo)))
 {
     // Messages reach the bar from four places, and it swaps its text without a
     // sound. This signal is the one point all four pass through. An empty text
@@ -604,8 +830,13 @@ void App::showError(ErrorCode code, const QString &reason)
     // is reading, the failure is about the transactions, and the accounts on the
     // left are readable. A notice at that view would point at a holding that is
     // in order and hide the tree that shows it.
+    //
+    // A fetch is the third origin. It reads nothing, so the question above would
+    // hand its failure to the accounts, and the tree it covered would be in
+    // perfect order. The status bar above carries it, and the outcome of the
+    // fetch follows with what it means.
     if (d_ptr->ui->appCentralWidget->page() == AppCentralWidget::Page::Banking
-        && !d_ptr->transactionTableModel->isReading()) {
+        && !d_ptr->fetchIsRunning && !d_ptr->transactionTableModel->isReading()) {
         d_ptr->ui->appCentralWidget->showAccountsUnreadable(message);
     }
 }
@@ -630,4 +861,21 @@ void App::resizeEvent(QResizeEvent *event)
 {
     d_ptr->storage->storeSetting(SizeKey, event->size(), WindowGroup);
     QMainWindow::resizeEvent(event);
+}
+
+void App::closeEvent(QCloseEvent *event)
+{
+    if (d_ptr->fetchIsRunning) {
+        // Not a dialog: the progress window of the banking layer already stands
+        // in front of everything, and a second one over it would ask the user to
+        // answer the wrong question first.
+        statusBar()->showMessage(
+            tr("A fetch is running. Stop it in the progress window of your bank, then close the "
+               "application."));
+
+        event->ignore();
+        return;
+    }
+
+    QMainWindow::closeEvent(event);
 }

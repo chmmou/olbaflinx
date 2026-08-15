@@ -64,10 +64,16 @@ public:
      * The application details of a test. Organisation and version are the same
      * everywhere; the name is what keeps the settings of two test binaries
      * apart, so it is the one thing a caller says.
+     *
+     * The registration key is made up. No run here reaches a bank server, and
+     * the one the application signs on with has no business in a test.
      */
     static ApplicationInfo applicationInfo(const QString &name)
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"), name, QStringLiteral("1.0.0")};
+        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
+                name,
+                QStringLiteral("1.0.0"),
+                QStringLiteral("test-registration-key")};
     }
 
     /**

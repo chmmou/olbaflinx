@@ -155,14 +155,15 @@ int main(int argc, char *argv[])
 
     const ApplicationInfo applicationInfo{QApplication::organizationName(),
                                           QApplication::applicationName(),
-                                          QApplication::applicationVersion()};
+                                          QApplication::applicationVersion(),
+                                          QString(FinTsRegistrationKey)};
 
     // Logger and Storage live on the stack of main. Their lifetime encloses the
     // one of every window, which leaves exactly one owner.
     Logger logger;
     Storage storage(applicationInfo);
 
-    App app(&logger, &storage);
+    App app(&logger, &storage, applicationInfo);
     app.initialize();
     app.show();
 

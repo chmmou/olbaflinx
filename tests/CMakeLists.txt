@@ -91,6 +91,11 @@ olbaflinx_add_test(tst_appkeyboard ui/tst_appkeyboard.cpp
 olbaflinx_add_test(tst_bankinggui ui/tst_bankinggui.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets Qt6::Concurrent)
 
+# The way from the entry in the menu to the rows in the view. It reaches the
+# banking backend, so it needs a home of its own for the configuration.
+olbaflinx_add_test(tst_appfetch ui/tst_appfetch.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+
 # The only test that reaches for the docking library itself. OlbaFlinxUi links
 # it privately, which carries the symbols but not the right to name its types.
 olbaflinx_add_test(tst_appdocklayout ui/tst_appdocklayout.cpp

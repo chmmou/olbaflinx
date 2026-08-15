@@ -399,7 +399,16 @@ public:
             // The interface is detached, not freed. It belongs to whoever passed
             // it to initialize, and freeing it here would release it a second
             // time when that owner goes.
-            GWEN_Gui_SetGui(nullptr);
+            //
+            // Only where it is still the current one. The setting is global per
+            // thread and two instances may hold one each: the wizard has one and
+            // the window has another. Detaching unconditionally would leave the
+            // other instance without an interface, and the shutdown of that one
+            // asserts on a missing one instead of reporting it.
+            if (GWEN_Gui_GetGui() == gwenGui) {
+                GWEN_Gui_SetGui(nullptr);
+            }
+
             GWEN_Fini();
 
             LC_Client_Fini(m_chipCardClient);

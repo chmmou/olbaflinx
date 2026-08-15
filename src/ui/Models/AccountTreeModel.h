@@ -67,6 +67,22 @@ public:
     [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
+    /**
+     * @brief The account an index stands for.
+     *
+     * The roles carry the fields of an account, not the account itself, and a
+     * fetch needs the record: the banking layer fills its orders from the
+     * description an account carries and no set of fields can stand in for it.
+     *
+     * @param index An index of this model. A bank node and an invalid index
+     *  answer with an empty pointer.
+     *
+     * @return The account, shared with the model. It stays valid for as long as
+     *  the model holds it, which the next setItems ends.
+     */
+    [[nodiscard]] std::shared_ptr<olbaflinx::core::banking::account::Account> accountAt(
+        const QModelIndex &index) const;
+
 public Q_SLOTS:
     /**
      * @brief Takes over the reported records and groups them by bank.

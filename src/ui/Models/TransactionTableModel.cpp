@@ -239,6 +239,18 @@ void TransactionTableModel::setAccountId(quint32 accountId)
     startOver();
 }
 
+void TransactionTableModel::refresh()
+{
+    if (m_storage == nullptr || m_accountId == 0) {
+        return;
+    }
+
+    // The same way the account, the order and the filter take. None of the three
+    // changed here, so the rows come back under the very conditions they stood
+    // under, with whatever the storage holds now.
+    startOver();
+}
+
 void TransactionTableModel::sort(int column, Qt::SortOrder order)
 {
     if (column < 0 || column >= ColumnCount) {

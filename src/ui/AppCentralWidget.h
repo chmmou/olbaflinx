@@ -176,6 +176,16 @@ public:
     void setTransactionModel(olbaflinx::ui::models::TransactionTableModel *model);
 
     /**
+     * @brief Reads the transactions again and puts the view back where it stood.
+     *
+     * What a fetch needs afterwards. The model starts over, which resets the
+     * view, so the position of the scroll bar is taken beforehand and set again
+     * once the rows are back. Without that the view would jump to the top of a
+     * holding the user was in the middle of.
+     */
+    void refreshTransactions();
+
+    /**
      * @brief Says why the transaction view is empty.
      *
      * Only read while the model reports no row. Whoever changes the selection

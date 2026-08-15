@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include "core/ApplicationInfo.h"
 #include "core/Banking/BankingItem.h"
 #include "core/Error.h"
 
@@ -48,11 +49,15 @@ public:
     /**
      * @param logger Externally owned logger, has to outlive the window.
      * @param storage Externally owned storage, has to outlive the window.
+     * @param applicationInfo What the window signs on to a bank with. Left out,
+     *  no fetch comes about and the reason says so; a window that never fetches
+     *  needs none.
      * @param parent Optional owner.
      * @param flags Window flags.
      */
     explicit App(core::logger::Logger *logger,
                  core::storage::Storage *storage,
+                 core::ApplicationInfo applicationInfo = {},
                  QWidget *parent = nullptr,
                  const Qt::WindowFlags &flags = Qt::WindowFlags());
     ~App() override;
@@ -111,6 +116,16 @@ protected:
     bool event(QEvent *event) override;
     void moveEvent(QMoveEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+
+    /**
+     * @brief Puts off closing while a fetch runs.
+     *
+     * The application has no way of its own to end a session; the abort runs
+     * over the button of the progress dialog the banking layer brings. Ending
+     * the process under a running session would reach into objects that are
+     * already being taken down.
+     */
+    void closeEvent(QCloseEvent *event) override;
 
 private:
     class Private;

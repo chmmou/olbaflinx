@@ -212,6 +212,19 @@ public:
 
     [[nodiscard]] quint32 accountId() const;
 
+    /**
+     * @brief Reads the holding of the account again, from the top.
+     *
+     * What a fetch needs afterwards: the rows it stored are in the file and
+     * nothing here knows of them. The account, the order and the filter stay as
+     * they are, and the rows that stand are replaced by what the storage now
+     * holds.
+     *
+     * Without an account it does nothing. The call returns before the rows
+     * arrive.
+     */
+    void refresh();
+
 public Q_SLOTS:
     /**
      * @brief Takes over the reported records.
