@@ -124,11 +124,22 @@ private:
         return !storage.initialize(true).isError();
     }
 
-    /** One account, under the identifier every run here works with. */
+    /**
+     * One account, under the identifier every run here works with.
+     *
+     * Without online access, and that is not a detail: an account that has it
+     * sends a session, and the session puts up the progress dialog the banking
+     * library brings. Under the offscreen platform that dialog takes the process
+     * down while it paints, so no run here may bring one about. What the banking
+     * layer does with such an account is measurable all the same: it passes it
+     * over by its identifier, before anything is sent.
+     */
     [[nodiscard]] bool putAccount(Storage &storage) const
     {
-        const auto account = Account::fromMap(
-            TestHelpers::accountMapWith(testAccountId, storedBalance));
+        auto map = TestHelpers::accountMapWith(testAccountId, storedBalance);
+        map[QStringLiteral("backend_name")] = QStringLiteral("aqnone");
+
+        const auto account = Account::fromMap(map);
 
         return !storage.storeItem(account.get()).isError();
     }
@@ -233,8 +244,9 @@ void AppFetchTest::cleanup()
  * here is that it reaches the banking layer at all, and that the account it
  * reaches it with is the one the tree has chosen.
  *
- * The session fails, because no institution is set up in this home. That it
- * fails is beside the point; that it was started is the point.
+ * The banking layer answers that this account has no online access, which it can
+ * only say about the account it was handed. That a session with a bank cannot be
+ * run here is what leaves this as the way to measure it.
  */
 void AppFetchTest::theActionStartsAFetchForTheChosenAccount()
 {
@@ -261,8 +273,14 @@ void AppFetchTest::theActionStartsAFetchForTheChosenAccount()
 
     action->trigger();
 
+    // Said the moment the command is given, before the bank is reached.
     QCOMPARE(startedSpy.count(), 1);
+    QVERIFY(!app.statusBar()->currentMessage().isEmpty());
+
     QVERIFY(endedSpy.wait(sessionTimeoutMs));
+
+    const auto outcome = endedSpy.first().first().value<AccountFetch::Outcome>();
+    QCOMPARE(outcome, AccountFetch::Outcome::Skipped);
 }
 
 /**
@@ -399,6 +417,10 @@ void AppFetchTest::theCounterOfTheFilterBarCarriesTheNewNumber()
  * A fetch does not read, so the distribution of an error used to hand its
  * failure to the account view: the notice would have covered a tree that is in
  * order with a message about accounts that could not be read.
+ *
+ * Measured against an empty tree, where that notice is the one thing on screen.
+ * With accounts in it the tree stands whatever the notice says, and the run
+ * would pass without the distinction ever being made.
  */
 void AppFetchTest::aFailureDuringAFetchIsNoFailureOfTheAccountView()
 {
@@ -406,17 +428,17 @@ void AppFetchTest::aFailureDuringAFetchIsNoFailureOfTheAccountView()
     Storage storage(applicationInfo());
 
     QVERIFY(openStorage(storage));
-    QVERIFY(putAccount(storage));
 
     App app(&logger, &storage, applicationInfo());
     app.initialize();
 
-    QVERIFY(chooseTheAccount(app, storage));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
 
     auto *const notice = app.findChild<QLabel *>(QStringLiteral("labelAccountsNotice"));
     QVERIFY(notice != nullptr);
 
     const QString noticeBefore = notice->text();
+    QVERIFY(!noticeBefore.isEmpty());
 
     auto *const fetch = fetchOf(app);
     QVERIFY(fetch != nullptr);
@@ -431,6 +453,12 @@ void AppFetchTest::aFailureDuringAFetchIsNoFailureOfTheAccountView()
     QCOMPARE(notice->text(), noticeBefore);
 
     Q_EMIT fetch->ended(AccountFetch::Outcome::Failed, 0, QStringLiteral("no bank"));
+
+    // The same failure outside a fetch still reaches the view it belongs to.
+    Q_EMIT storage.errorOccurred(ErrorCode::DatabaseFailure,
+                                 QStringLiteral("INSERT INTO transactions failed"));
+
+    QCOMPARE(notice->text(), userMessage(ErrorCode::DatabaseFailure));
 }
 
 /**
@@ -454,8 +482,16 @@ void AppFetchTest::theEntriesOfTheFetchCarryAnIdentifierANameAndARole()
     QVERIFY(!action->objectName().isEmpty());
     QVERIFY(!action->text().isEmpty());
 
-    // Without a shortcut the entry is reachable through the menu alone.
-    QVERIFY(!action->shortcut().isEmpty());
+    // The key the platform offers for fetching anew, rather than one made up
+    // here. No other entry of the window carries it.
+    QCOMPARE(action->shortcut(), QKeySequence(QKeySequence::Refresh));
+
+    const auto actions = app.findChildren<QAction *>();
+    for (const QAction *other : actions) {
+        if (other != action && !other->shortcut().isEmpty()) {
+            QVERIFY(other->shortcut() != action->shortcut());
+        }
+    }
 
     auto *const menu = app.findChild<QMenu *>(QStringLiteral("appAccountsMenu"));
     QVERIFY(menu != nullptr);
@@ -643,6 +679,8 @@ void AppFetchTest::theSpanOfTheCachedCredentialRunsAfterAFetchAndNotDuringIt()
     QVERIFY(!fetch->isPasswordCacheExpiring());
 
     QVERIFY(endedSpy.wait(sessionTimeoutMs));
+
+    // Started at the end of a fetch, whichever way it ended.
     QVERIFY(fetch->isPasswordCacheExpiring());
 }
 
@@ -674,10 +712,25 @@ void AppFetchTest::theAccountViewShowsANewBalanceWithoutARestart()
                                                             {.value = fetchedBalance});
     QVERIFY(!storage.storeItem(balance.get()).isError());
 
+    // The figure is in the file. What follows measures the way from there onto
+    // the screen and nothing else.
+    QCOMPARE(TestHelpers::storageScalar(storageFile(),
+                                        password(),
+                                        QStringLiteral("SELECT `value` FROM balances;"))
+                 .toDouble(),
+             fetchedBalance);
+
     auto *const fetch = fetchOf(app);
     QVERIFY(fetch != nullptr);
 
+    QSignalSpy accountsRead(&storage, &Storage::itemsReceived);
+
     Q_EMIT fetch->ended(AccountFetch::Outcome::Received, 0, QString());
+
+    // Told apart on purpose: whether the accounts were read again at all, and
+    // whether the tree then shows what they carry.
+    QVERIFY2(accountsRead.wait(UiTestHelpers::workerTimeout),
+             "the accounts were never read again after the fetch");
 
     QTRY_COMPARE_WITH_TIMEOUT(treeModel
                                   ->data(UiTestHelpers::firstAccountOf(*treeModel),

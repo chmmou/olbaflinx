@@ -33,7 +33,9 @@
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QScrollBar>
 #include <QtWidgets/QStackedWidget>
+#include <QtWidgets/QTableView>
 
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::ui::models;
@@ -229,6 +231,38 @@ public:
 
         transactionModel->setFilter(filter);
         applyTransactionNotice();
+    }
+
+    /**
+     * Reads the holding again and puts the view back where it stood.
+     *
+     * The model starts over for it, which resets the view and takes it to the
+     * top. Whoever was in the middle of a long holding would find himself at its
+     * beginning for a fetch that changed nothing he was looking at.
+     *
+     * The position is set again with the first rows that come back, not right
+     * away: the view has nothing to scroll over until they are there. A run that
+     * brings no row at all leaves the connection standing until the next one
+     * does; the position is then one page out of date, which is what the view
+     * would show anyway had the read been slower.
+     */
+    void refreshTransactions()
+    {
+        if (transactionModel == nullptr) {
+            return;
+        }
+
+        auto *const view = ui->tableViewTransactions;
+        const int position = view->verticalScrollBar()->value();
+
+        QObject::connect(
+            transactionModel,
+            &QAbstractItemModel::rowsInserted,
+            q_ptr,
+            [view, position] { view->verticalScrollBar()->setValue(position); },
+            Qt::SingleShotConnection);
+
+        transactionModel->refresh();
     }
 
     void resetTransactionFilter()
@@ -528,6 +562,7 @@ void AppCentralWidget::resetTransactionFilter()
 
 void AppCentralWidget::refreshTransactions()
 {
+    d_ptr->refreshTransactions();
 }
 
 void AppCentralWidget::setTransactionNotice(TransactionNotice notice)

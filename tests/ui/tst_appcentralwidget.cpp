@@ -143,9 +143,9 @@ private:
 
     static ApplicationInfo applicationInfo()
     {
-        return {QStringLiteral("de.chm-projects.olbaflinx.test"),
-                QStringLiteral("OlbaFlinxAppCentralWidgetTest"),
-                QStringLiteral("1.0.0")};
+        // Through the factory the other tests use. Written out here, this one
+        // silently left the field that was added to the struct empty.
+        return TestHelpers::applicationInfo(QStringLiteral("OlbaFlinxAppCentralWidgetTest"));
     }
 
     static QAction *actionOf(const App &app, const QString &name)

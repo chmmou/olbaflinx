@@ -216,6 +216,15 @@ def walk_the_way(driver, password):
         report(find(driver, unlocked).is_enabled(),
                f"{unlocked} is available once a vault is open")
 
+    # The fetch needs an account on top of an open vault, and this run has
+    # none: it reaches no bank. What it can show is the state a user meets,
+    # namely a command that stays where it is and says that it does not grip. A
+    # command that vanished instead would tell a reader nothing at all.
+    report(exists(driver, "appFetchTransactionsAction"),
+           "appFetchTransactionsAction is still offered once a vault is open")
+    report(not find(driver, "appFetchTransactionsAction").is_enabled(),
+           "appFetchTransactionsAction is not available while no account is chosen")
+
     take_menu_entry(driver, "appFileMenu", "appCloseStorageAction")
     report(wait_until(lambda: find(driver, "pageStorages").is_displayed()),
            "closing the vault returns to the first page")

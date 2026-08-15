@@ -91,7 +91,7 @@ public:
      * @return A default constructed Error on success, otherwise the reason. The
      *  caller has to check it, the return type is [[nodiscard]].
      */
-    Error initialize();
+    core::Error initialize();
 
     /**
      * @brief Fetches the transactions and the balance of one account.
@@ -134,9 +134,7 @@ Q_SIGNALS:
      * @param reason What to tell the user, already worded for him. Empty where
      *  the outcome says everything.
      */
-    void ended(olbaflinx::ui::AccountFetch::Outcome outcome,
-               int storedCount,
-               const QString &reason);
+    void ended(olbaflinx::ui::AccountFetch::Outcome outcome, int storedCount, const QString &reason);
 
 private:
     class Private;

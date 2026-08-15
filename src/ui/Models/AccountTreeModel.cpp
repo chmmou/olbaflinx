@@ -141,9 +141,17 @@ QVariant AccountTreeModel::data(const QModelIndex &index, int role) const
 
 std::shared_ptr<Account> AccountTreeModel::accountAt(const QModelIndex &index) const
 {
-    Q_UNUSED(index)
+    if (!index.isValid() || index.internalId() == NoBank
+        || index.internalId() >= static_cast<quintptr>(m_banks.size())) {
+        return {};
+    }
 
-    return {};
+    const auto &accounts = m_banks.at(static_cast<int>(index.internalId())).accounts;
+    if (index.row() >= accounts.size()) {
+        return {};
+    }
+
+    return accounts.at(index.row());
 }
 
 QHash<int, QByteArray> AccountTreeModel::roleNames() const
