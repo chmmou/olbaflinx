@@ -22,6 +22,8 @@
 // libgwengui-qt6.
 #include <gwen-gui-qt5/qt5_gui.hpp>
 
+#include <gwenhywfar/gui_be.h>
+
 #include <QtCore/QObject>
 #include <QtCore/QThread>
 #include <QtCore/QTimer>
@@ -36,6 +38,12 @@ namespace olbaflinx::ui {
  * arrive in that thread, and every one of them that touches a widget has to
  * cross back. This class overrides those and hands them to the thread it was
  * built in, waiting for the answer.
+ *
+ * The callbacks come in two kinds and are taken over in two ways. The dialogs
+ * are virtual functions of the C++ binding and are overridden below. The
+ * progress of a session is not: gwenhywfar keeps those as function pointers on
+ * the C interface, and they reach the widgets of the progress dialog just as
+ * directly. They are exchanged for forwarding ones in the constructor.
  *
  * Ownership: the creator owns the instance. It outlives the banking instance
  * that uses it and is destroyed after it; the banking backend reaches into the
@@ -117,6 +125,28 @@ protected:
 
 private:
     /**
+     * The five callbacks that carry the course of a session. Each of them hands
+     * its work to the owning thread and then calls the function that gwenhywfar
+     * had in place before, which is what actually writes into the dialog.
+     *
+     * The interface they are called with is the one they belong to, so an
+     * instance finds itself through it and no global state is involved.
+     */
+    static uint32_t forwardProgressStart(GWEN_GUI *gui,
+                                         uint32_t progressFlags,
+                                         const char *title,
+                                         const char *text,
+                                         uint64_t total,
+                                         uint32_t guiid);
+    static int forwardProgressAdvance(GWEN_GUI *gui, uint32_t id, uint64_t progress);
+    static int forwardProgressSetTotal(GWEN_GUI *gui, uint32_t id, uint64_t total);
+    static int forwardProgressLog(GWEN_GUI *gui,
+                                  uint32_t id,
+                                  GWEN_LOGGER_LEVEL level,
+                                  const char *text);
+    static int forwardProgressEnd(GWEN_GUI *gui, uint32_t id);
+
+    /**
      * Runs the given call in the thread this interface belongs to and answers
      * with its result.
      *
@@ -144,6 +174,14 @@ private:
      */
     QObject m_ownerThread;
     QTimer m_passwordCacheExpiry;
+
+    // What gwenhywfar had in place before the forwarding ones took over. They
+    // do the work; the forwarding ones only decide which thread it happens in.
+    GWEN_GUI_PROGRESS_START_FN m_progressStart = nullptr;
+    GWEN_GUI_PROGRESS_ADVANCE_FN m_progressAdvance = nullptr;
+    GWEN_GUI_PROGRESS_SETTOTAL_FN m_progressSetTotal = nullptr;
+    GWEN_GUI_PROGRESS_LOG_FN m_progressLog = nullptr;
+    GWEN_GUI_PROGRESS_END_FN m_progressEnd = nullptr;
 };
 
 } // namespace olbaflinx::ui

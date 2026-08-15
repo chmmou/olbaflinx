@@ -183,9 +183,12 @@ public:
             q_ptr->closeStorage();
         });
 
-        QObject::connect(ui->appQuitAction, &QAction::triggered, q_ptr, [] {
-            QApplication::quit();
-        });
+        // Closed rather than quit, so that the entry from the menu goes the same
+        // way as the button of the window manager. Quitting outright steps past
+        // closeEvent and with it past the refusal to leave while a fetch runs.
+        // The shutdown of the banking layer waits for the session, and a session
+        // reports its course into this thread and waits for that.
+        QObject::connect(ui->appQuitAction, &QAction::triggered, q_ptr, [this] { q_ptr->close(); });
 
         // The window does not know what a wizard needs to be built. The assembly
         // does, so the request travels there and the result comes back through
