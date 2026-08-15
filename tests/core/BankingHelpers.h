@@ -117,6 +117,12 @@ public:
      * @param firstBookingDate The day of the first booking, every further one a
      *  day on. Left invalid, the bookings carry no date at all, which is what a
      *  test that does not look at the period wants.
+     *
+     * The bookings carry no account of their own, and that is not an omission of
+     * the helper. A statement arrives through the importer of the backend, which
+     * fills the fields of the booking and leaves the account among them empty;
+     * only the entry the booking sits in names it. A helper that filled it here
+     * would measure a container no bank ever sends.
      */
     static AB_IMEXPORTER_CONTEXT *responseContext(quint32 uniqueId,
                                                   int transactionCount,
@@ -137,7 +143,6 @@ public:
             AB_TRANSACTION *transaction = AB_Transaction_new();
 
             AB_Transaction_SetType(transaction, AB_Transaction_TypeStatement);
-            AB_Transaction_SetUniqueAccountId(transaction, uniqueId);
             AB_Transaction_SetUniqueId(transaction, static_cast<uint32_t>(index) + 1);
 
             const auto purpose = QStringLiteral("Booking %1").arg(index + 1).toUtf8();

@@ -120,6 +120,7 @@ private Q_SLOTS:
     void aBookingKeepsTheFingerprintItAlreadyCarries();
     void anAccountCarriesTheSecondOfTwoStoredBalances();
     void theBookedBalanceOfAFetchReachesTheStorage();
+    void theBookingsOfAFetchAreFoundAgainUnderTheirAccount();
     void aStoredBalanceCarriesDateTypeAndCurrency();
     void aFetchWithoutABalanceLeavesTheStoredOneStanding();
     void moreThanAThousandBookingsAllArrive();
@@ -405,6 +406,57 @@ void StorageUniqueTest::theBookedBalanceOfAFetchReachesTheStorage()
              static_cast<int>(AB_Balance_TypeBooked));
     QCOMPARE(scalarOf(file, QStringLiteral("SELECT `date` FROM balances;")).toDate(),
              QDate(2026, 2, 1));
+}
+
+/**
+ * The whole way of a booking: out of the response container, into the table,
+ * and out again under the account it belongs to. A statement names no account
+ * of its own, only the entry it sits in does, so a booking that is not
+ * attributed while the container is read is stored under no account and is
+ * never found again - however many rows the write reported.
+ */
+void StorageUniqueTest::theBookingsOfAFetchAreFoundAgainUnderTheirAccount()
+{
+    const auto file = storageFile();
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+    QVERIFY(!storage.initialize(true).isError());
+
+    QCOMPARE(storeAndWait(storage, BankingItems{makeAccount(100.0)}), 1);
+
+    const auto account = BankingHelpers::accountFromBackend(testAccountId);
+
+    AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, QDate(2026, 1, 1));
+    AB_IMEXPORTER_CONTEXT *context = BankingHelpers::responseContext(testAccountId,
+                                                                     3,
+                                                                     {},
+                                                                     QDate(2026, 2, 1));
+
+    const BankingItems items = Banking::itemsFromContext(context, commands);
+
+    AB_ImExporterContext_free(context);
+    AB_Transaction_List2_freeAll(commands);
+
+    QCOMPARE(items.size(), 3);
+    QCOMPARE(storeAndWait(storage, items), 3);
+
+    QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
+
+    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = testAccountId});
+
+    QVERIFY(itemsSpy.wait(workerTimeout));
+
+    const auto found = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
+    QCOMPARE(found.size(), 3);
+
+    for (const auto &item : std::as_const(found)) {
+        const auto transaction = std::static_pointer_cast<Transaction>(item);
+        QCOMPARE(transaction->uniqueAccountId(), testAccountId);
+    }
+
+    storage.close();
 }
 
 /**

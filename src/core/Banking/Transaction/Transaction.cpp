@@ -139,6 +139,15 @@ Transaction::Transaction(const AB_TRANSACTION *transaction)
     , d_ptr(new Private(this, transaction))
 {}
 
+Transaction::Transaction(quint32 uniqueAccountId, const AB_TRANSACTION *transaction)
+    : BankingItem()
+    , d_ptr(new Private(this, transaction))
+{
+    if (AB_Transaction_GetUniqueAccountId(d_ptr->abTransaction) == 0) {
+        AB_Transaction_SetUniqueAccountId(d_ptr->abTransaction, uniqueAccountId);
+    }
+}
+
 Transaction::~Transaction()
 {
     delete d_ptr;

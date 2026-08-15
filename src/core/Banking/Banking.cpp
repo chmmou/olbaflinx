@@ -751,7 +751,18 @@ BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
                                                            AB_Transaction_CommandNone);
 
         while (transaction != nullptr) {
-            items.append(std::make_shared<Transaction>(transaction));
+            // The account comes from the entry. A statement that came over the
+            // wire names none of its own: the importer of the backend fills the
+            // fields of the booking and leaves that one empty. Only where the
+            // entry carries none either is there nothing to store the booking
+            // against, and it is dropped rather than written out of reach.
+            auto booking = std::make_shared<Transaction>(uniqueAccountId, transaction);
+
+            if (booking->uniqueAccountId() == 0) {
+                qCWarning(lcBanking) << "a booking arrived without an account id and is dropped";
+            } else {
+                items.append(std::move(booking));
+            }
 
             transaction = AB_Transaction_List_FindNextByType(transaction,
                                                              AB_Transaction_TypeNone,
@@ -762,9 +773,8 @@ BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
                 AB_ImExporterAccountInfo_GetBalanceList(accountInfo));
             balance != nullptr) {
             if (uniqueAccountId == 0) {
-                // A balance carries no account of its own, it belongs to the
-                // entry it sits in. Without an id there is nothing to store it
-                // against, whereas a booking carries its account itself.
+                // A balance belongs to the entry it sits in, like a booking.
+                // Without an id there is nothing to store it against.
                 qCWarning(lcBanking) << "a balance arrived without an account id and is dropped";
             } else {
                 items.append(std::make_shared<Balance>(uniqueAccountId, balance));
