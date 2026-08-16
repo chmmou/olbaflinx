@@ -22,6 +22,8 @@
 
 #include <QtTest/QtTest>
 
+#include <QtSql/QSqlDatabase>
+
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
 
@@ -45,12 +47,18 @@ private Q_SLOTS:
     void destroyingStorageWithSettingsDoesNotCrash();
     void twoConsecutiveStoragesDoNotCrash();
     void storageIsUsableWithoutAnyApplicationInstance();
+    void attemptsThatFailToOpenLeaveNoConnectionBehind();
 };
 
 void StorageLifetimeTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 }
 
 /**
@@ -109,6 +117,34 @@ void StorageLifetimeTest::storageIsUsableWithoutAnyApplicationInstance()
     const Storage storage(applicationInfo());
 
     QVERIFY(storage.storagePath().endsWith("de.chm-projects.olbaflinx.test"));
+}
+
+/**
+ * Qt keeps a connection under its name for the life of the process until it is
+ * taken out again. The way out of a failed open skipped the call that does that,
+ * and the destructor of the connection was left at = default, so every attempt
+ * that did not open left one behind: a wrong path or a mistyped password could
+ * be repeated as often as the user liked, and the list grew with every try.
+ */
+void StorageLifetimeTest::attemptsThatFailToOpenLeaveNoConnectionBehind()
+{
+    QTemporaryDir workingDirectory;
+    QVERIFY(workingDirectory.isValid());
+
+    const int before = QSqlDatabase::connectionNames().size();
+
+    for (int attempt = 0; attempt < 20; ++attempt) {
+        Storage storage(applicationInfo());
+        QVERIFY(!storage.setKey(TestHelpers::password()).isError());
+
+        // A directory cannot be opened as a database file, and it exists, so the
+        // driver answers with a connection that is registered and not open.
+        storage.setStorageFile(workingDirectory.path());
+
+        QVERIFY(storage.initialize(false).isError());
+    }
+
+    QCOMPARE(QSqlDatabase::connectionNames().size(), before);
 }
 
 } // namespace olbaflinx::core::storage::tests

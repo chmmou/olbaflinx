@@ -123,6 +123,9 @@ private Q_SLOTS:
     void storageFileIsNotPlaintextSqlite();
     void changeKeyPreservesData();
     void changeKeyLeavesOldKeyInvalid();
+    void changeKeyRefusesAKeyTheStorageCouldNotBeOpenedWith_data();
+    void changeKeyRefusesAKeyTheStorageCouldNotBeOpenedWith();
+    void changeKeyWithTheWrongCurrentKeyLeavesTheStorageUsable();
     void receiveItemsRejectsInvalidWindow_data();
     void receiveItemsRejectsInvalidWindow();
 
@@ -142,6 +145,11 @@ void StorageKeyTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 
     QVERIFY(workingDirectory.isValid());
 }
@@ -258,7 +266,7 @@ void StorageKeyTest::changeKeyPreservesData()
     QVERIFY(storage.isValid());
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
@@ -288,6 +296,91 @@ void StorageKeyTest::changeKeyLeavesOldKeyInvalid()
 }
 
 /**
+ * The length is checked on the way into the storage, whichever way that is.
+ * changeKey is the second one and used to walk past it: a rekey to a key below
+ * the lower bound went through and reported success, and the next open then
+ * refused that very key before the file was touched. The holding was out of
+ * reach of the public interface from then on.
+ */
+void StorageKeyTest::changeKeyRefusesAKeyTheStorageCouldNotBeOpenedWith_data()
+{
+    QTest::addColumn<QString>("newPassword");
+
+    QTest::newRow("tooShort") << QStringLiteral("a");
+    QTest::newRow("oneBelowTheMinimum") << QStringLiteral("Aa1!Aa1!Aa1");
+    QTest::newRow("empty") << QString();
+    QTest::newRow("tooLong") << QString(MaximumPasswordLength + 1, QLatin1Char('c'));
+}
+
+void StorageKeyTest::changeKeyRefusesAKeyTheStorageCouldNotBeOpenedWith()
+{
+    QFETCH(QString, newPassword);
+
+    const auto file = storageFile(QTest::currentDataTag());
+    const auto oldPassword = QStringLiteral("Paßwort-Ümlaut-2026");
+
+    {
+        Storage storage(applicationInfo());
+        QVERIFY(!storage.setKey(oldPassword).isError());
+        storage.setStorageFile(file);
+
+        QVERIFY(!storage.initialize(true).isError());
+
+        const auto account = TestHelpers::createFakeAccount();
+        QVERIFY(!storage.storeItem(account.get()).isError());
+
+        const auto error = storage.changeKey(oldPassword, newPassword);
+
+        QVERIFY(error.isError());
+        QCOMPARE(error.code(), ErrorCode::InvalidInput);
+
+        storage.close();
+    }
+
+    // The file was never touched, so the key it was created with still opens it
+    // and the account is still there. Without the refusal the rekey went
+    // through and nothing opened the file afterwards.
+    QVERIFY(opens(file, oldPassword));
+    QVERIFY(!opens(file, newPassword));
+}
+
+/**
+ * A change that names the wrong current key. The storage used to keep that key
+ * afterwards: every later statement set it and failed, and once the file had
+ * been closed nothing opened it again, although the file itself was never
+ * touched.
+ */
+void StorageKeyTest::changeKeyWithTheWrongCurrentKeyLeavesTheStorageUsable()
+{
+    const auto file = storageFile("wrongCurrentKey");
+    const auto password = QStringLiteral("Paßwort-Ümlaut-2026");
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password).isError());
+    storage.setStorageFile(file);
+
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto account = TestHelpers::createFakeAccount();
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    const auto error = storage.changeKey(QStringLiteral("Falsches-Paßwort-2026"),
+                                         QStringLiteral("Neues-Paßwort-2027"));
+
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::PermissionDenied);
+
+    // The storage answers on the key it was opened with, rather than on the one
+    // that was just refused.
+    const auto second = TestHelpers::createFakeAccount();
+    QVERIFY(!storage.storeItem(second.get()).isError());
+
+    storage.close();
+
+    QVERIFY(opens(file, password));
+}
+
+/**
  * The window used to travel into the statement unchecked.
  */
 void StorageKeyTest::receiveItemsRejectsInvalidWindow_data()
@@ -312,12 +405,18 @@ void StorageKeyTest::receiveItemsRejectsInvalidWindow()
 
     QVERIFY(!storage.initialize(true).isError());
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
 
-    storage.receiveItems({.type = Storage::StorageAccount, .offset = offset, .limit = limit});
+    const auto refused = storage.receiveItems(
+        {.type = Storage::StorageAccount, .offset = offset, .limit = limit});
 
-    QCOMPARE(errorSpy.count(), 1);
-    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+    QVERIFY(refused.isError());
+    QCOMPARE(refused.code(), ErrorCode::InvalidInput);
+
+    // No run was started, so neither of the two signals of a read is due.
+    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
 
     storage.close();
 }

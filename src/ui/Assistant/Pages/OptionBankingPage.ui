@@ -168,25 +168,4 @@
   </layout>
  </widget>
  <resources/>
- <connections>
-  <connection>
-   <sender>btnSetupAccounts</sender>
-   <signal>clicked()</signal>
-   <receiver>UiSetupAssistantOptionBankingPage</receiver>
-   <slot>showSetupDialog()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>366</x>
-     <y>368</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>452</x>
-     <y>363</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
- <slots>
-  <slot>showSetupDialog()</slot>
- </slots>
 </ui>

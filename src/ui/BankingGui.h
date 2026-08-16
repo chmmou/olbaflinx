@@ -28,6 +28,8 @@
 #include <QtCore/QThread>
 #include <QtCore/QTimer>
 
+#include <atomic>
+
 namespace olbaflinx::ui {
 
 /**
@@ -110,6 +112,27 @@ public:
     /** Whether an expiry is on its way. */
     [[nodiscard]] bool isPasswordCacheExpiring() const;
 
+    /**
+     * @brief Whether the user asked for the running session to stop.
+     *
+     * The banking layer cannot answer this. It smooths the abort of a session
+     * away on the way up and hands its caller a plain success with an empty
+     * result, which reads like an account the bank had nothing new for. The
+     * progress callbacks are where the wish arrives, and this is what they
+     * leave behind.
+     *
+     * Readable from any thread: a session sets it from the thread it runs in.
+     */
+    [[nodiscard]] bool userAborted() const;
+
+    /**
+     * @brief Forgets an abort of an earlier session.
+     *
+     * Called before a session starts. The mark belongs to one session and must
+     * not decide the outcome of the next.
+     */
+    void forgetAbort();
+
 protected:
     int execDialog(GWEN_DIALOG *dlg, uint32_t guiid) override;
     int openDialog(GWEN_DIALOG *dlg, uint32_t guiid) override;
@@ -145,6 +168,8 @@ private:
                                   GWEN_LOGGER_LEVEL level,
                                   const char *text);
     static int forwardProgressEnd(GWEN_GUI *gui, uint32_t id);
+
+    void noteAbort(int result);
 
     /**
      * Runs the given call in the thread this interface belongs to and answers
@@ -182,6 +207,9 @@ private:
     GWEN_GUI_PROGRESS_SETTOTAL_FN m_progressSetTotal = nullptr;
     GWEN_GUI_PROGRESS_LOG_FN m_progressLog = nullptr;
     GWEN_GUI_PROGRESS_END_FN m_progressEnd = nullptr;
+
+    /** Set in the session thread, read in the one that owns this interface. */
+    std::atomic_bool m_userAborted = false;
 };
 
 } // namespace olbaflinx::ui

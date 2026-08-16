@@ -28,6 +28,7 @@
 
 #include <QtCore/QDate>
 #include <QtCore/QMetaObject>
+#include <QtCore/QTimer>
 
 #include <utility>
 
@@ -38,6 +39,13 @@ using namespace olbaflinx::core::banking::balance;
 using namespace olbaflinx::core::banking::transaction;
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::ui;
+
+namespace {
+
+/** How long a write waits before it asks a busy storage again. */
+constexpr int StoreRetryMs = 50;
+
+} // namespace
 
 class AccountFetch::Private
 {
@@ -85,6 +93,16 @@ public:
             return;
         }
 
+        // The banking layer cannot report this one. An abort is smoothed away
+        // on the way up through the library and reaches it as a plain success
+        // with an empty result, which would tell the user his bank had nothing
+        // new. The interface saw the wish and is asked instead. Only where the
+        // session claims to have gone through: a failure it did report names
+        // its own cause and keeps it.
+        if (sessionDelivered() && gui && gui->userAborted()) {
+            outcome = Outcome::Aborted;
+        }
+
         if (!sessionDelivered()) {
             finish(outcome, reason);
             return;
@@ -122,10 +140,47 @@ public:
 
     void startStoring(StorePhase next)
     {
-        phase = next;
         storeFailed = false;
 
-        storage->storeItems(phase == StorePhase::Transactions ? pendingBookings : pendingBalances);
+        const auto error = storage->storeItems(next == StorePhase::Transactions ? pendingBookings
+                                                                                : pendingBalances);
+
+        // The phase is set where a run of this class actually started, and only
+        // there. It is what tells the three signals of the write path apart from
+        // those of a run somebody else has going; carrying it while no run of
+        // this one is out would take a foreign count and a foreign end for this
+        // fetch.
+        if (!error.isError()) {
+            phase = next;
+            return;
+        }
+
+        // No run was started, so no end of one will arrive and the outcome has
+        // to be settled here.
+        //
+        // A write of somebody else holding the way is a moment and not a
+        // failure. What this fetch brought in cost minutes on the line and is
+        // still here, so it is asked again rather than given up; giving up would
+        // have the next fetch bring the same records once more.
+        if (error.code() == ErrorCode::Busy) {
+            QTimer::singleShot(StoreRetryMs, q_ptr, [this, next] {
+                if (running) {
+                    startStoring(next);
+                }
+            });
+            return;
+        }
+
+        // The bookings are written in a run of their own and are committed by the
+        // time the balances are attempted. A phase that never started therefore
+        // takes nothing back with it, and only the failure of the first one
+        // leaves the holding as it was.
+        if (next == StorePhase::Transactions) {
+            storedCount = 0;
+        }
+
+        phase = StorePhase::None;
+        finish(Outcome::StoreFailed, {});
     }
 
     void takeStoredCount(int count)
@@ -151,8 +206,14 @@ public:
 
         if (storeFailed) {
             // Nothing of this run stayed behind: the storage brackets a run and
-            // rolls it back whole. The starting point has therefore not moved
-            // and a second fetch brings the same records again.
+            // rolls it back whole. That reaches this run and no further. The
+            // bookings go in a run of their own and are committed before the
+            // balances are attempted, so a failure of the balances leaves them
+            // standing and the count that goes out has to say so.
+            if (phase == StorePhase::Transactions) {
+                storedCount = 0;
+            }
+
             phase = StorePhase::None;
             finish(Outcome::StoreFailed, {});
             return;
@@ -264,6 +325,10 @@ Error AccountFetch::initialize()
         d_ptr->outcome = Outcome::Skipped;
     });
 
+    connect(d_ptr->banking.get(), &Banking::noOrderOffered, this, [this](quint32) {
+        d_ptr->outcome = Outcome::NothingOffered;
+    });
+
     // Arrives before the session and says that no booking can come in for this
     // account. Without it an empty result would read like an account the bank
     // had nothing new for.
@@ -290,20 +355,21 @@ Error AccountFetch::initialize()
 
     connect(d_ptr->banking.get(), &Banking::finished, this, [this] { d_ptr->sessionEnded(); });
 
-    // Every one of these three reaches this object for reads of other callers as
-    // well. The phase is what says whether the storage is answering a run of
-    // this class.
+    // The three of the write path. A read of another caller may well be going at
+    // the same time and ends with signals of its own, so none of these three can
+    // be answered by it; the phase is what says whether the run that ends here
+    // belongs to this class.
     connect(d_ptr->storage, &Storage::itemsStored, this, [this](int count) {
         d_ptr->takeStoredCount(count);
     });
 
-    connect(d_ptr->storage, &Storage::errorOccurred, this, [this](ErrorCode, const QString &) {
+    connect(d_ptr->storage, &Storage::writeFailed, this, [this](ErrorCode, const QString &) {
         if (d_ptr->isStoring()) {
             d_ptr->storeFailed = true;
         }
     });
 
-    connect(d_ptr->storage, &Storage::finished, this, [this] { d_ptr->storeRunEnded(); });
+    connect(d_ptr->storage, &Storage::writeFinished, this, [this] { d_ptr->storeRunEnded(); });
 
     return {};
 }
@@ -338,6 +404,9 @@ void AccountFetch::start(const std::shared_ptr<Account> &account)
         return;
     }
 
+    // The mark belongs to one session. Left standing it would end the next one
+    // as an abort the user never asked for.
+    d_ptr->gui->forgetAbort();
     d_ptr->gui->holdPasswordCache();
 
     const Result<QDate> latest = d_ptr->storage->latestTransactionDate(account->uniqueId());

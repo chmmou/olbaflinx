@@ -22,6 +22,7 @@
 #include <QtCore/QMap>
 #include <QtCore/QRandomGenerator>
 #include <QtCore/QString>
+#include <QtCore/QTemporaryDir>
 #include <QtCore/QVariant>
 
 #include <QtSql/QSqlDatabase>
@@ -47,6 +48,33 @@ namespace olbaflinx::core::tests {
 class TestHelpers
 {
 public:
+    /**
+     * Moves the home directory of the process into a temporary one, once.
+     *
+     * QStandardPaths::setTestModeEnabled is not enough on its own. It moves the
+     * locations below ~/.qttest, which is a directory of the user like any
+     * other: it survives the run, and what one run leaves there the next one
+     * finds. A settings file written by an earlier run was found there carrying
+     * the paths of a temporary directory that had long since gone.
+     *
+     * Both the settings file and Storage::storagePath() derive from the home
+     * directory, so moving that one moves everything a test writes. It has to
+     * happen before the first QSettings is built, which is why every test calls
+     * this from initTestCase.
+     *
+     * The directory is removed and the old value put back when the process ends.
+     *
+     * @return false when no temporary directory could be created, in which case
+     *  nothing was changed and the caller is to fail rather than write into the
+     *  home directory of whoever started the run.
+     */
+    static bool useTemporaryHome()
+    {
+        static TemporaryHome home;
+
+        return home.isValid();
+    }
+
     /**
      * The pass phrase every storage of a test is opened with. It meets the
      * guideline of the core and carries a quote, a backslash and a slash, so a
@@ -283,6 +311,37 @@ public:
     }
 
 private:
+    /**
+     * Holds HOME in a temporary directory for as long as it lives. Only
+     * useTemporaryHome builds one, and it builds exactly one per process.
+     */
+    class TemporaryHome
+    {
+    public:
+        TemporaryHome()
+            : m_previousHome(qgetenv("HOME"))
+        {
+            if (m_directory.isValid()) {
+                qputenv("HOME", m_directory.path().toLocal8Bit());
+            }
+        }
+
+        ~TemporaryHome() { qputenv("HOME", m_previousHome); }
+
+        TemporaryHome(const TemporaryHome &) = delete;
+        TemporaryHome &operator=(const TemporaryHome &) = delete;
+        TemporaryHome(TemporaryHome &&) = delete;
+        TemporaryHome &operator=(TemporaryHome &&) = delete;
+
+        [[nodiscard]] bool isValid() const { return m_directory.isValid(); }
+
+    private:
+        // Built before the old value is read, so that the value put back is the
+        // one that stood outside and never the one this object set.
+        QTemporaryDir m_directory;
+        QByteArray m_previousHome;
+    };
+
     /**
      * A generator with a fixed seed. A failing run has to be reproducible, which
      * QRandomGenerator::system() cannot give. Consecutive calls still differ, so

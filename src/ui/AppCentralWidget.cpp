@@ -368,6 +368,19 @@ public:
                              q_ptr,
                              [this] { applyTransactionCount(); });
 
+            // The model orders by something else on its own where the storage is
+            // given up, and the indicator has to follow it there. Setting it here
+            // once left the header pointing at a column the rows had long since
+            // stopped standing under, and the next click then turned an order
+            // around that was never in force.
+            QObject::connect(transactionModel,
+                             &TransactionTableModel::sortChanged,
+                             q_ptr,
+                             [this](int column, Qt::SortOrder order) {
+                                 ui->tableViewTransactions->horizontalHeader()
+                                     ->setSortIndicator(column, order);
+                             });
+
             ui->tableViewTransactions->horizontalHeader()
                 ->setSortIndicator(transactionModel->sortColumn(), transactionModel->sortOrder());
             ui->tableViewTransactions->setSortingEnabled(true);

@@ -32,6 +32,7 @@
 #include <QtCore/QFile>
 #include <QtCore/QFutureWatcher>
 #include <QtCore/QMetaEnum>
+#include <QtCore/QMetaObject>
 #include <QtCore/QPromise>
 #include <QtCore/QSet>
 #include <QtCore/QSettings>
@@ -67,10 +68,12 @@ constexpr int MinPasswordLength = 12;
 constexpr int MaxPasswordLength = 128;
 
 /**
- * The widest window a single read may open. Without a bound a caller could ask
- * for INT_MAX rows and hold a whole table in memory at once.
+ * How long a statement waits for a lock another connection of this storage
+ * holds. Long enough to sit out a page of a read or the commit of a fetch,
+ * short enough that a caller which really is stuck says so within a few
+ * seconds instead of standing forever.
  */
-constexpr int MaxItemsPerQuery = 1000;
+constexpr int LockWaitMs = 5000;
 
 /**
  * Password regular expression
@@ -81,15 +84,14 @@ constexpr int MaxItemsPerQuery = 1000;
  * At least one special character out of the class below, umlauts among them
  * Between MinPasswordLength and MaxPasswordLength characters, with the anchors
  *
- * The pattern is compiled once. It used to be a macro and was therefore built
- * anew on every password check.
+ * Compiled once and kept, rather than built anew on every password check.
  */
 const QRegularExpression &minPasswordPattern()
 {
-    // The hyphen stands last so that it counts as a literal. It used to sit
-    // between '#' and '_', where a character class reads it as a range from 0x23
-    // to 0x5F. That range covers every digit and every capital letter, so the
-    // fourth lookahead matched on those alone and asked for nothing.
+    // The hyphen stands last so that it counts as a literal. Between '#' and
+    // '_' a character class reads it as a range from 0x23 to 0x5F, which covers
+    // every digit and every capital letter: the fourth lookahead would then
+    // match on those alone and ask for nothing.
     //
     // The backslash, 0x5C, sat inside that range and reached the class through
     // it. With the range gone it has to stand on its own, which is what the
@@ -364,6 +366,18 @@ QSet<QString> placeholdersOf(const QString &statement)
 {
     static const QRegularExpression placeholder(QStringLiteral(":([A-Za-z_][A-Za-z0-9_]*)"));
 
+    // The answer hangs on the statement alone, and a run asks it once per record
+    // against a handful of statements. Held per thread rather than shared: a
+    // writing run and the window reach this at the same time, and a lock around a
+    // lookup this small would cost more than the scan it saves. It grows to the
+    // number of insert statements the schema has and no further.
+    thread_local QHash<QString, QSet<QString>> known;
+
+    const auto cached = known.constFind(statement);
+    if (cached != known.cend()) {
+        return *cached;
+    }
+
     auto names = QSet<QString>();
 
     auto matches = placeholder.globalMatch(statement);
@@ -371,7 +385,7 @@ QSet<QString> placeholdersOf(const QString &statement)
         names.insert(matches.next().captured(1));
     }
 
-    return names;
+    return *known.insert(statement, names);
 }
 
 /**
@@ -472,9 +486,8 @@ struct ReadResult
  * for reaches the statement through a binding, and only the column names are
  * written into the text.
  *
- * Three queries of one read share it. The records, the size of the window for
- * the progress, and the number the filter bar shows all have to stand under the
- * same condition, or they contradict each other.
+ * Both queries of one read share it. The records and the number the filter bar
+ * shows have to stand under the same condition, or they contradict each other.
  */
 struct ReadCondition
 {
@@ -496,12 +509,11 @@ struct WriteResult
 class Storage::Private
 {
 public:
-    explicit Private(Storage *storage, ApplicationInfo applicationInfo)
+    explicit Private(ApplicationInfo applicationInfo)
         : m_key()
         , m_storageFileName()
         , m_applicationInfo(std::move(applicationInfo))
         , m_connection(nullptr)
-        , q_ptr(storage)
     {
         initResource();
 
@@ -510,6 +522,8 @@ public:
 
     ~Private()
     {
+        waitForRuns();
+
         if (m_settings) {
             m_settings->sync();
         }
@@ -517,34 +531,175 @@ public:
         close();
     }
 
+    /**
+     * Waits out the runs that read and write in threads of their own.
+     *
+     * Nothing else ends them. Each holds a connection of its own and hands it
+     * back to the global registry of QSqlDatabase when it is done, and a run
+     * that outlives this object does that after the state it reaches into has
+     * been torn down. The wait blocks the thread of the owner, which is the
+     * price of that: this runs on the way out, where there is nothing left to
+     * keep responsive.
+     *
+     * The wait hands on what a run threw, and this is called from a destructor,
+     * which is implicitly noexcept. An exception passing through would end the
+     * process instead of reporting anything.
+     *
+     * One wait per call, because a read that throws must not take the wait for
+     * the write with it: that one would then outlive the object this is here to
+     * protect.
+     */
+    void waitForRuns()
+    {
+        const auto waitFor = [](QFutureWatcherBase &watcher, const char *kind) {
+            const QString failure = exceptionOf([&watcher] { watcher.waitForFinished(); });
+            if (!failure.isEmpty()) {
+                qCCritical(lcStorage) << "a" << kind << "of the storage ended in" << failure;
+            }
+        };
+
+        waitFor(m_readWatcher, "read");
+        waitFor(m_writeWatcher, "write");
+    }
+
     void setStorageFile(const QString &file) { m_storageFileName = file; }
 
     QString storageFileName() const { return m_storageFileName; }
 
-    void setKey(const QString &key) { m_key = key; }
+    /**
+     * The key every path of the storage works with.
+     *
+     * The length is checked here and not at the public setKey, so that it hangs
+     * on every way in rather than on one of two facades. changeKey is the second
+     * way, and a new key below the lower bound would rekey the file to something
+     * no later open accepts, which puts the holding out of reach.
+     *
+     * The length, not the full guideline. The character classes of
+     * minPasswordGuidelines end in [A-Za-z\d<special>], which no CJK character
+     * and no emoji is a member of, however many of the lookaheads a pass phrase
+     * built from them satisfies. Enforcing the whole pattern here would lock out
+     * exactly the keys the storage was taught to carry unmangled, and would shut
+     * the door on every file created under an older, weaker rule. The classes
+     * are checked where a key is chosen, in the dialog; what cannot open a file
+     * at all is checked here.
+     *
+     * The length is counted in UTF-16 units, as QString counts it. A character
+     * outside the basic multilingual plane, an emoji among them, therefore
+     * counts as two. That is the same measure the guideline pattern applies.
+     */
+    Error setKey(const QString &key)
+    {
+        if (key.length() < MinPasswordLength || key.length() > MaxPasswordLength) {
+            // The key itself never reaches the message.
+            return Error(ErrorCode::InvalidInput,
+                         QStringLiteral("The key has to be between %1 and %2 characters long")
+                             .arg(MinPasswordLength)
+                             .arg(MaxPasswordLength));
+        }
+
+        m_key = key;
+
+        return {};
+    }
+
+    /**
+     * Puts back a key this object held a moment ago. Only for the way out of a
+     * failed rekey: the value passed the check on its way in, so there is
+     * nothing left to decide and nothing left to report.
+     */
+    void restoreKey(const QString &key) { m_key = key; }
 
     StorageConnection *connection() { return m_connection; }
 
     QString lastErrorMessage() { return m_connection->lastErrorMessage(); }
 
+    /**
+     * A failed attempt takes its connection with it. Left standing, it is
+     * registered under the name of the file and open, and the next call would
+     * take it for a storage that has already been checked.
+     */
     Error initialize(const bool withSchema = false)
+    {
+        const auto error = openAndVerify(withSchema);
+        if (error.isError()) {
+            dropConnection();
+        }
+
+        return error;
+    }
+
+    Error openAndVerify(const bool withSchema)
     {
         if (m_connection != nullptr) {
             const auto currentDatabaseName = m_connection->database().databaseName();
-            if (currentDatabaseName.toLower() != m_storageFileName.toLower()) {
-                if (m_connection->isOpen()) {
-                    m_connection->close();
-                }
-                delete m_connection;
-                m_connection = nullptr;
-            } else {
-                if (withSchema) {
-                    return setupTables();
-                }
-                return {};
+
+            // The file alone does not make a connection worth keeping. An
+            // attempt that failed to open leaves exactly such a connection
+            // behind, and answering success on it hands the caller a store that
+            // no statement can reach. It is torn down and built anew instead.
+            const bool reusable = currentDatabaseName.toLower() == m_storageFileName.toLower()
+                                  && m_connection->isOpen();
+
+            if (!reusable) {
+                dropConnection();
             }
         }
 
+        // Only the opening is skipped for a connection that stands, never the
+        // checks below it. Answering on the strength of an open file alone would
+        // pass a storage whose schema this build cannot read, and the columns
+        // the statements bind against would go unasked for.
+        if (m_connection == nullptr) {
+            if (const auto error = openConnection(); error.isError()) {
+                return error;
+            }
+        }
+
+        // Read before anything else touches the file. A schema this build does
+        // not know may hold columns it would silently ignore on read and drop on
+        // write.
+        const auto versionBefore = schemaVersion();
+        if (!versionBefore.hasValue()) {
+            return schemaFailure(versionBefore.error().code(), versionBefore.error().message());
+        }
+
+        if (versionBefore.value() > CurrentSchemaVersion) {
+            return schemaFailure(ErrorCode::SchemaMismatch,
+                                 QStringLiteral("The storage %1 was written by a newer "
+                                                "version of this program")
+                                     .arg(m_storageFileName));
+        }
+
+        if (withSchema) {
+            // Only where the file is behind. The schema statements are a
+            // migration and not an opening routine: they walk the whole holding
+            // once, the run that drops doubled bookings twice over, and they do
+            // it in the thread that opens the vault. A file that already carries
+            // the current version has been through them, and its columns are
+            // asked for below whether they ran or not.
+            if (versionBefore.value() < CurrentSchemaVersion) {
+                if (const auto error = setupTables(); error.isError()) {
+                    return error;
+                }
+            }
+
+            return verifySchema(versionBefore.value());
+        }
+
+        if (versionBefore.value() < CurrentSchemaVersion) {
+            return schemaFailure(ErrorCode::SchemaMismatch,
+                                 QStringLiteral("The storage %1 is at schema version %2 and "
+                                                "has to be migrated to %3")
+                                     .arg(m_storageFileName)
+                                     .arg(versionBefore.value())
+                                     .arg(CurrentSchemaVersion));
+        }
+
+        return verifyColumns();
+    }
+
+    Error openConnection()
+    {
         initResource();
 
         m_connection = new StorageConnection(m_storageFileName);
@@ -552,63 +707,47 @@ public:
         if (!m_connection->isDriverAvailable()) {
             // Without the plugin no file opens at all. Told apart from a wrong
             // pass phrase, because the two ask for entirely different remedies.
-            return reportSchemaFailure(ErrorCode::DriverMissing,
-                                       QStringLiteral("The database driver the storage needs is "
-                                                      "not installed"));
+            return schemaFailure(ErrorCode::DriverMissing,
+                                 QStringLiteral("The database driver the storage needs is "
+                                                "not installed"));
         }
 
         if (!m_connection->isOpen()) {
             // The message of the driver names the file and the reason, it is for
             // the log. The code tells the caller that the store could not be
             // opened, which is not the same as a wrong password.
-            auto error = Error(ErrorCode::DatabaseFailure,
-                               QStringLiteral("Could not open the storage file %1: %2")
-                                   .arg(m_storageFileName, lastErrorMessage()));
-
-            qCCritical(lcStorage) << error.message();
-
-            Q_EMIT q_ptr->errorOccurred(error.code(), error.message());
-            Q_EMIT q_ptr->finished();
-
-            return error;
+            return schemaFailure(ErrorCode::DatabaseFailure,
+                                 QStringLiteral("Could not open the storage file %1: %2")
+                                     .arg(m_storageFileName, lastErrorMessage()));
         }
 
         qCInfo(lcStorage) << "storage opened" << m_storageFileName;
 
-        // Read before anything else touches the file. A schema this build does
-        // not know may hold columns it would silently ignore on read and drop on
-        // write.
-        const auto versionBefore = schemaVersion();
-        if (!versionBefore.hasValue()) {
-            return reportSchemaFailure(versionBefore.error().code(),
-                                       versionBefore.error().message());
-        }
-
-        if (versionBefore.value() > CurrentSchemaVersion) {
-            return reportSchemaFailure(ErrorCode::SchemaMismatch,
-                                       QStringLiteral("The storage %1 was written by a newer "
-                                                      "version of this program")
-                                           .arg(m_storageFileName));
-        }
-
-        if (withSchema) {
-            if (const auto error = setupTables(); error.isError()) {
-                return error;
-            }
-
-            return verifySchema(versionBefore.value());
-        }
-
-        if (versionBefore.value() < CurrentSchemaVersion) {
-            return reportSchemaFailure(ErrorCode::SchemaMismatch,
-                                       QStringLiteral("The storage %1 is at schema version %2 and "
-                                                      "has to be migrated to %3")
-                                           .arg(m_storageFileName)
-                                           .arg(versionBefore.value())
-                                           .arg(CurrentSchemaVersion));
-        }
-
         return {};
+    }
+
+    /**
+     * Takes the connection down and raises the read generation with it.
+     *
+     * The number is what tells a result of the file that was open from one of
+     * the file that is open now. It is raised wherever a connection falls, not
+     * in close() alone: a read that is still going would otherwise pass its
+     * records off as the holding of a storage that was opened in the meantime.
+     */
+    void dropConnection()
+    {
+        if (m_connection == nullptr) {
+            return;
+        }
+
+        ++m_connectionGeneration;
+
+        if (m_connection->isOpen()) {
+            m_connection->close();
+        }
+
+        delete m_connection;
+        m_connection = nullptr;
     }
 
     /**
@@ -652,16 +791,16 @@ public:
     {
         const auto versionAfter = schemaVersion();
         if (!versionAfter.hasValue()) {
-            return reportSchemaFailure(versionAfter.error().code(), versionAfter.error().message());
+            return schemaFailure(versionAfter.error().code(), versionAfter.error().message());
         }
 
         if (versionAfter.value() != CurrentSchemaVersion) {
-            return reportSchemaFailure(ErrorCode::SchemaMismatch,
-                                       QStringLiteral("The storage %1 is at schema version %2 "
-                                                      "after the migration, expected %3")
-                                           .arg(m_storageFileName)
-                                           .arg(versionAfter.value())
-                                           .arg(CurrentSchemaVersion));
+            return schemaFailure(ErrorCode::SchemaMismatch,
+                                 QStringLiteral("The storage %1 is at schema version %2 "
+                                                "after the migration, expected %3")
+                                     .arg(m_storageFileName)
+                                     .arg(versionAfter.value())
+                                     .arg(CurrentSchemaVersion));
         }
 
         if (versionAfter.value() != versionBefore) {
@@ -669,6 +808,19 @@ public:
                               << versionBefore << "to" << versionAfter.value();
         }
 
+        return verifyColumns();
+    }
+
+    /**
+     * Whether the tables hold the columns the statements bind against.
+     *
+     * Asked apart from the version, because the version alone does not answer
+     * it. A file that reached the current version before a column was added to
+     * that version carries the number without the column, and every statement
+     * that names it fails at the first write.
+     */
+    Error verifyColumns()
+    {
         for (const auto &[table, columns] : expectedColumns().asKeyValueRange()) {
             const auto columnList = tableColumns(table);
             const auto present = QSet<QString>(columnList.cbegin(), columnList.cend());
@@ -681,12 +833,12 @@ public:
             }
 
             if (!missing.isEmpty()) {
-                return reportSchemaFailure(ErrorCode::SchemaMismatch,
-                                           QStringLiteral("The table %1 of %2 is missing the "
-                                                          "columns %3")
-                                               .arg(table,
-                                                    m_storageFileName,
-                                                    missing.join(QLatin1StringView(", "))));
+                return schemaFailure(ErrorCode::SchemaMismatch,
+                                     QStringLiteral("The table %1 of %2 is missing the "
+                                                    "columns %3")
+                                         .arg(table,
+                                              m_storageFileName,
+                                              missing.join(QLatin1StringView(", "))));
             }
         }
 
@@ -695,30 +847,70 @@ public:
 
     void close()
     {
-        // Raised before anything is torn down. A read that is still going keeps
-        // its own number and is answered as stale when it comes back.
-        ++m_readGeneration;
-
-        if (m_connection) {
-            if (m_connection->isOpen()) {
-                QSqlQuery query;
-                if (const auto error = openQuery(query); error.isError()) {
-                    qCWarning(lcStorage) << "skipping maintenance on close:" << error.message();
-                } else {
-                    runMaintenance(query, QStringLiteral("REINDEX;"));
-                    runMaintenance(query, QStringLiteral("VACUUM;"));
-                }
-
-                m_connection->close();
-
-                qCInfo(lcStorage) << "storage closed" << m_storageFileName;
-            }
-
-            delete m_connection;
-            m_connection = nullptr;
+        // Closed without maintenance. VACUUM writes the whole encrypted file
+        // anew and would hold the window for as long as that takes on a vault
+        // of years, on a path the user reaches by closing a storage or by
+        // leaving the program.
+        //
+        // What it would win is the space of deleted rows, and the holding only
+        // grows. The one statement that deletes is the deduplication of the
+        // schema, which runs once per version step.
+        if (m_connection != nullptr && m_connection->isOpen()) {
+            qCInfo(lcStorage) << "storage closed" << m_storageFileName;
         }
 
+        dropConnection();
+
         cleanupResource();
+    }
+
+    /**
+     * Whether the given key opens the file this storage stands on.
+     *
+     * Asked on a connection of its own. SQLCipher takes the key of a connection
+     * once, when the first statement runs on it, and a PRAGMA key on a
+     * connection that is already decrypted changes nothing: a check on the open
+     * connection therefore answers for the key that opened it, whatever key it
+     * was handed. A second connection is the only place the question can be put.
+     */
+    [[nodiscard]] bool keyOpensTheFile(const QString &key)
+    {
+        if (m_connection == nullptr || !m_connection->isOpen()) {
+            return false;
+        }
+
+        const auto sourceConnectionName = m_connection->database().connectionName();
+        const auto probeConnectionName = sourceConnectionName + QStringLiteral("_keyprobe");
+
+        // Called rather than written out, so that every way out of it releases
+        // the query and the handle before removeDatabase runs below. Qt warns
+        // and leaks the connection while either still refers to it.
+        const bool opens = [&] {
+            QSqlDatabase database = QSqlDatabase::cloneDatabase(sourceConnectionName,
+                                                                probeConnectionName);
+            if (!database.isValid() || !database.open()) {
+                return false;
+            }
+
+            QSqlQuery query;
+            if (openQueryOn(database, key, m_storageFileName, query).isError()) {
+                database.close();
+                return false;
+            }
+
+            // A statement that has to read a page of the file. Applying the key
+            // says nothing on its own: SQLCipher takes a wrong one without
+            // complaint and fails at the first read.
+            const bool readable = query.exec(QStringLiteral("SELECT COUNT(*) FROM sqlite_master;"));
+
+            database.close();
+
+            return readable;
+        }();
+
+        QSqlDatabase::removeDatabase(probeConnectionName);
+
+        return opens;
     }
 
     bool isConnectionValid()
@@ -784,6 +976,16 @@ public:
                          QStringLiteral("Could not apply the key to %1").arg(fileName));
         }
 
+        // A read and a write of this storage run at the same time and on
+        // connections of their own, over one file. Without a wait SQLite refuses
+        // the moment the other holds the lock, and the whole run falls: a fetch
+        // that cost minutes on the line is rolled back because the user clicked
+        // an account while it was being written.
+        if (!query.exec(QStringLiteral("PRAGMA busy_timeout=%1;").arg(LockWaitMs))) {
+            qCWarning(lcStorage) << "could not set the lock wait on" << fileName << ":"
+                                 << query.lastError().text();
+        }
+
         return {};
     }
 
@@ -795,19 +997,6 @@ public:
         }
 
         return openQueryOn(m_connection->database(), m_key, m_storageFileName, query);
-    }
-
-    /**
-     * Maintenance. A failure leaves the data untouched, it only costs the
-     * compactness of the file. A log entry is therefore the whole of the
-     * handling.
-     */
-    static void runMaintenance(QSqlQuery &query, const QString &statement)
-    {
-        if (!query.exec(statement)) {
-            qCWarning(lcStorage) << "maintenance statement failed:" << statement
-                                 << query.lastError().text();
-        }
     }
 
     QMap<int, QString> tableColumns(const QString &table)
@@ -896,9 +1085,9 @@ public:
     }
 
     /**
-     * Runs one COUNT statement and hands back its number. The two counts of a
-     * read differ in their statement alone; the key, the preparation and the
-     * bindings are the same for both.
+     * Runs one COUNT statement and hands back its number. It carries the key,
+     * the preparation and the bindings, so that a caller has only its statement
+     * to give.
      */
     static Result<int> countOn(const QSqlDatabase &database,
                                const QString &key,
@@ -932,43 +1121,9 @@ public:
     }
 
     /**
-     * The number of rows the given window actually yields. QSqlQuery::size() is
-     * unavailable for SQLite and numRowsAffected() is undefined for a SELECT, so
-     * the count comes from a query of its own. It serves the progress.
-     */
-    static Result<int> windowedRowCountOn(const QSqlDatabase &database,
-                                          const QString &key,
-                                          const QString &fileName,
-                                          const QString &table,
-                                          const ReadCondition &condition,
-                                          int offset,
-                                          int limit)
-    {
-        if (!isKnownTable(table)) {
-            return Error(ErrorCode::InvalidInput, QStringLiteral("Unknown table %1").arg(table));
-        }
-
-        auto bindings = condition.bindings;
-        bindings[QStringLiteral(":limit")] = limit;
-        bindings[QStringLiteral(":offset")] = offset;
-
-        // The table name is interpolated because SQL knows no binding for an
-        // identifier. It passed the list above. The window and the condition are
-        // bound.
-        return countOn(database,
-                       key,
-                       fileName,
-                       table,
-                       QStringLiteral(
-                           "SELECT COUNT(*) FROM (SELECT 1 FROM %1%2 LIMIT :limit OFFSET :offset);")
-                           .arg(table, condition.where),
-                       bindings);
-    }
-
-    /**
      * How many rows of the table satisfy the condition, without the window. This
-     * is the number the filter bar shows, and it is the one thing the count
-     * above cannot answer: a window of fifty says nothing about three thousand.
+     * is the number the filter bar shows, and the window a read hands back
+     * cannot stand in for it: fifty rows say nothing about three thousand.
      */
     static Result<int> matchingRowCountOn(const QSqlDatabase &database,
                                           const QString &key,
@@ -1090,26 +1245,11 @@ public:
                 return;
             }
 
-            // numRowsAffected() is undefined for a SELECT and SQLite answers -1,
-            // which turned the progress negative. The count comes from a query of
-            // its own. A failure there costs the progress reporting, not the read.
-            const auto rowCount = windowedRowCountOn(database,
-                                                     key,
-                                                     fileName,
-                                                     table,
-                                                     condition,
-                                                     itemQuery.offset,
-                                                     itemQuery.limit);
-            if (!rowCount.hasValue()) {
-                qCWarning(lcStorage) << "no progress reporting:" << rowCount.error().message();
-            }
-
-            const int totalRows = rowCount.hasValue() ? rowCount.value() : 0;
-
             // The number the filter bar shows. It stands under the same condition
-            // as the read and counts the whole holding, which is what the count
-            // above cannot do. A failure costs the number, not the records, so
-            // the run carries on and reports nothing rather than something wrong.
+            // as the read and counts the whole holding, which the window the
+            // query just opened cannot say. A failure costs the number, not the
+            // records, so the run carries on and reports nothing rather than
+            // something wrong.
             const auto matchCount = matchingRowCountOn(database, key, fileName, table, condition);
             if (!matchCount.hasValue()) {
                 qCWarning(lcStorage) << "no record count:" << matchCount.error().message();
@@ -1126,7 +1266,7 @@ public:
             auto map = QMap<QString, QVariant>();
 
             while (query.next()) {
-                for (const auto &[key_, value] : columnList.asKeyValueRange()) {
+                for (const auto &[key_, value] : std::as_const(columnList).asKeyValueRange()) {
                     map[value] = query.value(key_);
                 }
 
@@ -1135,6 +1275,13 @@ public:
                 // No clear on purpose. Every row sets the same keys, so the
                 // inserts of the next round turn into assignments.
             }
+
+            // What the progress below is measured against. numRowsAffected() is
+            // undefined for a SELECT and SQLite answers -1, which turned the
+            // progress negative; the rows that were just collected are the window
+            // this run reports over, and asking the file for their number would
+            // scan the same page a second time.
+            const int totalRows = rows.size();
 
             auto bankingItems = BankingItems();
             int index = 0;
@@ -1240,9 +1387,12 @@ public:
         }
 
         if (!query.exec()) {
+            // The result carries the failure of an exec, not the driver. Asking
+            // the driver answers with the last error it saw for itself, which
+            // for a statement SQLite refused is nothing at all.
             return Error(ErrorCode::DatabaseFailure,
                          QStringLiteral("Could not store an item of type %1: %2")
-                             .arg(type, database.lastError().text()));
+                             .arg(type, query.lastError().text()));
         }
 
         // numRowsAffected is defined for an INSERT and answers what SQLite
@@ -1255,8 +1405,8 @@ public:
      * it added. The whole write path is static and takes the database, because
      * storeItems runs it in a thread of its own on a connection of its own; a
      * QSqlDatabase belongs to the thread that created it. Storage::storeItem
-     * hands in the connection of this object and adds the signals, this function
-     * emits none.
+     * hands in the connection of this object and answers its caller through the
+     * return value; neither it nor this function emits anything.
      *
      * The type is told from the record itself rather than from the enumeration of
      * storage types: that one steers the read path, where a table name and a row
@@ -1296,8 +1446,8 @@ public:
             return storeFetchedBalanceOn(database, key, fileName, bankingItem->toMap());
         }
 
-        // Category and Contact have no table of their own yet. The branch used to
-        // be empty, which sent an unprepared query on its way.
+        // Category and Contact have no table of their own yet. Answered here,
+        // because an empty branch would send an unprepared query on its way.
         return Error(ErrorCode::NotImplemented,
                      QStringLiteral("Storing an item of type %1 is not implemented").arg(type));
     }
@@ -1344,9 +1494,12 @@ public:
      * clones it. Everything the run needs is passed by value, the records
      * included: they are shared pointers, so the run holds them alive on its own.
      *
-     * The bracket sits around the single record. What went in stays in, and the
-     * run ends at the first failure rather than carrying on over a record that
-     * may be the cause.
+     * The bracket sits around the run, not around the single record: a run that
+     * fails at one record leaves no row of that run behind, because half a
+     * holding would move the starting point of the next fetch past bookings
+     * nobody holds. The run ends at the first failure rather than carrying on
+     * over a record that may be the cause. A run that carries an account is the
+     * exception, and the reason stands where that is decided.
      */
     static void writeItems(QPromise<WriteResult> &promise,
                            const QString &sourceConnectionName,
@@ -1424,9 +1577,16 @@ public:
                     error = rollbackOn(database, error);
                     stored = 0;
                 } else if (!database.commit()) {
-                    error = Error(ErrorCode::DatabaseFailure,
-                                  QStringLiteral("Could not commit a run of records to %1: %2")
-                                      .arg(fileName, database.lastError().text()));
+                    // Rolled back like the failure above, so that the state this
+                    // run leaves behind is the one it reports. A commit that did
+                    // not go through can leave the transaction open, and closing
+                    // the connection alone would decide the outcome without
+                    // saying so.
+                    error = rollbackOn(database,
+                                       Error(ErrorCode::DatabaseFailure,
+                                             QStringLiteral(
+                                                 "Could not commit a run of records to %1: %2")
+                                                 .arg(fileName, database.lastError().text())));
                     stored = 0;
                 }
             }
@@ -1510,9 +1670,13 @@ public:
         }
 
         if (!database.commit()) {
-            return Error(ErrorCode::DatabaseFailure,
-                         QStringLiteral("Could not commit an account to %1: %2")
-                             .arg(fileName, database.lastError().text()));
+            // Rolled back like every other way out of this function that failed.
+            // A commit that did not go through can leave the transaction open,
+            // and the next write on this connection would then run inside it.
+            return rollbackOn(database,
+                              Error(ErrorCode::DatabaseFailure,
+                                    QStringLiteral("Could not commit an account to %1: %2")
+                                        .arg(fileName, database.lastError().text())));
         }
 
         // The row of the account itself. The balance and the reference accounts
@@ -1589,7 +1753,7 @@ public:
         if (!query.exec()) {
             return Error(ErrorCode::DatabaseFailure,
                          QStringLiteral("Could not store the state of an account in %1: %2")
-                             .arg(fileName, database.lastError().text()));
+                             .arg(fileName, query.lastError().text()));
         }
 
         return {};
@@ -1602,9 +1766,9 @@ public:
      * read.
      *
      * The type says unknown for the same reason: the account list does not say
-     * whether the figure is booked or noted. It used to say none, which a bank
-     * also sends for a figure it gives no type for, so the two could not be told
-     * apart - and telling them apart is what the statement below rests on. It
+     * whether the figure is booked or noted. Not none, which a bank also sends
+     * for a figure it gives no type for: the two have to be told apart, and
+     * telling them apart is what the statement below rests on. It
      * refreshes the row it wrote itself and leaves a fetched figure alone, which
      * was chosen by its type and would otherwise be pushed aside by this
      * placeholder on the next run over the account list.
@@ -1726,10 +1890,19 @@ public:
             return;
         }
 
-        if (query.prepare(QStringLiteral("SELECT `value` FROM balances WHERE account_id = :id;"))) {
+        if (!query.prepare(
+                QStringLiteral("SELECT `value` FROM balances WHERE account_id = :id;"))) {
+            qCWarning(lcStorage) << "could not read the balance of an account:"
+                                 << query.lastError().text();
+        } else {
             query.bindValue(QStringLiteral(":id"), accountId);
 
-            if (query.exec() && query.next()) {
+            if (!query.exec()) {
+                qCWarning(lcStorage)
+                    << "could not read the balance of an account:" << query.lastError().text();
+            } else if (query.next()) {
+                // An account with no balance row is not a failure. It carries no
+                // figure yet, and the row goes on without the property.
                 row[QStringLiteral("balance")] = query.value(0);
             }
         }
@@ -1788,23 +1961,23 @@ public:
     {
         QFile storageFile(QStringLiteral(":/lib/olbaflinx-storage"));
         if (!storageFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            return reportSchemaFailure(ErrorCode::IoFailure,
-                                       QStringLiteral("Could not read the schema: %1")
-                                           .arg(storageFile.errorString()));
+            return schemaFailure(ErrorCode::IoFailure,
+                                 QStringLiteral("Could not read the schema: %1")
+                                     .arg(storageFile.errorString()));
         }
 
         const QStringList sqlStatements = QTextStream(&storageFile).readAll().split(';');
         QStringList queries = {};
 
-        // The replacement works on a copy. It used to mutate sqlStatements as a
-        // side effect of building the second list.
+        // The replacement works on a copy, so that building the second list
+        // leaves the first one as it was.
         for (const auto &statement : sqlStatements) {
             queries << QString(statement).replace(QStringLiteral("#"), QStringLiteral(";")).trimmed();
         }
 
         QSqlQuery query;
         if (const auto error = openQuery(query); error.isError()) {
-            return reportSchemaFailure(error.code(), error.message());
+            return schemaFailure(error.code(), error.message());
         }
 
         for (const auto &sqlStatement : std::as_const(queries)) {
@@ -1813,9 +1986,9 @@ public:
             }
 
             if (!connection()->beginTransaction()) {
-                return reportSchemaFailure(ErrorCode::DatabaseFailure,
-                                           QStringLiteral("Could not begin a transaction on %1: %2")
-                                               .arg(m_storageFileName, lastErrorMessage()));
+                return schemaFailure(ErrorCode::DatabaseFailure,
+                                     QStringLiteral("Could not begin a transaction on %1: %2")
+                                         .arg(m_storageFileName, lastErrorMessage()));
             }
 
             if (!query.exec(sqlStatement)) {
@@ -1829,15 +2002,19 @@ public:
                 qCCritical(lcStorage)
                     << "schema statement failed:" << sqlStatement << query.lastError().text();
 
-                return reportSchemaFailure(ErrorCode::DatabaseFailure,
-                                           QStringLiteral("Could not create the schema of %1: %2")
-                                               .arg(m_storageFileName, lastErrorMessage()));
+                // The result carries the failure of an exec, not the driver.
+                // Asking the driver answers with the last error it saw for
+                // itself, which for a statement SQLite refused is nothing at
+                // all, and the message would name the file without a cause.
+                return schemaFailure(ErrorCode::DatabaseFailure,
+                                     QStringLiteral("Could not create the schema of %1: %2")
+                                         .arg(m_storageFileName, query.lastError().text()));
             }
 
             if (!connection()->commitTransaction()) {
-                return reportSchemaFailure(ErrorCode::DatabaseFailure,
-                                           QStringLiteral("Could not commit the schema of %1: %2")
-                                               .arg(m_storageFileName, lastErrorMessage()));
+                return schemaFailure(ErrorCode::DatabaseFailure,
+                                     QStringLiteral("Could not commit the schema of %1: %2")
+                                         .arg(m_storageFileName, lastErrorMessage()));
             }
         }
 
@@ -1845,14 +2022,19 @@ public:
     }
 
 private:
-    Error reportSchemaFailure(ErrorCode code, const QString &message)
+    /**
+     * Notes a failure of the setup in the log and hands it back.
+     *
+     * It reaches the caller through the return value alone. initialize is a
+     * synchronous call: whoever asked for it is standing right there holding an
+     * Error, and a signal beside it would put a second message on the same
+     * status bar, from a path the caller has already handled.
+     */
+    Error schemaFailure(ErrorCode code, const QString &message)
     {
         auto error = Error(code, message);
 
         qCCritical(lcStorage) << error.message();
-
-        Q_EMIT q_ptr->errorOccurred(error.code(), error.message());
-        Q_EMIT q_ptr->finished();
 
         return error;
     }
@@ -1869,17 +2051,20 @@ private:
      * Storage that owns it, which is what turns the progress and the completion
      * of the worker back into signals of that thread.
      *
-     * A member rather than a local, because a watcher destroyed while its future
-     * is still running waits for it, which would make the call blocking again.
+     * A member rather than a local, because a local would go at the end of the
+     * call that started the run. Its destructor does not wait for the future, it
+     * only cuts the delivery, so the run would carry on with nobody left to
+     * report to. What waits is waitForRuns, on the way out of this object.
      */
     QFutureWatcher<ReadResult> m_readWatcher;
 
     /**
-     * Tells the run that is going from the one that was going before the storage
-     * was closed. Closing raises it, and a result that comes back under an older
-     * number belongs to a file nobody has open any more.
+     * Tells a run that is going from one that started on a connection which has
+     * since fallen. Every way a connection goes raises it, closing and a failed
+     * open alike, and a result that comes back under an older number belongs to
+     * a file nobody has open any more.
      */
-    quint64 m_readGeneration = 0;
+    quint64 m_connectionGeneration = 0;
 
     /**
      * The same for the run started by storeItems. A watcher of its own rather
@@ -1888,13 +2073,28 @@ private:
      */
     QFutureWatcher<WriteResult> m_writeWatcher;
 
+    /**
+     * Whether a run of that kind is still owed its answer.
+     *
+     * The watcher alone cannot say it. It reports the state of the future, which
+     * turns to finished the moment the worker returns, while the completion is
+     * still on its way to this thread as a queued signal. A second call arriving
+     * in that gap would pass the watcher's own guard and cut the connection the
+     * first run's answer is to travel over, leaving whoever waits for it waiting
+     * for good. These are raised where a run is started and lowered where its
+     * answer is handed on, so they stay up across the whole of that gap.
+     */
+    bool m_readInFlight = false;
+    bool m_writeInFlight = false;
+
+    // Nothing here emits. Every signal of the storage belongs to a run that
+    // Storage itself starts and watches, so this class needs no way back to it.
     friend class Storage;
-    Storage *q_ptr;
 };
 
 Storage::Storage(ApplicationInfo applicationInfo, QObject *parent)
     : QObject(parent)
-    , d_ptr(new Private(this, std::move(applicationInfo)))
+    , d_ptr(new Private(std::move(applicationInfo)))
 {}
 
 Storage::~Storage()
@@ -1909,58 +2109,75 @@ void Storage::setStorageFile(const QString &storageFileName)
 
 Error Storage::setKey(const QString &key)
 {
-    // The length, not the full guideline. The character classes of
-    // minPasswordGuidelines end in [A-Za-z\d<special>], which no CJK character
-    // and no emoji is a member of, however many of the lookaheads a pass phrase
-    // built from them satisfies. Enforcing the whole pattern here would lock out
-    // exactly the keys the storage was taught to carry unmangled, and would shut
-    // the door on every file created under an older, weaker rule. The classes
-    // are checked where a key is chosen, in the dialog; what cannot open a file
-    // at all is checked here.
-    //
-    // The length is counted in UTF-16 units, as QString counts it. A character
-    // outside the basic multilingual plane, an emoji among them, therefore
-    // counts as two. That is the same measure the guideline pattern applies.
-    if (key.length() < MinPasswordLength || key.length() > MaxPasswordLength) {
-        // The key itself never reaches the message.
-        return Error(ErrorCode::InvalidInput,
-                     QStringLiteral("The key has to be between %1 and %2 characters long")
-                         .arg(MinPasswordLength)
-                         .arg(MaxPasswordLength));
-    }
-
-    d_ptr->setKey(key);
-
-    return {};
+    return d_ptr->setKey(key);
 }
 
 Error Storage::changeKey(const QString &oldKey, const QString &newKey)
 {
-    d_ptr->setKey(oldKey);
+    const QString previousKey = d_ptr->m_key;
 
-    QSqlQuery query;
-    if (const auto error = d_ptr->openQuery(query); error.isError()) {
+    if (const auto error = d_ptr->setKey(oldKey); error.isError()) {
         return error;
     }
 
-    if (!d_ptr->isConnectionValid()) {
+    // Asked of the file and not of the connection that stands. The open one
+    // answers for the key it was opened with, so a wrong current key would pass
+    // here and the rekey would go through on it: whoever has an open vault in
+    // front of them could set a new password without knowing the old one, and
+    // the dialog that says the current password is not correct would never say
+    // it.
+    if (!d_ptr->keyOpensTheFile(oldKey)) {
+        // The key that was handed in stays out of the object. It does not open
+        // the file, so every later statement would set it and fail, and a close
+        // followed by an open would leave the holding out of reach.
+        d_ptr->restoreKey(previousKey);
+
         return Error(ErrorCode::PermissionDenied,
                      QStringLiteral("The current key does not open %1")
                          .arg(d_ptr->storageFileName()));
     }
 
-    d_ptr->setKey(newKey);
+    // The query is held for the length of the rekey and no longer. Below this
+    // block the connection may come down, and a query still standing on it would
+    // hold the connection open past removeDatabase and leak it for the run.
+    {
+        QSqlQuery query;
+        if (const auto error = d_ptr->openQuery(query); error.isError()) {
+            d_ptr->restoreKey(previousKey);
 
-    if (!query.exec(QStringLiteral("PRAGMA rekey=") + keyLiteral(newKey) + QLatin1Char(';'))) {
-        // Restores the state the caller handed us, so that a failed change does
-        // not leave the storage holding a key it was never rekeyed to.
-        d_ptr->setKey(oldKey);
+            return error;
+        }
 
-        return Error(ErrorCode::DatabaseFailure,
-                     QStringLiteral("Could not change the key of %1").arg(d_ptr->storageFileName()));
+        // Refused before the file is touched. A rekey to a key the public
+        // interface does not accept would leave the holding out of reach of
+        // every later open.
+        if (const auto error = d_ptr->setKey(newKey); error.isError()) {
+            d_ptr->restoreKey(oldKey);
+
+            return error;
+        }
+
+        if (!query.exec(QStringLiteral("PRAGMA rekey=") + keyLiteral(newKey) + QLatin1Char(';'))) {
+            // Restores the state the caller handed us, so that a failed change
+            // does not leave the storage holding a key it was never rekeyed to.
+            d_ptr->restoreKey(oldKey);
+
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not change the key of %1")
+                             .arg(d_ptr->storageFileName()));
+        }
     }
 
-    if (!d_ptr->isConnectionValid()) {
+    // Asked of the file for the same reason the old key was: the connection that
+    // stands kept the cipher context it was opened with and answers for it,
+    // whatever key the file on disk now carries. A rekey writes every page anew
+    // and can stop halfway.
+    if (!d_ptr->keyOpensTheFile(newKey)) {
+        // Neither key is known to open the file, so no later statement on this
+        // connection would say anything about the one on disk. It comes down,
+        // which shows the damage here rather than at the next start.
+        d_ptr->dropConnection();
+
         return Error(ErrorCode::DatabaseFailure,
                      QStringLiteral("The storage %1 is not readable with the new key")
                          .arg(d_ptr->storageFileName()));
@@ -1979,6 +2196,11 @@ Error Storage::initialize(bool withSchema)
 bool Storage::isValid()
 {
     return d_ptr->isConnectionValid();
+}
+
+bool Storage::isOpen() const
+{
+    return d_ptr->connection() != nullptr && d_ptr->connection()->isOpen();
 }
 
 QString Storage::storagePath() const
@@ -2036,8 +2258,8 @@ int Storage::minPasswordLength() const
 Error Storage::storeItem(const BankingItem *bankingItem)
 {
     if (d_ptr->connection() == nullptr) {
-        // The write path used to reach for the connection without asking. A call
-        // before initialize took the whole application down with it.
+        // Asked for before it is reached for. A call before initialize would
+        // otherwise take the whole application down with it.
         return Error(ErrorCode::DatabaseFailure,
                      QStringLiteral("No storage connection for %1").arg(d_ptr->storageFileName()));
     }
@@ -2047,54 +2269,63 @@ Error Storage::storeItem(const BankingItem *bankingItem)
                                               d_ptr->storageFileName(),
                                               bankingItem);
 
+    // Reported through the return value alone. This call is synchronous and its
+    // caller holds the outcome the moment it comes back; a signal beside it
+    // would reach the receivers of a run of storeItems, which this is not, and
+    // would put a second message on a status bar the caller has already written.
     if (!written.hasValue()) {
         const auto error = written.error();
 
         qCCritical(lcStorage) << error.message();
-
-        Q_EMIT errorOccurred(error.code(), error.message());
-        Q_EMIT finished();
 
         return error;
     }
 
     qCDebug(lcStorage) << "stored an item of type" << bankingItem->itemType();
 
-    Q_EMIT finished();
-
     return {};
 }
 
-void Storage::storeItems(const BankingItems &items)
+Error Storage::storeItems(const BankingItems &items)
 {
-    const auto reportError = [this](ErrorCode code, const QString &message) {
+    // Answered to the caller and to nobody else. A signal here would reach
+    // whoever is waiting for the run that is already going, and that receiver
+    // would take the refusal of this call for the end of its own run.
+    const auto refuse = [](ErrorCode code, const QString &message) {
         qCCritical(lcStorage) << message;
 
-        Q_EMIT errorOccurred(code, message);
-        Q_EMIT finished();
+        return Error(code, message);
     };
 
     if (d_ptr->connection() == nullptr || !d_ptr->connection()->isOpen()) {
-        reportError(ErrorCode::DatabaseFailure,
-                    QStringLiteral("No open storage connection for %1")
-                        .arg(d_ptr->storageFileName()));
-        return;
+        return refuse(ErrorCode::DatabaseFailure,
+                      QStringLiteral("No open storage connection for %1")
+                          .arg(d_ptr->storageFileName()));
     }
 
     // A second run while one is still going would be a second transaction on the
     // same file, and the watcher of the first would be lost.
-    if (d_ptr->m_writeWatcher.isRunning()) {
-        reportError(ErrorCode::InvalidInput,
-                    QStringLiteral("A write to the storage is already running"));
-        return;
+    if (d_ptr->m_writeInFlight) {
+        return refuse(ErrorCode::Busy, QStringLiteral("A write to the storage is already running"));
     }
 
     // A run without records is not a failure. Nothing is started, and the caller
     // still gets its end.
+    //
+    // Reported through the event loop rather than from here, the way a run that
+    // does start reports. A caller makes its connections after the call, on the
+    // strength of the return value, and would not be among the receivers of a
+    // signal sent before this function came back.
     if (items.isEmpty()) {
-        Q_EMIT itemsStored(0);
-        Q_EMIT finished();
-        return;
+        QMetaObject::invokeMethod(
+            this,
+            [this] {
+                Q_EMIT itemsStored(0);
+                Q_EMIT writeFinished();
+            },
+            Qt::QueuedConnection);
+
+        return {};
     }
 
     const auto sourceConnectionName = d_ptr->connection()->database().connectionName();
@@ -2106,62 +2337,86 @@ void Storage::storeItems(const BankingItems &items)
     connect(&d_ptr->m_writeWatcher,
             &QFutureWatcher<WriteResult>::progressValueChanged,
             this,
-            [this](int progress) { Q_EMIT progressChanged(progress); });
+            [this](int progress) { Q_EMIT writeProgressChanged(progress); });
 
-    connect(&d_ptr->m_writeWatcher, &QFutureWatcher<WriteResult>::finished, this, [this]() {
-        const auto future = d_ptr->m_writeWatcher.future();
-        if (future.resultCount() == 0) {
-            // Cannot happen through writeItems, which reports on every path. A
-            // cancelled future can end here, and a silent return would leave the
-            // caller waiting for a signal that never comes.
-            qCCritical(lcStorage) << "the storage write ended without a result";
+    const quint64 generation = d_ptr->m_connectionGeneration;
 
-            Q_EMIT errorOccurred(ErrorCode::DatabaseFailure,
-                                 QStringLiteral("The storage write ended without a result"));
-            Q_EMIT itemsStored(0);
-            Q_EMIT finished();
-            return;
-        }
+    connect(&d_ptr->m_writeWatcher,
+            &QFutureWatcher<WriteResult>::finished,
+            this,
+            [this, generation]() {
+                d_ptr->m_writeInFlight = false;
 
-        const auto result = future.result();
-        if (result.error.isError()) {
-            qCCritical(lcStorage) << result.error.message();
+                if (generation != d_ptr->m_connectionGeneration) {
+                    // The storage was closed while this run was going. What it wrote is
+                    // in the file it wrote to, and that file is not the one that is open
+                    // now: a count reported here would be read as the outcome of the
+                    // storage that stands, and whoever refreshes on it would ask a
+                    // connection that is gone. The end is still reported, so that nobody
+                    // waits for a run that is over.
+                    qCInfo(lcStorage) << "dropping the result of a write that outlived its storage";
 
-            Q_EMIT errorOccurred(result.error.code(), result.error.message());
-        } else {
-            qCDebug(lcStorage) << "stored" << result.stored << "items";
-        }
+                    Q_EMIT writeFinished();
+                    return;
+                }
 
-        // The count goes out on both paths. A failure has to be reported with
-        // the number of items that made it, not on its own.
-        Q_EMIT itemsStored(result.stored);
-        Q_EMIT finished();
-    });
+                const auto future = d_ptr->m_writeWatcher.future();
+                if (future.resultCount() == 0) {
+                    // Cannot happen through writeItems, which reports on every path. A
+                    // cancelled future can end here, and a silent return would leave the
+                    // caller waiting for a signal that never comes.
+                    qCCritical(lcStorage) << "the storage write ended without a result";
+
+                    Q_EMIT writeFailed(ErrorCode::DatabaseFailure,
+                                       QStringLiteral("The storage write ended without a result"));
+                    Q_EMIT itemsStored(0);
+                    Q_EMIT writeFinished();
+                    return;
+                }
+
+                const auto result = future.result();
+                if (result.error.isError()) {
+                    qCCritical(lcStorage) << result.error.message();
+
+                    Q_EMIT writeFailed(result.error.code(), result.error.message());
+                } else {
+                    qCDebug(lcStorage) << "stored" << result.stored << "items";
+                }
+
+                // The count goes out on both paths. A failure has to be reported with
+                // the number of items that made it, not on its own.
+                Q_EMIT itemsStored(result.stored);
+                Q_EMIT writeFinished();
+            });
+
+    d_ptr->m_writeInFlight = true;
 
     d_ptr->m_writeWatcher.setFuture(QtConcurrent::run(&Private::writeItems,
                                                       sourceConnectionName,
                                                       d_ptr->m_key,
                                                       d_ptr->storageFileName(),
                                                       items));
+
+    return {};
 }
 
-void Storage::receiveItems(const ItemQuery &query)
+Error Storage::receiveItems(const ItemQuery &query)
 {
-    const auto reportError = [this](ErrorCode code, const QString &message) {
+    // See storeItems: a call that starts no run answers its caller and emits
+    // nothing.
+    const auto refuse = [](ErrorCode code, const QString &message) {
         qCCritical(lcStorage) << message;
 
-        Q_EMIT errorOccurred(code, message);
-        Q_EMIT finished();
+        return Error(code, message);
     };
 
-    // The window used to travel into the statement unchecked. A negative offset
-    // or a limit of INT_MAX is not a query anyone meant to run.
+    // A negative offset or a limit of INT_MAX is not a query anyone meant to
+    // run, and neither belongs in a statement.
     if (query.limit < 1 || query.limit > MaxItemsPerQuery || query.offset < 0) {
-        reportError(ErrorCode::InvalidInput,
-                    QStringLiteral("Invalid window: limit=%1 offset=%2")
-                        .arg(query.limit)
-                        .arg(query.offset));
-        return;
+        return refuse(ErrorCode::InvalidInput,
+                      QStringLiteral("Invalid window: limit=%1 offset=%2")
+                          .arg(query.limit)
+                          .arg(query.offset));
     }
 
     // The account goes over transactions.unique_account_id, the identifier the
@@ -2177,11 +2432,22 @@ void Storage::receiveItems(const ItemQuery &query)
                           || query.to.isValid() || query.direction != Direction::Any;
 
     if (filtered && query.type != StorageTransaction) {
-        reportError(ErrorCode::InvalidInput,
-                    QStringLiteral("A filter is defined for transactions only, not for %1")
-                        .arg(QString::fromUtf8(
-                            QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
-        return;
+        return refuse(ErrorCode::InvalidInput,
+                      QStringLiteral("A filter is defined for transactions only, not for %1")
+                          .arg(QString::fromUtf8(
+                              QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
+    }
+
+    // The same for the column a read orders by. Every value of SortColumn names
+    // a column of the transactions table, so one of them on another type reaches
+    // the statement as an ORDER BY over a column that table does not carry. The
+    // caller would get a failure of the database in place of the answer the
+    // check above gives for the very same mistake.
+    if (query.sort != SortColumn::None && query.type != StorageTransaction) {
+        return refuse(ErrorCode::InvalidInput,
+                      QStringLiteral("A sort column is defined for transactions only, not for %1")
+                          .arg(QString::fromUtf8(
+                              QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
     }
 
     auto table = QString();
@@ -2200,40 +2466,39 @@ void Storage::receiveItems(const ItemQuery &query)
         // These two have no table of their own in the schema. The branches used
         // to be empty, which ended in a message that named the previous statement
         // instead of the cause.
-        reportError(ErrorCode::NotImplemented,
-                    QStringLiteral("Reading items of type %1 is not implemented")
-                        .arg(QString::fromUtf8(
-                            QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
-        return;
+        return refuse(ErrorCode::NotImplemented,
+                      QStringLiteral("Reading items of type %1 is not implemented")
+                          .arg(QString::fromUtf8(
+                              QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
     }
 
-    const auto columnList = d_ptr->tableColumns(table);
-    if (columnList.isEmpty()) {
-        reportError(ErrorCode::DatabaseFailure,
-                    QStringLiteral("No columns found for the table %1").arg(table));
-        return;
-    }
-
+    // Before the columns are asked for, because that asks the file. Without a
+    // connection the question ends in a message about the columns of a table,
+    // which names neither the cause nor a remedy.
     if (d_ptr->connection() == nullptr || !d_ptr->connection()->isOpen()) {
-        reportError(ErrorCode::DatabaseFailure,
-                    QStringLiteral("No open storage connection for %1")
-                        .arg(d_ptr->storageFileName()));
-        return;
+        return refuse(ErrorCode::DatabaseFailure,
+                      QStringLiteral("No open storage connection for %1")
+                          .arg(d_ptr->storageFileName()));
     }
 
     // A second run while one is still going would open a second reader and lose
     // the watcher of the first. Nothing in the application does it, and this
     // says so instead of leaving it to chance.
-    if (d_ptr->m_readWatcher.isRunning()) {
-        reportError(ErrorCode::InvalidInput,
-                    QStringLiteral("A read of the storage is already running"));
-        return;
+    if (d_ptr->m_readInFlight) {
+        return refuse(ErrorCode::Busy, QStringLiteral("A read of the storage is already running"));
     }
 
-    // Everything above is cheap and answers a programming error at once. What
-    // follows is the part that reads the file, and it is what must not sit in
-    // the calling thread: a window of a thousand accounts costs a second query
-    // per account for its balance and its reference accounts.
+    const auto columnList = d_ptr->tableColumns(table);
+    if (columnList.isEmpty()) {
+        return refuse(ErrorCode::DatabaseFailure,
+                      QStringLiteral("No columns found for the table %1").arg(table));
+    }
+
+    // Everything above answers its caller at once, the column query included:
+    // that one asks the file, but for the shape of a single table. What follows
+    // is the part that reads the holding, and it is what must not sit in the
+    // calling thread: a window of a thousand accounts costs a second query per
+    // account for its balance and its reference accounts.
     const auto sourceConnectionName = d_ptr->connection()->database().connectionName();
 
     // The connections are made before the run is started. A short read could
@@ -2243,12 +2508,14 @@ void Storage::receiveItems(const ItemQuery &query)
     connect(&d_ptr->m_readWatcher,
             &QFutureWatcher<ReadResult>::progressValueChanged,
             this,
-            [this](int progress) { Q_EMIT progressChanged(progress); });
+            [this](int progress) { Q_EMIT readProgressChanged(progress); });
 
-    const quint64 generation = d_ptr->m_readGeneration;
+    const quint64 generation = d_ptr->m_connectionGeneration;
 
     connect(&d_ptr->m_readWatcher, &QFutureWatcher<ReadResult>::finished, this, [this, generation]() {
-        if (generation != d_ptr->m_readGeneration) {
+        d_ptr->m_readInFlight = false;
+
+        if (generation != d_ptr->m_connectionGeneration) {
             // The storage was closed while this run was going, and the file it
             // read is not the one that is open now. Handing the records on would
             // show the accounts of the previous storage under the name of the
@@ -2256,7 +2523,7 @@ void Storage::receiveItems(const ItemQuery &query)
             // waits for a run that is over.
             qCInfo(lcStorage) << "dropping the result of a read that outlived its storage";
 
-            Q_EMIT finished();
+            Q_EMIT readFinished();
             return;
         }
 
@@ -2267,9 +2534,9 @@ void Storage::receiveItems(const ItemQuery &query)
             // caller waiting for a signal that never comes.
             qCCritical(lcStorage) << "the storage read ended without a result";
 
-            Q_EMIT errorOccurred(ErrorCode::DatabaseFailure,
-                                 QStringLiteral("The storage read ended without a result"));
-            Q_EMIT finished();
+            Q_EMIT readFailed(ErrorCode::DatabaseFailure,
+                              QStringLiteral("The storage read ended without a result"));
+            Q_EMIT readFinished();
             return;
         }
 
@@ -2287,14 +2554,16 @@ void Storage::receiveItems(const ItemQuery &query)
         if (result.error.isError()) {
             qCCritical(lcStorage) << result.error.message();
 
-            Q_EMIT errorOccurred(result.error.code(), result.error.message());
-            Q_EMIT finished();
+            Q_EMIT readFailed(result.error.code(), result.error.message());
+            Q_EMIT readFinished();
             return;
         }
 
         Q_EMIT itemsReceived(result.items);
-        Q_EMIT finished();
+        Q_EMIT readFinished();
     });
+
+    d_ptr->m_readInFlight = true;
 
     d_ptr->m_readWatcher.setFuture(QtConcurrent::run(&Private::readItems,
                                                      sourceConnectionName,
@@ -2303,6 +2572,8 @@ void Storage::receiveItems(const ItemQuery &query)
                                                      table,
                                                      columnList,
                                                      query));
+
+    return {};
 }
 
 Result<QDate> Storage::latestTransactionDate(quint32 uniqueAccountId)

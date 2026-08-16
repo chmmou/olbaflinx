@@ -97,6 +97,7 @@ private:
     }
 
 private Q_SLOTS:
+    void initTestCase();
     void init();
     void cleanup();
 
@@ -110,6 +111,20 @@ private Q_SLOTS:
     void aStatusMessageIsAnnounced();
     void anEmptyStatusMessageIsNotAnnounced();
 };
+
+void AppAccessibilityTest::initTestCase()
+{
+    // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
+    QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    //
+    // This target builds windows, and a window writes its dock layout and its
+    // geometry through the storage when it goes.
+    QVERIFY(TestHelpers::useTemporaryHome());
+}
 
 void AppAccessibilityTest::init()
 {

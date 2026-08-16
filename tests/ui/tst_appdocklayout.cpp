@@ -119,22 +119,37 @@ private Q_SLOTS:
     void resettingBringsTheGroupingBack();
     void aResetOutlivesTheWindow();
     void resettingWaitsForAnOpenStorage();
+
+    void theSizeIsWrittenOnceTheWindowComesToRest();
+    void aWindowClosedRightAfterAResizeKeepsItsLastSize();
 };
 
 void AppDockLayoutTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 }
 
 /**
  * The saved arrangement lives in the settings and outlives a single window, so it
  * would carry from one test into the next.
+ *
+ * The geometry goes with it. A window that was resized writes its position and
+ * its size on the way out, and initialize applies both: the functions that
+ * measure where the dock areas sit would otherwise start on whatever size the
+ * function before them left behind.
  */
 void AppDockLayoutTest::init()
 {
     Storage storage(applicationInfo());
     storage.storeSetting(QStringLiteral("DockLayout"), QByteArray(), QStringLiteral("App"));
+    storage.storeSetting(QStringLiteral("Position"), QPoint(), QStringLiteral("App"));
+    storage.storeSetting(QStringLiteral("Size"), QSize(), QStringLiteral("App"));
 }
 
 /**
@@ -538,6 +553,74 @@ void AppDockLayoutTest::resettingWaitsForAnOpenStorage()
     // And it goes back to grey on the way out.
     app.closeStorage();
     QVERIFY(!reset->isEnabled());
+}
+
+/**
+ * A drag across the screen raises one resize event per step, and each of them
+ * used to write two settings. The write goes to QSettings and reaches the file
+ * system, in the thread that draws the window.
+ *
+ * It is put off until the window comes to rest instead. The first size below is
+ * therefore not in the settings while the second resize is still coming.
+ */
+void AppDockLayoutTest::theSizeIsWrittenOnceTheWindowComesToRest()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    App app(&logger, &storage);
+    showOnBankingPage(app);
+
+    const auto storedSize = [&storage] {
+        return storage.setting(QStringLiteral("Size"), QStringLiteral("App"), QSize()).toSize();
+    };
+
+    // Showing the window raises resize events of its own, and waiting for it to
+    // be exposed turns the event loop for as long as that takes. On a loaded
+    // machine the span the write is put off by runs out in there, so what this
+    // measures against is set here rather than taken on trust.
+    storage.storeSetting(QStringLiteral("Size"), QSize(), QStringLiteral("App"));
+    QCOMPARE(storedSize(), QSize());
+
+    app.resize(QSize(820, 560));
+
+    // The event that carries the first size goes through, so that what stands
+    // below is the span and not an event that never arrived.
+    QCoreApplication::processEvents();
+
+    app.resize(QSize(840, 580));
+
+    // Neither of the two has been written. A run that wrote per event would hold
+    // the first size here.
+    QCOMPARE(storedSize(), QSize());
+
+    // And the last one arrives once the window has stood still.
+    QTRY_COMPARE_WITH_TIMEOUT(storedSize(), QSize(840, 580), 5000);
+}
+
+/**
+ * The window that is closed right after a drag. Its write is still pending and
+ * the timer will not fire any more, so the size would be lost.
+ */
+void AppDockLayoutTest::aWindowClosedRightAfterAResizeKeepsItsLastSize()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    {
+        App app(&logger, &storage);
+        showOnBankingPage(app);
+
+        app.resize(QSize(880, 600));
+
+        // The event that puts the write off has to arrive, otherwise nothing is
+        // pending when the window goes and the test would pass over a window
+        // that never noticed the resize at all.
+        QCoreApplication::processEvents();
+    }
+
+    QCOMPARE(storage.setting(QStringLiteral("Size"), QStringLiteral("App"), QSize()).toSize(),
+             QSize(880, 600));
 }
 
 } // namespace olbaflinx::ui::tests

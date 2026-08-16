@@ -69,8 +69,19 @@ void appendToLogFile(QtMsgType type, const QMessageLogContext &context, const QS
 {
     // The console keeps what it always had. The file is what a user who starts
     // the program from a menu can be asked for.
-    if (s_previousHandler != nullptr) {
-        s_previousHandler(type, context, message);
+    //
+    // Read under the lock and called outside it. The pointer is replaced under
+    // the lock while other threads log, and a handler that logs in turn would
+    // wait for a lock this call still held.
+    QtMessageHandler previousHandler = nullptr;
+
+    {
+        const QMutexLocker locker(&s_logMutex);
+        previousHandler = s_previousHandler;
+    }
+
+    if (previousHandler != nullptr) {
+        previousHandler(type, context, message);
     }
 
     const QMutexLocker locker(&s_logMutex);
@@ -95,7 +106,28 @@ void appendToLogFile(QtMsgType type, const QMessageLogContext &context, const QS
 Logger::Logger(QObject *parent)
     : QObject(parent)
 {}
-Logger::~Logger() = default;
+
+Logger::~Logger()
+{
+    // enable() puts this instance into s_owner, hands a QFile to a static
+    // pointer and installs the message handler. A member of this class holds
+    // none of it, so nothing of it is undone by leaving the scope: s_owner would
+    // stay behind pointing at an object that is gone, and the next failed write
+    // would emit a signal on it.
+    //
+    // Only the instance that took the log down takes it down. A second logger
+    // that never enabled anything must not close the file another one keeps.
+    bool owns = false;
+
+    {
+        const QMutexLocker locker(&s_logMutex);
+        owns = s_owner == this;
+    }
+
+    if (owns) {
+        disable();
+    }
+}
 
 QString Logger::defaultLogFile()
 {
@@ -113,7 +145,7 @@ void Logger::enable(LoggerLevel level, const QString &logFile)
         // A path is a sequence of bytes for the file system, not text for a
         // reader. toLocal8Bit answers the locale codec, which drops what it
         // cannot map; encodeName answers what open() actually needs. On a path
-        // with characters outside the locale the logger used to open the wrong
+        // with characters outside the locale the other way opens the wrong
         // file, or none.
         const QByteArray encodedLogFile = QFile::encodeName(logFile);
 
@@ -124,6 +156,17 @@ void Logger::enable(LoggerLevel level, const QString &logFile)
                          logFile.isEmpty() ? GWEN_LoggerType_Console : GWEN_LoggerType_File,
                          GWEN_LoggerFacility_User);
         GWEN_Logger_SetLevel(OLBAFLINX_CORE_LOGDOMAIN, (GWEN_LOGGER_LEVEL) level);
+
+        // Whoever opened the domain is the one who closes it. Noted here rather
+        // than below, because a call without a file opens it just the same and
+        // would otherwise leave no owner at all: the domain would outlive every
+        // instance, and the next call would find it open, skip the open and the
+        // level with it, and log to the console at the level of the first
+        // call.
+        const QMutexLocker locker(&s_logMutex);
+        if (s_owner == nullptr) {
+            s_owner = this;
+        }
     }
 
     if (logFile.isEmpty()) {
@@ -134,7 +177,12 @@ void Logger::enable(LoggerLevel level, const QString &logFile)
 
     {
         const QMutexLocker locker(&s_logMutex);
-        if (s_logFile != nullptr) {
+
+        // The file goes with the domain and both go with one owner. An instance
+        // that found the domain open is not that owner, and a file it opened
+        // here would be closed by the destructor of the one that is: the owner
+        // would then log to nothing while it still counts as enabled.
+        if (s_logFile != nullptr || (s_owner != nullptr && s_owner != this)) {
             return;
         }
 

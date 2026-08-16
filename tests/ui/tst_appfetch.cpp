@@ -200,6 +200,8 @@ private Q_SLOTS:
     void theWindowIsNotClosedWhileAFetchRuns();
     void theQuitEntryGoesThroughTheSameRefusalAsClosing();
     void theAccountTreeTakesUpWhatWasWrittenPastTheWindow();
+    void aRefreshThatFindsNoAccountDoesNotEmptyTheTreeLater();
+    void theAccountTreeShowsMoreAccountsThanOneDefaultWindowHolds();
     void theRegistrationKeyIsNotEmptyWhenTheBankingLayerComesUp();
     void theWindowComesUpBesideAnInstanceOfTheWizard();
     void theSpanOfTheCachedCredentialRunsAfterAFetchAndNotDuringIt();
@@ -215,6 +217,11 @@ private Q_SLOTS:
 void AppFetchTest::initTestCase()
 {
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 
     bankingHome = std::make_unique<QTemporaryDir>();
     QVERIFY(bankingHome->isValid());
@@ -281,6 +288,12 @@ void AppFetchTest::theActionStartsAFetchForTheChosenAccount()
 
     const auto outcome = endedSpy.first().first().value<AccountFetch::Outcome>();
     QCOMPARE(outcome, AccountFetch::Outcome::Skipped);
+
+    // This account carries no backend, which is the one case the outcome stands
+    // for. An account the bank holds no order for has online access and ends in
+    // NothingOffered; the two used to share this value, and the window told the
+    // user of both that the account had no online access.
+    QVERIFY(app.statusBar()->currentMessage().contains(QStringLiteral("no online access")));
 }
 
 /**
@@ -445,8 +458,8 @@ void AppFetchTest::aFailureDuringAFetchIsNoFailureOfTheAccountView()
 
     Q_EMIT fetch->started();
 
-    Q_EMIT storage.errorOccurred(ErrorCode::DatabaseFailure,
-                                 QStringLiteral("INSERT INTO transactions failed"));
+    Q_EMIT storage.writeFailed(ErrorCode::DatabaseFailure,
+                               QStringLiteral("INSERT INTO transactions failed"));
 
     // The status bar is where it belongs, and the accounts side is untouched.
     QCOMPARE(app.statusBar()->currentMessage(), userMessage(ErrorCode::DatabaseFailure));
@@ -455,8 +468,8 @@ void AppFetchTest::aFailureDuringAFetchIsNoFailureOfTheAccountView()
     Q_EMIT fetch->ended(AccountFetch::Outcome::Failed, 0, QStringLiteral("no bank"));
 
     // The same failure outside a fetch still reaches the view it belongs to.
-    Q_EMIT storage.errorOccurred(ErrorCode::DatabaseFailure,
-                                 QStringLiteral("INSERT INTO transactions failed"));
+    Q_EMIT storage.writeFailed(ErrorCode::DatabaseFailure,
+                               QStringLiteral("INSERT INTO transactions failed"));
 
     QCOMPARE(notice->text(), userMessage(ErrorCode::DatabaseFailure));
 }
@@ -658,6 +671,101 @@ void AppFetchTest::theAccountTreeTakesUpWhatWasWrittenPastTheWindow()
 }
 
 /**
+ * A single shot connection only parts once its signal has fired. Every way out
+ * of a read that brings no record leaves it standing, and the empty account
+ * table is a case the application itself treats as an everyday one.
+ *
+ * The connection then took the result of the next read. That one carries
+ * transactions; the tree cannot build an account from one, so it emptied itself
+ * and dropped the choice of the user with it.
+ */
+void AppFetchTest::aRefreshThatFindsNoAccountDoesNotEmptyTheTreeLater()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putAccount(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    QVERIFY(UiTestHelpers::showTheWindow(app));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    auto *const treeModel = app.findChild<AccountTreeModel *>();
+    auto *const transactionModel = app.findChild<TransactionTableModel *>();
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+    QCOMPARE(treeModel->rowCount(), 1);
+
+    // The account leaves the table, so the refresh below finds nothing and
+    // reports no records at all.
+    QVERIFY(TestHelpers::runStatement(storageFile(),
+                                      password(),
+                                      QStringLiteral("DELETE FROM accounts;")));
+
+    QSignalSpy readFinishedSpy(&storage, &Storage::readFinished);
+
+    app.refreshAccounts();
+    QTRY_COMPARE_WITH_TIMEOUT(readFinishedSpy.count(), 1, workerTimeoutMs);
+
+    // The tree kept what it had: nothing was handed to it.
+    QCOMPARE(treeModel->rowCount(), 1);
+
+    // Bookings for the account that is chosen, and a read of them. Their records
+    // travel through the same signal the refresh above was listening for.
+    QVERIFY(putAccount(storage));
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                testAccountId,
+                                                3,
+                                                QStringLiteral("Miete")));
+
+    transactionModel->setAccountId(testAccountId);
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+
+    // The tree still shows its bank and its account. A connection left standing
+    // would have handed it three bookings, which it answers with an empty tree.
+    QCOMPARE(treeModel->rowCount(), 1);
+    QCOMPARE(treeModel->rowCount(treeModel->index(0, 0)), 1);
+}
+
+/**
+ * The tree replaces its whole content and pages through nothing, so the read
+ * behind it has to bring the whole holding. It used to leave the window of a
+ * read at its default of fifty: whoever keeps more accounts than that saw the
+ * first fifty after every fetch and the rest nowhere, and the account he had
+ * chosen was gone from the tree along with them.
+ */
+void AppFetchTest::theAccountTreeShowsMoreAccountsThanOneDefaultWindowHolds()
+{
+    constexpr int accountCount = 60;
+
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    for (int i = 0; i < accountCount; ++i) {
+        QVERIFY(putAccount(storage, testAccountId + quint32(i)));
+    }
+
+    App app(&logger, &storage, applicationInfo());
+    QVERIFY(UiTestHelpers::showTheWindow(app));
+
+    auto *const treeModel = app.findChild<AccountTreeModel *>();
+    QVERIFY(treeModel != nullptr);
+
+    QSignalSpy readFinishedSpy(&storage, &Storage::readFinished);
+
+    app.refreshAccounts();
+    QTRY_COMPARE_WITH_TIMEOUT(readFinishedSpy.count(), 1, workerTimeoutMs);
+
+    // One bank node, because every account of the helper carries the same bank.
+    QCOMPARE(treeModel->rowCount(), 1);
+    QCOMPARE(treeModel->rowCount(treeModel->index(0, 0)), accountCount);
+}
+
+/**
  * The key names the application to the bank servers. A fourth field of an
  * aggregate stays empty without a word from any compiler, and the application
  * would sign on without one.
@@ -852,8 +960,43 @@ void AppFetchTest::aFetchWithoutNewBookingsSaysSo()
     QVERIFY(!balanceOnly.isEmpty());
     QVERIFY(balanceOnly != withoutAny);
 
+    // An account with online access whose bank holds no order for it at all.
+    // Told apart from an account without online access, which is a matter of
+    // the setup rather than of what the bank offers.
+    Q_EMIT fetch->ended(AccountFetch::Outcome::NothingOffered, 0, QString());
+
+    const QString nothingOffered = app.statusBar()->currentMessage();
+    QVERIFY(!nothingOffered.isEmpty());
+    QVERIFY(nothingOffered != withoutAny);
+    QVERIFY(nothingOffered != balanceOnly);
+
+    Q_EMIT fetch->ended(AccountFetch::Outcome::Skipped, 0, QString());
+
+    QVERIFY(app.statusBar()->currentMessage() != nothingOffered);
+
+    // A run that reached the storage and could not write there. Nothing of it
+    // stayed behind, so the user is told to try again rather than sent looking
+    // for bookings that are not in the file.
+    Q_EMIT fetch->ended(AccountFetch::Outcome::StoreFailed, 0, QString());
+
+    const QString storeFailed = app.statusBar()->currentMessage();
+    QVERIFY(!storeFailed.isEmpty());
+    QVERIFY(storeFailed != withoutAny);
+
+    // The same outcome after the bookings went in and only the balance failed.
+    // They are committed in a run of their own by then, so this must not read
+    // like the line above: whoever fetches again on the strength of that one
+    // finds those records already there and adds none of them.
+    Q_EMIT fetch->ended(AccountFetch::Outcome::StoreFailed, 7, QString());
+
+    const QString storeFailedAfterBookings = app.statusBar()->currentMessage();
+    QVERIFY(!storeFailedAfterBookings.isEmpty());
+    QVERIFY(storeFailedAfterBookings != storeFailed);
+    QVERIFY(storeFailedAfterBookings.contains(QStringLiteral("7")));
+
     // Neither of them names an account or an amount.
-    for (const QString &message : {withoutAny, withSeven, balanceOnly}) {
+    for (const QString &message :
+         {withoutAny, withSeven, balanceOnly, nothingOffered, storeFailed, storeFailedAfterBookings}) {
         QVERIFY(!message.contains(QStringLiteral("DE02")));
         QVERIFY(!message.contains(QStringLiteral("0137075030")));
         QVERIFY(!message.contains(QStringLiteral("12,5")));

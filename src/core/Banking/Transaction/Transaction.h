@@ -68,6 +68,14 @@ public:
 
     ~Transaction() override;
 
+    // The instance owns a C structure and frees it. A copy would hand the same
+    // pointer to two destructors, so the compiler generated ones are withdrawn
+    // rather than left to be called by accident.
+    Transaction(const Transaction &) = delete;
+    Transaction &operator=(const Transaction &) = delete;
+    Transaction(Transaction &&) = delete;
+    Transaction &operator=(Transaction &&) = delete;
+
     /**
      * @brief Creates a transaction from the column values of a database row.
      *

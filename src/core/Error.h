@@ -19,9 +19,12 @@
 
 #include "core/OlbaFlinxCore.h"
 
+#include <QtCore/QException>
 #include <QtCore/QObject>
 #include <QtCore/QString>
 
+#include <exception>
+#include <functional>
 #include <utility>
 
 namespace olbaflinx::core {
@@ -55,6 +58,12 @@ enum class ErrorCode {
     DriverMissing,
     /** The schema of the file does not match the one this build understands. */
     SchemaMismatch,
+    /**
+     * A run of the same kind is already going, and the one that was asked for
+     * was not started. Nothing is wrong with what was asked: the caller may ask
+     * again once the run that holds the way has ended.
+     */
+    Busy,
 };
 Q_ENUM_NS(ErrorCode)
 
@@ -83,5 +92,45 @@ private:
     ErrorCode m_code = ErrorCode::None;
     QString m_message;
 };
+
+/**
+ * @brief Runs the given call and answers what it threw.
+ *
+ * An empty string means it returned. This is for the places that must not let
+ * anything escape: a destructor, which is implicitly noexcept, and a slot,
+ * whose exception would travel into an event loop that does not carry it.
+ *
+ * Asking a caught exception for what() is not enough where the call waits on a
+ * run of QtConcurrent. Anything that run throws and that is not a QException
+ * arrives wrapped in a QUnhandledException, and neither wrapper carries a
+ * what() of its own: asking one answers the name of its base class and says
+ * nothing about the cause. The wrapper is therefore unpacked first.
+ */
+inline QString exceptionOf(const std::function<void()> &call)
+{
+    const auto describe = [](const std::exception_ptr &held) -> QString {
+        if (held) {
+            try {
+                std::rethrow_exception(held);
+            } catch (const std::exception &inner) {
+                return QString::fromUtf8(inner.what());
+            } catch (...) {}
+        }
+
+        return QStringLiteral("an exception of unknown type");
+    };
+
+    try {
+        call();
+    } catch (const QUnhandledException &wrapped) {
+        return describe(wrapped.exception());
+    } catch (const std::exception &exception) {
+        return QString::fromUtf8(exception.what());
+    } catch (...) {
+        return QStringLiteral("an exception of unknown type");
+    }
+
+    return {};
+}
 
 } // namespace olbaflinx::core

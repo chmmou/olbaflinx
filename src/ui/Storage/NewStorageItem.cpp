@@ -21,8 +21,10 @@
 #include "core/Storage/Storage.h"
 #include "ui/Logging.h"
 
+#include <QtCore/QDateTime>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
+#include <QtCore/QFileInfo>
 #include <QtCore/QPointer>
 
 #include <QtGui/QAccessible>
@@ -34,6 +36,7 @@
 #include <QtWidgets/QFormLayout>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QMessageBox>
+#include <QtWidgets/QPushButton>
 
 using namespace olbaflinx::ui::storage;
 using namespace olbaflinx::core::storage;
@@ -100,6 +103,13 @@ NewStorageItem::NewStorageItem(Storage *storage, QWidget *parent, Qt::WindowFlag
     , d_ptr(new Private(this, storage))
 {
     installAccessibleFactory();
+
+    // Made here rather than in the form. A connection declared there becomes a
+    // SIGNAL()/SLOT() call in the generated header, where the slot is named as a
+    // string: renaming one of these two, or taking it out of the slot section,
+    // leaves the build green and the buttons of every entry dead.
+    connect(d_ptr->ui->btnStorageMenu, &QPushButton::clicked, this, &NewStorageItem::showMenu);
+    connect(d_ptr->ui->btnOpenStorage, &QPushButton::clicked, this, &NewStorageItem::openVault);
 }
 
 NewStorageItem::~NewStorageItem()
@@ -113,12 +123,12 @@ void NewStorageItem::setTitle(const QString &title)
     setAccessibleName(title);
 }
 
-void NewStorageItem::setFileInfo(const QString &info) const
+void NewStorageItem::setFileInfo(const QString &info)
 {
     d_ptr->ui->lblFileInfo->setText(info);
 }
 
-void NewStorageItem::setFilePath(const QString &filePath) const
+void NewStorageItem::setFilePath(const QString &filePath)
 {
     d_ptr->ui->lblFilePath->setText(filePath);
 }
@@ -138,10 +148,10 @@ void NewStorageItem::showMenu()
     // anything, and a working one would have to be written first.
     itemMenu->addAction(tr("Information"))->setEnabled(false);
 
-    itemMenu->addAction(tr("Passwort ändern"), this, &NewStorageItem::showPasswordChangeDialog);
+    itemMenu->addAction(tr("Change password"), this, &NewStorageItem::showPasswordChangeDialog);
     itemMenu->addSeparator();
-    itemMenu->addAction(tr("Sicherungen"), this, &NewStorageItem::backupStorage);
-    itemMenu->addAction(tr("Löschen"), this, &NewStorageItem::deleteStorage);
+    itemMenu->addAction(tr("Back up"), this, &NewStorageItem::backupStorage);
+    itemMenu->addAction(tr("Delete"), this, &NewStorageItem::deleteStorage);
 
     connect(itemMenu, &QMenu::aboutToHide, itemMenu, &QMenu::deleteLater);
 
@@ -275,6 +285,12 @@ void NewStorageItem::showPasswordChangeDialog()
 
                 const bool isStorageValid = d_ptr->storage->isValid();
                 if (!isStorageValid) {
+                    // The file is open and decrypted at this point, and the way
+                    // out of this dialog is the only one that closes it again.
+                    // The message below is modal and would hold it open for as
+                    // long as it stands, on a screen that shows no open vault.
+                    d_ptr->storage->close();
+
                     QMessageBox::critical(&pwdChangeDlg,
                                           dlgTitle,
                                           tr("The current password is not correct!"));
@@ -285,6 +301,8 @@ void NewStorageItem::showPasswordChangeDialog()
                 if (const auto error = d_ptr->storage->changeKey(currPassword, newPassword);
                     error.isError()) {
                     qCWarning(lcUiStorage) << "could not change the key:" << error.message();
+
+                    d_ptr->storage->close();
 
                     QMessageBox::critical(&pwdChangeDlg,
                                           dlgTitle,
@@ -330,23 +348,47 @@ void NewStorageItem::deleteStorage()
 
 void NewStorageItem::backupStorage()
 {
-    QString storageBackupPath = d_ptr->storage->storagePath().append(QStringLiteral("/backup"));
-    QDir backupDir(storageBackupPath);
-    if (!backupDir.exists()) {
-        backupDir.mkpath(storageBackupPath);
-    }
+    const QFileInfo info(filePath());
+    const QString name = info.baseName();
 
     QFile storageFile(filePath());
-    if (storageFile.exists()) {
-        // UTC. A backup taken during the hour a daylight saving change repeats
-        // would otherwise sort before one taken an hour earlier.
-        const QString timeStamp = QDateTime::currentDateTimeUtc().toString(
-            QStringLiteral("yyyyMMddhhmmsszzz"));
-
-        QFileInfo info(filePath());
-        const QString storageBackupFile = storageBackupPath.append(QStringLiteral("/%1.%2"))
-                                              .arg(timeStamp, info.completeSuffix());
-
-        storageFile.copy(storageBackupFile);
+    if (!storageFile.exists()) {
+        Q_EMIT message(tr("There is no file to back up for \"%1\".").arg(name));
+        return;
     }
+
+    const QString backupPath = QStringLiteral("%1/backup").arg(d_ptr->storage->storagePath());
+
+    if (!QDir().mkpath(backupPath)) {
+        qCWarning(lcUiStorage) << "could not create the directory for the backups";
+
+        Q_EMIT message(tr("The directory for the backups could not be created. Check the "
+                          "permissions on your home directory."));
+        return;
+    }
+
+    // UTC. A backup taken during the hour a daylight saving change repeats
+    // would otherwise sort before one taken an hour earlier.
+    const QString timeStamp = QDateTime::currentDateTimeUtc().toString(
+        QStringLiteral("yyyyMMddhhmmsszzz"));
+
+    // The name of the vault goes into the file name. The backups of every vault
+    // lie in one directory, and a name built from the time alone leaves them
+    // indistinguishable.
+    const QString backupFile = QStringLiteral("%1/%2-%3.%4")
+                                   .arg(backupPath, name, timeStamp, info.completeSuffix());
+
+    // QFile::copy does not overwrite, so a name that is taken is a failure like
+    // any other. The user is told either way: the dialog that changes a password
+    // points him at a backup, and one he believes he has is worse than none.
+    if (!storageFile.copy(backupFile)) {
+        qCWarning(lcUiStorage) << "could not write a backup:" << storageFile.errorString();
+
+        Q_EMIT message(tr("The backup of \"%1\" could not be written. Check the permissions on "
+                          "the backup directory.")
+                           .arg(name));
+        return;
+    }
+
+    Q_EMIT message(tr("A backup of \"%1\" was written.").arg(name));
 }

@@ -130,12 +130,8 @@ private:
         return entries.size() == 1 ? entries.first() : nullptr;
     }
 
-    std::unique_ptr<QTemporaryDir> workingDirectory;
-    QByteArray previousHome;
-
 private Q_SLOTS:
     void initTestCase();
-    void cleanupTestCase();
     void cleanup();
     void repeatedReloadKeepsTheInfoLabelUsable();
     void dialogDoesNotCloseTheStorageItDoesNotOwn();
@@ -145,7 +141,11 @@ private Q_SLOTS:
     void deletingTheLastStorageBringsTheWelcomeTextBack();
     void cancellingTheConflictMessageLeavesTheDialogStanding();
     void anEntryWhoseFileIsGoneDoesNotShowUp();
+    void anEntryOutsideTheStorageDirectoryDoesNotShowUp();
     void aNameThatLeavesTheDirectoryCreatesNothing();
+    void anEntryReportsWhetherItsBackupWasWritten();
+    void openingWithoutAWindowIsRefusedAndSaidSo();
+    void theButtonsOfAnEntryAreWiredToItsSlots();
     void anEntryReportsItselfAsAGroupUnderItsName();
     void everyControlOfAnEntryCarriesAName_data();
     void everyControlOfAnEntryCarriesAName();
@@ -159,21 +159,10 @@ void StorageDialogTest::initTestCase()
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
 
-    // Test mode alone puts the settings below the home directory, and
-    // Storage::storagePath() derives from the same location. Pointing HOME at a
-    // temporary directory keeps the settings and every storage file this test
-    // creates inside it.
-    workingDirectory = std::make_unique<QTemporaryDir>();
-    QVERIFY(workingDirectory->isValid());
-
-    previousHome = qgetenv("HOME");
-    qputenv("HOME", workingDirectory->path().toLocal8Bit());
-}
-
-void StorageDialogTest::cleanupTestCase()
-{
-    qputenv("HOME", previousHome);
-    workingDirectory.reset();
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 }
 
 /**
@@ -500,6 +489,56 @@ void StorageDialogTest::anEntryWhoseFileIsGoneDoesNotShowUp()
 }
 
 /**
+ * The list of storages is kept in a plain settings file, which is an input from
+ * outside the process like any other. Every entry of the overview reaches
+ * QFile::remove, QFile::copy and setStorageFile from that list, and it used to
+ * be filtered on nothing but whether the file exists.
+ *
+ * An entry pointing at a private key of the user therefore stood in the
+ * overview like a vault of his, and the entry for removing it removed that file.
+ */
+void StorageDialogTest::anEntryOutsideTheStorageDirectoryDoesNotShowUp()
+{
+    QTemporaryDir elsewhere;
+    QVERIFY(elsewhere.isValid());
+
+    const QString outsideFile = elsewhere.filePath(QStringLiteral("id_ed25519"));
+
+    {
+        QFile file(outsideFile);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(QByteArrayLiteral("not a storage")), 13);
+    }
+
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    QCOMPARE(dialog.findChildren<NewStorageItem *>().size(), 1);
+
+    auto paths = storedPaths(storage);
+    QCOMPARE(paths.size(), 1);
+
+    paths.append(outsideFile);
+    storage.storeSetting(QStringLiteral("Paths"), paths, QStringLiteral("Items"));
+
+    dialog.reload();
+
+    // The vault is shown, the foreign file is not, and it leaves the list on the
+    // way. Nothing of it was touched: it is still there and still holds what it
+    // held.
+    QCOMPARE(dialog.findChildren<NewStorageItem *>().size(), 1);
+    QCOMPARE(storedPaths(storage).size(), 1);
+    QVERIFY(!storedPaths(storage).contains(outsideFile));
+
+    QVERIFY(QFileInfo::exists(outsideFile));
+    QCOMPARE(QFileInfo(outsideFile).size(), 13);
+}
+
+/**
  * The dialog refuses a name with a path separator in it, so this cannot be
  * reached through the window. createStorage can be called without it, and a name
  * that walks up a directory would write the file anywhere the process may write.
@@ -712,6 +751,141 @@ void StorageDialogTest::theInformationEntrySaysThatItDoesNotAct()
     QVERIFY(!changeEntry->state().disabled);
 
     menu->close();
+}
+
+/**
+ * The backup used to evaluate neither the directory it creates nor the copy it
+ * makes, and it said nothing either way. QFile::copy does not overwrite, so a
+ * name that is taken is a failure like any other, and the user was left holding
+ * a backup that was never written - while the dialog that changes a password
+ * points him at exactly such a backup.
+ */
+void StorageDialogTest::anEntryReportsWhetherItsBackupWasWritten()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    auto *entry = singleEntryOf(dialog);
+    QVERIFY(entry != nullptr);
+
+    QSignalSpy messageSpy(&dialog, &StorageDialog::message);
+
+    QMetaObject::invokeMethod(entry, "backupStorage");
+
+    QCOMPARE(messageSpy.count(), 1);
+
+    // The name of the vault alone does not tell the two apart: both messages
+    // carry it. What the file says is the one that holds.
+    QVERIFY(messageSpy.takeFirst().at(0).toString().contains(QStringLiteral("was written")));
+
+    // The name of the vault is in the file name, so the backups of two vaults in
+    // one directory can be told apart.
+    const QDir backupDirectory(QStringLiteral("%1/backup").arg(storage.storagePath()));
+    const auto written = backupDirectory.entryList({QStringLiteral("Privat-*")}, QDir::Files);
+
+    QCOMPARE(written.size(), 1);
+
+    // Cleaned up here: the backup directory is not among the files the cleanup
+    // of this class removes.
+    QVERIFY(backupDirectory.exists());
+    QVERIFY(QFile::remove(backupDirectory.filePath(written.first())));
+
+    // The failure path, which is what the reporting was put in for. The vault
+    // file goes and the entry keeps pointing at it, so the copy has nothing to
+    // take. A run that dropped the message here would leave the user believing
+    // he holds a backup, and the password dialog points him at exactly that one.
+    QVERIFY(QFile::remove(entry->filePath()));
+
+    QMetaObject::invokeMethod(entry, "backupStorage");
+
+    QCOMPARE(messageSpy.count(), 1);
+    QVERIFY(messageSpy.takeFirst().at(0).toString().contains(QStringLiteral("no file to back up")));
+
+    QVERIFY(backupDirectory.entryList({QStringLiteral("Privat-*")}, QDir::Files).isEmpty());
+}
+
+/**
+ * The accounts of an opened storage go to the window and nowhere else. The
+ * overview took the pointer it was given for one without asking, so a dialog
+ * built without a window, which the tests do throughout, would have run into a
+ * null pointer the moment a storage was opened through it.
+ */
+void StorageDialogTest::openingWithoutAWindowIsRefusedAndSaidSo()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    auto *entry = singleEntryOf(dialog);
+    QVERIFY(entry != nullptr);
+
+    auto *field = fieldOf(entry, QStringLiteral("leStoragePassword"));
+    QVERIFY(field != nullptr);
+    field->setText(password());
+
+    QSignalSpy messageSpy(&dialog, &StorageDialog::message);
+    QSignalSpy openedSpy(&dialog, &StorageDialog::storageOpened);
+
+    QMetaObject::invokeMethod(entry, "openVault");
+
+    // Said, and nothing opened. Nothing is unlocked that cannot be shown.
+    QCOMPARE(messageSpy.count(), 1);
+    QVERIFY(!messageSpy.takeFirst().at(0).toString().isEmpty());
+    QCOMPARE(openedSpy.count(), 0);
+}
+
+/**
+ * Both buttons of an entry used to be wired in the form, which turns into a
+ * SIGNAL()/SLOT() call in the generated header. A rename of either slot left the
+ * build green and the buttons of every entry dead. They are wired in pointer
+ * syntax now, and this holds the wiring itself.
+ */
+void StorageDialogTest::theButtonsOfAnEntryAreWiredToItsSlots()
+{
+    Storage storage(applicationInfo());
+    storage.storeSetting(QStringLiteral("Paths"), QStringList(), QStringLiteral("Items"));
+
+    StorageDialog dialog(&storage);
+    dialog.initialize(nullptr);
+
+    QVERIFY(dialog.createStorage(QStringLiteral("Privat"), password()));
+    dialog.reload();
+
+    auto *entry = singleEntryOf(dialog);
+    QVERIFY(entry != nullptr);
+
+    auto *const menuButton = entry->findChild<QPushButton *>(QStringLiteral("btnStorageMenu"));
+    auto *const openButton = entry->findChild<QPushButton *>(QStringLiteral("btnOpenStorage"));
+
+    QVERIFY(menuButton != nullptr);
+    QVERIFY(openButton != nullptr);
+
+    // The menu is built on demand, so its presence is what says the button
+    // reached the slot.
+    QVERIFY(entry->findChild<QMenu *>() == nullptr);
+
+    menuButton->click();
+
+    auto *const menu = entry->findChild<QMenu *>();
+    QVERIFY(menu != nullptr);
+    menu->close();
+
+    QSignalSpy openedSpy(entry, &NewStorageItem::storageOpened);
+
+    openButton->click();
+
+    QCOMPARE(openedSpy.count(), 1);
 }
 
 } // namespace olbaflinx::ui::storage::tests

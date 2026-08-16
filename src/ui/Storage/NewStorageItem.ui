@@ -216,42 +216,4 @@
  <resources>
   <include location="../../../res/app.qrc"/>
  </resources>
- <connections>
-  <connection>
-   <sender>btnStorageMenu</sender>
-   <signal>clicked()</signal>
-   <receiver>UiNewStorageItem</receiver>
-   <slot>showMenu()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>389</x>
-     <y>39</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>269</x>
-     <y>101</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>btnOpenStorage</sender>
-   <signal>clicked()</signal>
-   <receiver>UiNewStorageItem</receiver>
-   <slot>openVault()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>353</x>
-     <y>74</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>155</x>
-     <y>102</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
- <slots>
-  <slot>showMenu()</slot>
-  <slot>openVault()</slot>
- </slots>
 </ui>

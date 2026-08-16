@@ -53,8 +53,8 @@ public:
 
     void unregisterTheme(const QString &name)
     {
-        // The condition used to ask for the absence of the key before removing
-        // it, so a registered theme could never be taken out again.
+        // Asked for the presence of the key, not its absence: a registered
+        // theme is what there is to take out.
         if (const auto themKey = themeName(name); themes.contains(themKey)) {
             themes.remove(themKey);
         }
@@ -63,10 +63,10 @@ public:
     /**
      * Reads every registered theme and hands the lot to the application at once.
      *
-     * The loop used to look the value of the iterator up as if it were a key,
-     * which answers with an empty path, so its body never opened a file. Each
-     * round also replaced the whole style sheet rather than adding to it, which
-     * left only the last theme in effect.
+     * The loop takes the value of the iterator, not another lookup with it as a
+     * key, which would answer with an empty path and open no file. What it
+     * gathers is added to the style sheet rather than replacing it, so that more
+     * than the last theme is in effect.
      */
     void reloadTheme()
     {
@@ -105,8 +105,8 @@ public:
 
 private:
     /**
-     * A theme that cannot be read costs its own rules, not those of the others.
-     * The failure used to pass without a word.
+     * A theme that cannot be read costs its own rules, not those of the others,
+     * and the failure is noted rather than passed over.
      */
     QString readTheme(const QString &path) const
     {

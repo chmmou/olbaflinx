@@ -131,16 +131,22 @@ public:
      * @brief Whether a read this model asked for is still going.
      *
      * It tells a failure that belongs to this model from one that belongs to
-     * another reader. The storage reports every failure through the same signal
-     * and names no owner.
+     * another reader. The storage names no owner on its read signals, and a
+     * second reader of the same file is not ruled out.
      */
     [[nodiscard]] bool isReading() const;
 
     /**
      * @brief The storage the model reads from.
      *
-     * Externally owned and has to outlive the model. Passing nullptr detaches
-     * it; the model then keeps what it holds and asks for nothing.
+     * Externally owned and has to outlive the model.
+     *
+     * The rows and the state of a running request go with the storage they
+     * belong to: a read that was going is cut off in this very call and its end
+     * will never arrive here, and a model that kept waiting for it would queue
+     * every later request instead of sending it. The model is therefore empty
+     * afterwards, whether nullptr or another storage was passed, and refresh()
+     * is what fills it again.
      */
     void setStorage(olbaflinx::core::storage::Storage *storage);
 
@@ -241,6 +247,33 @@ Q_SIGNALS:
      */
     void totalRowsChanged(int totalRows);
 
+    /**
+     * @brief This signal is emitted when the model ordered by something else.
+     *
+     * A click on a header is not the only way the order changes: giving up the
+     * account puts it back to the default, and a header indicator that was set
+     * once at setup would then show a column the rows no longer stand under.
+     * Whoever draws the indicator hangs it on this.
+     *
+     * @param column One of Column.
+     * @param order Ascending or descending.
+     */
+    void sortChanged(int column, Qt::SortOrder order);
+
+    /**
+     * @brief This signal is emitted when the storage turned a request down.
+     *
+     * A refusal reaches the caller through the return value alone, so none of
+     * the signals of the read path carries it and whoever shows failures to the
+     * user would never learn of this one. The view falls back on the words for
+     * an account without transactions otherwise, which is not merely silence
+     * but the wrong answer.
+     *
+     * @param code The machine readable cause.
+     * @param reason The technical message. It is not for the screen.
+     */
+    void readRefused(olbaflinx::core::ErrorCode code, const QString &reason);
+
 private:
     /**
      * What the view opens with, and what it returns to once no account is shown.
@@ -250,6 +283,7 @@ private:
     static constexpr Column DefaultSortColumn = DateColumn;
     static constexpr Qt::SortOrder DefaultSortOrder = Qt::DescendingOrder;
 
+    void applySort(Column column, Qt::SortOrder order);
     void startOver();
     void requestItems();
     void appendItems(const olbaflinx::core::banking::BankingItems &items);
@@ -279,6 +313,14 @@ private:
 
     bool m_pending = false;
     bool m_queued = false;
+
+    /**
+     * Whether a request was put off because the storage had a read going that
+     * this model did not start. Told apart from m_queued, which stands for a
+     * request that overtook one of this model's own: this one waits for the end
+     * of a run that belongs to somebody else.
+     */
+    bool m_deferred = false;
 
     /**
      * How many rows the storage has handed over, which is where the next page

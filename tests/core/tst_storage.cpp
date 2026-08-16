@@ -131,7 +131,7 @@ private Q_SLOTS:
     void changeKeyMakesOldPasswordInvalid();
     void settingReturnsTheDefaultForAnUnknownKey();
     void storeSettingPersistsValueUnderGroup();
-    void storeItemPersistsAccountAndEmitsFinished();
+    void storeItemPersistsAccountWithoutEmittingASignal();
     void storeItemKeepsBalanceAndReferenceAccounts();
     void anAccountSurvivesAReopenWithEveryVisibleProperty();
     void storingTheSameAccountTwiceLeavesOneRow();
@@ -150,16 +150,25 @@ private Q_SLOTS:
     void aRestrictionToIncomingLetsNoDebitThrough();
     void aPercentSignInTheSearchTextIsLookedForAsACharacter();
     void closingWhileAReadIsGoingDropsItsResult();
+    void closingWhileAWriteIsGoingDropsItsCount();
     void storeItemsReturnsBeforeTheAccountsAreWritten();
     void storeItemsSignalsArriveInOrderAndInTheCallingThread();
     void storeItemsRefusesASecondRunWhileOneIsGoing();
     void manyWritesLeaveNoConnectionBehind();
+    void aReadAndAWriteEachReportOnlyTheirOwnEnd();
+    void aRunWithoutRecordsReportsToWhoeverListensAfterTheCall();
+    void anOpenStorageSaysSoAndAClosedOneDoesNot();
 };
 
 void StorageTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 }
 
 /**
@@ -330,12 +339,19 @@ void StorageTest::storeSettingPersistsValueUnderGroup()
     QCOMPARE(read, written);
 }
 
-void StorageTest::storeItemPersistsAccountAndEmitsFinished()
+/**
+ * storeItem answers through its return value and emits nothing. A signal beside
+ * it would reach the receivers of a run of storeItems, which this is not, and
+ * would tell one of them that a write of its own had ended.
+ */
+void StorageTest::storeItemPersistsAccountWithoutEmittingASignal()
 {
     Storage storage(applicationInfo());
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy readFinishedSpy(&storage, &Storage::readFinished);
+    QSignalSpy writeFinishedSpy(&storage, &Storage::writeFinished);
+    QSignalSpy writeFailedSpy(&storage, &Storage::writeFailed);
 
     QVERIFY(!storage.setKey(password()).isError());
     storage.setStorageFile(storageFile());
@@ -352,15 +368,18 @@ void StorageTest::storeItemPersistsAccountAndEmitsFinished()
     QVERIFY(!storage.storeItem(first.get()).isError());
     QVERIFY(!storage.storeItem(second.get()).isError());
 
-    // Every completed write reports finished once, which is where two of the
-    // three emissions come from.
-    QCOMPARE(finishedSpy.count(), 2);
+    QCOMPARE(writeFinishedSpy.count(), 0);
+    QCOMPARE(writeFailedSpy.count(), 0);
+    QCOMPARE(readFinishedSpy.count(), 0);
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
-    QCOMPARE(finishedSpy.count(), 3);
+    QCOMPARE(readFinishedSpy.count(), 1);
+
+    // The read ended, the write path stayed silent throughout.
+    QCOMPARE(writeFinishedSpy.count(), 0);
 
     const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
     QCOMPARE(items.size(), 2);
@@ -397,7 +416,7 @@ void StorageTest::storeItemKeepsBalanceAndReferenceAccounts()
 
     QVERIFY(!storage.storeItem(account.get()).isError());
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
@@ -447,7 +466,7 @@ void StorageTest::anAccountSurvivesAReopenWithEveryVisibleProperty()
     storage.setStorageFile(file);
     QVERIFY(!storage.initialize(true).isError());
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
     QVERIFY(itemsSpy.wait(workerTimeout));
 
     const auto items = qvariant_cast<BankingItems>(itemsSpy.takeFirst().at(0));
@@ -685,11 +704,11 @@ void StorageTest::receiveItemsReturnsBeforeTheItemsArrive()
     }
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
 
     const int finishedBefore = finishedSpy.count();
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     // Straight after the call. No event has been processed yet, so nothing can
     // have been delivered even if the worker were already done.
@@ -725,7 +744,7 @@ void StorageTest::receiveItemsSignalsArriveInOrderAndInTheCallingThread()
     QStringList order;
     QList<QThread *> threads;
 
-    connect(&storage, &Storage::progressChanged, &storage, [&](int) {
+    connect(&storage, &Storage::readProgressChanged, &storage, [&](int) {
         if (order.isEmpty() || order.last() != QStringLiteral("progress")) {
             order << QStringLiteral("progress");
         }
@@ -737,13 +756,13 @@ void StorageTest::receiveItemsSignalsArriveInOrderAndInTheCallingThread()
         threads << QThread::currentThread();
     });
 
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
-    connect(&storage, &Storage::finished, &storage, [&]() {
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
+    connect(&storage, &Storage::readFinished, &storage, [&]() {
         order << QStringLiteral("finished");
         threads << QThread::currentThread();
     });
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     QVERIFY(finishedSpy.wait(workerTimeout));
 
@@ -763,6 +782,11 @@ void StorageTest::receiveItemsSignalsArriveInOrderAndInTheCallingThread()
  * The failure case for the second run. Two readers on one storage are not
  * provided for, and the watcher of the first would be lost. Refused with an
  * error rather than left to chance.
+ *
+ * The refusal goes to whoever asked and to nobody else. It used to travel as
+ * readFailed and readFinished, which are the signals of a run: whoever was
+ * waiting for the run that was still going took them for its end, parted from
+ * the records it had asked for, and never saw them arrive.
  */
 void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
 {
@@ -777,21 +801,26 @@ void StorageTest::receiveItemsRefusesASecondRunWhileOneIsGoing()
         QVERIFY(!storage.storeItem(account.get()).isError());
     }
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     // The first run is still going, this thread has not processed an event since
     // it started. The refusal comes back in this thread, before any waiting.
-    storage.receiveItems({.type = Storage::StorageAccount});
+    const auto refused = storage.receiveItems({.type = Storage::StorageAccount});
 
-    QCOMPARE(errorSpy.count(), 1);
-    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+    QVERIFY(refused.isError());
+    QCOMPARE(refused.code(), ErrorCode::Busy);
+
+    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
 
     // The first run is unaffected and still delivers.
     QVERIFY(itemsSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 1);
+    QCOMPARE(finishedSpy.count(), 1);
 
     storage.close();
 }
@@ -820,7 +849,8 @@ void StorageTest::aReadForOneAccountLeavesTheTransactionsOfAnotherOut()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount})
+                 .isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
 
@@ -859,7 +889,7 @@ void StorageTest::aReadForOneAccountReturnsBeforeItsItemsAndSignalsInTheCallingT
     QStringList order;
     QList<QThread *> threads;
 
-    connect(&storage, &Storage::progressChanged, &storage, [&](int) {
+    connect(&storage, &Storage::readProgressChanged, &storage, [&](int) {
         if (order.isEmpty() || order.last() != QStringLiteral("progress")) {
             order << QStringLiteral("progress");
         }
@@ -876,13 +906,14 @@ void StorageTest::aReadForOneAccountReturnsBeforeItsItemsAndSignalsInTheCallingT
         threads << QThread::currentThread();
     });
 
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
-    connect(&storage, &Storage::finished, &storage, [&]() {
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
+    connect(&storage, &Storage::readFinished, &storage, [&]() {
         order << QStringLiteral("finished");
         threads << QThread::currentThread();
     });
 
-    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount})
+                 .isError());
 
     // Straight after the call. No event has been processed yet, so nothing can
     // have been delivered even if the worker were already done.
@@ -939,8 +970,10 @@ void StorageTest::aReadReportsHowManyRecordsMatchBeforeItReportsTheRecords()
     QSignalSpy countSpy(&storage, &Storage::itemsCounted);
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems(
-        {.type = Storage::StorageTransaction, .accountId = ownAccount, .limit = window});
+    QVERIFY(!storage
+                 .receiveItems(
+                     {.type = Storage::StorageTransaction, .accountId = ownAccount, .limit = window})
+                 .isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
 
@@ -979,14 +1012,15 @@ void StorageTest::aReadWithoutAMatchReportsZeroBeforeItReportsThatNothingWasFoun
         order << QStringLiteral("count");
     });
 
-    connect(&storage, &Storage::errorOccurred, &storage, [&](ErrorCode, const QString &) {
+    connect(&storage, &Storage::readFailed, &storage, [&](ErrorCode, const QString &) {
         order << QStringLiteral("error");
     });
 
     QSignalSpy countSpy(&storage, &Storage::itemsCounted);
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
 
-    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageTransaction, .accountId = ownAccount})
+                 .isError());
 
     QVERIFY(errorSpy.wait(workerTimeout));
 
@@ -1030,9 +1064,11 @@ void StorageTest::aSearchTextReachesBeyondThePageThatWasLoaded()
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
     QSignalSpy countSpy(&storage, &Storage::itemsCounted);
 
-    storage.receiveItems({.type = Storage::StorageTransaction,
-                          .accountId = ownAccount,
-                          .text = QStringLiteral("Möbelkauf")});
+    QVERIFY(!storage
+                 .receiveItems({.type = Storage::StorageTransaction,
+                                .accountId = ownAccount,
+                                .text = QStringLiteral("Möbelkauf")})
+                 .isError());
 
     // The calling thread has not processed an event since the call.
     QCOMPARE(itemsSpy.count(), 0);
@@ -1078,10 +1114,12 @@ void StorageTest::aPeriodLetsNoTransactionOutsideItThrough()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageTransaction,
-                          .accountId = ownAccount,
-                          .from = QDate(2026, 2, 1),
-                          .to = QDate(2026, 2, 28)});
+    QVERIFY(!storage
+                 .receiveItems({.type = Storage::StorageTransaction,
+                                .accountId = ownAccount,
+                                .from = QDate(2026, 2, 1),
+                                .to = QDate(2026, 2, 28)})
+                 .isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
 
@@ -1123,9 +1161,11 @@ void StorageTest::aRestrictionToIncomingLetsNoDebitThrough()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageTransaction,
-                          .accountId = ownAccount,
-                          .direction = Storage::Direction::Incoming});
+    QVERIFY(!storage
+                 .receiveItems({.type = Storage::StorageTransaction,
+                                .accountId = ownAccount,
+                                .direction = Storage::Direction::Incoming})
+                 .isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
 
@@ -1168,9 +1208,11 @@ void StorageTest::aPercentSignInTheSearchTextIsLookedForAsACharacter()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageTransaction,
-                          .accountId = ownAccount,
-                          .text = QStringLiteral("3%")});
+    QVERIFY(!storage
+                 .receiveItems({.type = Storage::StorageTransaction,
+                                .accountId = ownAccount,
+                                .text = QStringLiteral("3%")})
+                 .isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
 
@@ -1207,9 +1249,9 @@ void StorageTest::closingWhileAReadIsGoingDropsItsResult()
     }
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     // Nothing has been delivered yet, this thread has not processed an event
     // since the run started.
@@ -1219,6 +1261,42 @@ void StorageTest::closingWhileAReadIsGoingDropsItsResult()
 
     QVERIFY(finishedSpy.wait(workerTimeout));
     QCOMPARE(itemsSpy.count(), 0);
+}
+
+/**
+ * The same for the write. What it wrote is in the file it wrote to, and that one
+ * is not the file that is open afterwards: a count reported here is read as the
+ * outcome of the storage that stands, and whoever refreshes on it asks a
+ * connection that is gone.
+ *
+ * The end is reported either way, so that nobody waits for a run that is over.
+ */
+void StorageTest::closingWhileAWriteIsGoingDropsItsCount()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    auto accounts = BankingItems();
+    for (int i = 0; i < 5; ++i) {
+        accounts << TestHelpers::createFakeAccount();
+    }
+
+    QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+    QSignalSpy finishedSpy(&storage, &Storage::writeFinished);
+
+    QVERIFY(!storage.storeItems(accounts).isError());
+
+    // Nothing has been reported yet, this thread has not processed an event
+    // since the run started.
+    QCOMPARE(storedSpy.count(), 0);
+
+    storage.close();
+
+    QVERIFY(finishedSpy.wait(workerTimeout));
+    QCOMPARE(storedSpy.count(), 0);
 }
 
 /**
@@ -1240,9 +1318,9 @@ void StorageTest::storeItemsReturnsBeforeTheAccountsAreWritten()
     }
 
     QSignalSpy storedSpy(&storage, &Storage::itemsStored);
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy finishedSpy(&storage, &Storage::writeFinished);
 
-    storage.storeItems(accounts);
+    QVERIFY(!storage.storeItems(accounts).isError());
 
     // Straight after the call. No event has been processed yet, so nothing can
     // have been delivered even if the worker were already done.
@@ -1281,7 +1359,7 @@ void StorageTest::storeItemsSignalsArriveInOrderAndInTheCallingThread()
     QStringList order;
     QList<QThread *> threads;
 
-    connect(&storage, &Storage::progressChanged, &storage, [&](int) {
+    connect(&storage, &Storage::writeProgressChanged, &storage, [&](int) {
         if (order.isEmpty() || order.last() != QStringLiteral("progress")) {
             order << QStringLiteral("progress");
         }
@@ -1293,13 +1371,13 @@ void StorageTest::storeItemsSignalsArriveInOrderAndInTheCallingThread()
         threads << QThread::currentThread();
     });
 
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
-    connect(&storage, &Storage::finished, &storage, [&]() {
+    QSignalSpy finishedSpy(&storage, &Storage::writeFinished);
+    connect(&storage, &Storage::writeFinished, &storage, [&]() {
         order << QStringLiteral("finished");
         threads << QThread::currentThread();
     });
 
-    storage.storeItems(accounts);
+    QVERIFY(!storage.storeItems(accounts).isError());
 
     QVERIFY(finishedSpy.wait(workerTimeout));
 
@@ -1333,21 +1411,29 @@ void StorageTest::storeItemsRefusesASecondRunWhileOneIsGoing()
         accounts << TestHelpers::createFakeAccount();
     }
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::writeFailed);
+    QSignalSpy finishedSpy(&storage, &Storage::writeFinished);
     QSignalSpy storedSpy(&storage, &Storage::itemsStored);
 
-    storage.storeItems(accounts);
+    QVERIFY(!storage.storeItems(accounts).isError());
 
     // The first run is still going, this thread has not processed an event since
     // it started. The refusal comes back in this thread, before any waiting.
-    storage.storeItems(accounts);
+    const auto refused = storage.storeItems(accounts);
 
-    QCOMPARE(errorSpy.count(), 1);
-    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+    QVERIFY(refused.isError());
+    QCOMPARE(refused.code(), ErrorCode::Busy);
+
+    // The counterpart of the read: the refusal reaches its caller, and no
+    // receiver of the run that is still going hears a thing.
+    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
+    QCOMPARE(storedSpy.count(), 0);
 
     // The first run is unaffected and still delivers.
     QVERIFY(storedSpy.wait(workerTimeout));
     QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 5);
+    QCOMPARE(finishedSpy.count(), 1);
 
     storage.close();
 }
@@ -1373,13 +1459,106 @@ void StorageTest::manyWritesLeaveNoConnectionBehind()
         auto accounts = BankingItems();
         accounts << TestHelpers::createFakeAccount();
 
-        storage.storeItems(accounts);
+        QVERIFY(!storage.storeItems(accounts).isError());
         QVERIFY(storedSpy.wait(workerTimeout));
     }
 
     QCOMPARE(QSqlDatabase::connectionNames().size(), connectionsWithoutAWrite);
 
     storage.close();
+}
+
+/**
+ * The two runs hang on watchers of their own and do not lock against each other,
+ * so either of them may end while the other is still going. Each therefore ends
+ * with a signal of its own.
+ *
+ * Both used to end in one parameterless finished(), and the three receivers in
+ * the application took whichever arrived for their own. A user scrolling the
+ * booking table while a fetch was writing ended the write phase of that fetch,
+ * and he read that his fetch could not be stored while its bookings lay in the
+ * file.
+ */
+void StorageTest::aReadAndAWriteEachReportOnlyTheirOwnEnd()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    const auto account = TestHelpers::createFakeAccount();
+    QVERIFY(!storage.storeItem(account.get()).isError());
+
+    QSignalSpy readFinishedSpy(&storage, &Storage::readFinished);
+    QSignalSpy writeFinishedSpy(&storage, &Storage::writeFinished);
+
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
+
+    QVERIFY(readFinishedSpy.wait(workerTimeout));
+    QCOMPARE(readFinishedSpy.count(), 1);
+
+    // The read said nothing about a write. Nobody waiting for one was answered.
+    QCOMPARE(writeFinishedSpy.count(), 0);
+
+    QVERIFY(!storage.storeItems(BankingItems{TestHelpers::createFakeAccount()}).isError());
+
+    QVERIFY(writeFinishedSpy.wait(workerTimeout));
+    QCOMPARE(writeFinishedSpy.count(), 1);
+
+    // And the write said nothing about a read.
+    QCOMPARE(readFinishedSpy.count(), 1);
+
+    storage.close();
+}
+
+/**
+ * A caller connects after the call, because a call that starts no run reports
+ * through its return value alone. The run of nought records is the one that
+ * starts nothing and reports anyway, so its two signals have to wait for the
+ * event loop like those of every other run.
+ */
+void StorageTest::aRunWithoutRecordsReportsToWhoeverListensAfterTheCall()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    QVERIFY(!storage.storeItems({}).isError());
+
+    QSignalSpy storedSpy(&storage, &Storage::itemsStored);
+    QSignalSpy finishedSpy(&storage, &Storage::writeFinished);
+
+    QVERIFY(finishedSpy.wait(workerTimeout));
+
+    QCOMPARE(storedSpy.count(), 1);
+    QCOMPARE(storedSpy.takeFirst().at(0).toInt(), 0);
+    QCOMPARE(finishedSpy.count(), 1);
+
+    storage.close();
+}
+
+/**
+ * The cheap answer, so that a caller reaching the storage after it was closed
+ * can tell that apart from a file worth warning the user about.
+ */
+void StorageTest::anOpenStorageSaysSoAndAClosedOneDoesNot()
+{
+    Storage storage(applicationInfo());
+
+    QVERIFY(!storage.isOpen());
+
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile());
+    QVERIFY(!storage.initialize(true).isError());
+
+    QVERIFY(storage.isOpen());
+
+    storage.close();
+
+    QVERIFY(!storage.isOpen());
 }
 
 } // namespace olbaflinx::core::storage::tests

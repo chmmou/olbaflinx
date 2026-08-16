@@ -66,6 +66,18 @@ public:
     Q_ENUM(Type);
 
     /**
+     * @brief The widest window a single read may open.
+     *
+     * Without a bound a caller could ask for INT_MAX rows and hold a whole table
+     * in memory at once. A read that names a wider one is refused.
+     *
+     * Public because a caller that shows a whole holding at once, the account
+     * tree among them, has to know where that stops rather than guess a number
+     * of its own.
+     */
+    static constexpr int MaxItemsPerQuery = 1000;
+
+    /**
      * @brief The column a read may order by.
      *
      * An enumeration rather than a string: SQL binds no identifier, so the column
@@ -96,8 +108,8 @@ public:
     /**
      * @brief What a single read asks for.
      *
-     * The three parameters receiveItems used to take grew to ten, four of them
-     * integral. A swapped pair would have compiled.
+     * Ten parameters, four of them integral: named rather than positional,
+     * because a swapped pair would compile.
      */
     struct ItemQuery
     {
@@ -109,6 +121,10 @@ public:
         // and a value is only meaningful for StorageTransaction.
         quint32 accountId = 0;
 
+        // Every value of the enumeration names a column of the transactions
+        // table, so a chosen column is meaningful for StorageTransaction alone
+        // and is refused on any other type. None leaves the ordering to the row
+        // id and is the one value every type carries.
         SortColumn sort = SortColumn::None;
         Qt::SortOrder order = Qt::AscendingOrder;
         int offset = 0;
@@ -141,8 +157,8 @@ public:
      *
      * The key is checked against minPasswordGuidelines before it is kept. A key
      * that does not meet them is refused and the storage keeps the one it had.
-     * The check used to live in the user interface alone, where a second caller
-     * of the core could walk past it.
+     * The check lives here rather than in the user interface alone, where a
+     * second caller of the core could walk past it.
      *
      * @param key Storage Key
      *
@@ -152,6 +168,10 @@ public:
 
     /**
      * @brief Change a storage key
+     *
+     * Both keys stand under the same length check setKey applies. A new key
+     * below the lower bound would rekey the file to something the public
+     * interface refuses afterwards, which puts the holding out of reach.
      *
      * @param oldKey Old storage key
      * @param newKey New storage key
@@ -169,7 +189,9 @@ public:
      *  the database default schema once.
      *
      * @return A default constructed Error on success, otherwise the reason. The
-     *  caller has to check it, the return type is [[nodiscard]].
+     *  caller has to check it, the return type is [[nodiscard]]. Success means
+     *  an open connection: a connection that already stands on the same file is
+     *  asked whether it is open rather than taken for one.
      */
     Error initialize(bool withSchema = false);
 
@@ -179,6 +201,17 @@ public:
      * @return true on success; otherwise false.
      */
     [[nodiscard]] bool isValid();
+
+    /**
+     * @brief Whether a connection to the storage file stands.
+     *
+     * Answers from the connection alone and reads nothing, which is the
+     * difference from isValid: it says whether a call has any prospect of being
+     * answered, not whether the file behind it is sound. A caller that reaches
+     * the storage after it was closed uses this to tell that apart from a
+     * failure worth showing to the user.
+     */
+    [[nodiscard]] bool isOpen() const;
 
     /**
      * @brief Get a user storage configuration path
@@ -250,24 +283,30 @@ public:
      *
      * The call returns at once and the reading happens in a thread of its own,
      * on a second connection to the same file. The calling thread stays
-     * responsive; a window of a thousand accounts used to hold it for as long as
-     * the read took, and each account costs a second query for its balance and
-     * its reference accounts.
+     * responsive: a window of a thousand accounts would otherwise hold it for
+     * the length of the read, and each account costs a second query for its
+     * balance and its reference accounts.
      *
      * Every signal reaches the caller in the thread it called from. Nothing is
      * emitted from the worker.
      *
-     * Wrong arguments are still answered before anything is started, in the
-     * calling thread, because they are a programming error and not worth a
-     * detour. A second call while a read is running is refused the same way.
+     * A call that starts no run answers through the return value and emits
+     * nothing. That is the only way to tell the caller apart from whoever is
+     * waiting for the read that is already going: the signals belong to a run,
+     * and a run that was never started has none to give. Wrong arguments end
+     * here, and so does a second call while a read is running.
      *
      * The order is unambiguous whatever is asked for: every read orders by the
      * row id as well. Without it a record could fall between two windows or
      * appear in both.
      *
      * @param query What to read. See ItemQuery.
+     *
+     * @return A default constructed Error once the run is under way, otherwise
+     *  the reason it was not started. Nothing was emitted in that case, and
+     *  neither readFailed nor readFinished is to be expected.
      */
-    void receiveItems(const ItemQuery &query);
+    [[nodiscard]] Error receiveItems(const ItemQuery &query);
 
     /**
      * @brief The day the stored holding of one account ends on.
@@ -314,30 +353,55 @@ public:
      * institution assigns, and the storage translates that into the row it keys
      * on. The account it names has to be stored already.
      *
-     * itemsStored reports how many rows were added, on every path. A booking
-     * that is already there adds none and is no failure, and a run that was
-     * rolled back reports nought. errorOccurred names the failure, finished ends
-     * the run either way. All of them reach the caller in the thread it called
-     * from.
+     * itemsStored reports how many rows were added. A booking that is already
+     * there adds none and is no failure, and a run that was rolled back reports
+     * nought. It stays out on the one path where the number would say nothing:
+     * a run whose storage was closed while it went speaks of a file that is no
+     * longer open. writeFailed names the failure, writeFinished ends the run on
+     * every path. All of them reach the caller in the thread it called from.
      *
-     * A second run while one is going is refused. A fetch therefore stores its
-     * bookings first and its balance after the end of that run.
+     * A call that starts no run answers through the return value and emits
+     * nothing before it returns, the way receiveItems does and for the same
+     * reason. A second run while one is going ends there: a fetch therefore
+     * stores its bookings first and its balance after the end of that run.
      *
-     * @param items The records to store. An empty run is not an error.
+     * @param items The records to store. An empty run is not an error and is
+     *  reported as a run of nought records rather than refused. Its two signals
+     *  go out through the event loop, so a caller that connects after the call
+     *  receives them.
+     *
+     * @return A default constructed Error once the run is under way, otherwise
+     *  the reason it was not started.
      */
-    void storeItems(const BankingItems &items);
+    [[nodiscard]] Error storeItems(const BankingItems &items);
 
 Q_SIGNALS:
     /**
-     * @brief This signal is emitted if an error occurred on an asynchronous path.
+     * @brief This signal is emitted when a run of receiveItems failed.
      *
-     * Synchronous calls report through their return value instead.
+     * Told apart from the write by the signal and not by a flag the receiver
+     * keeps: a read and a write may be going at the same time, and a receiver
+     * that takes the failure of the other one for its own ends a run that is
+     * still going.
+     *
+     * Synchronous calls report through their return value instead. Nothing on
+     * setKey, changeKey, initialize or storeItem reaches a signal.
      *
      * @param errorCode @ref olbaflinx::core::ErrorCode
      * @param reason Technical message, meant for the log. The presentation
      *  layer decides what the user gets to see.
      */
-    void errorOccurred(olbaflinx::core::ErrorCode errorCode, const QString &reason);
+    void readFailed(olbaflinx::core::ErrorCode errorCode, const QString &reason);
+
+    /**
+     * @brief This signal is emitted when a run of storeItems failed.
+     *
+     * The counterpart of readFailed. See there.
+     *
+     * @param errorCode @ref olbaflinx::core::ErrorCode
+     * @param reason Technical message, meant for the log.
+     */
+    void writeFailed(olbaflinx::core::ErrorCode errorCode, const QString &reason);
 
     /**
      * @brief This signal is emitted when we have received one or more entries.
@@ -349,7 +413,7 @@ Q_SIGNALS:
     /**
      * @brief This signal is emitted once per read that reached the table.
      *
-     * It arrives before itemsReceived and before errorOccurred, so that whoever
+     * It arrives before itemsReceived and before readFailed, so that whoever
      * shows the number already holds it when the empty result is handled. A run
      * that fails before the query does not report it at all.
      *
@@ -366,10 +430,10 @@ Q_SIGNALS:
     /**
      * @brief This signal is emitted when a run of storeItems has ended.
      *
-     * It arrives on every path, after a failure as well. Whoever tells the user
-     * what happened needs the count in both cases, and progressChanged cannot
-     * carry it: QFutureWatcher limits the rate of its progress reports, so a
-     * receiver is not told every value.
+     * It arrives on every path of a run that started, after a failure as well.
+     * Whoever tells the user what happened needs the count in both cases, and
+     * writeProgressChanged cannot carry it: QFutureWatcher limits the rate of
+     * its progress reports, so a receiver is not told every value.
      *
      * @param count The number of rows the run added. Not the number of records
      *  it was handed: a booking that is already stored adds none. A run that
@@ -378,16 +442,38 @@ Q_SIGNALS:
     void itemsStored(int count);
 
     /**
-     * @brief The signal that is emitted if any progress changed
+     * @brief How far the running read has got.
      *
      * @param progress Progress value in percent, from 0 to 100.
      */
-    void progressChanged(int progress);
+    void readProgressChanged(int progress);
 
     /**
-     * @brief This signal is emitted when we have received any resources or an error has occurred.
+     * @brief How far the running write has got.
+     *
+     * @param progress Progress value in percent, from 0 to 100.
      */
-    void finished();
+    void writeProgressChanged(int progress);
+
+    /**
+     * @brief This signal is emitted when a run of receiveItems has ended.
+     *
+     * It arrives on every path, after a failure as well, and it is what frees
+     * the storage for the next read.
+     *
+     * A read and a write may be going at the same time; they stand under
+     * watchers of their own and do not lock against each other. Each therefore
+     * ends with a signal of its own, so that a receiver waiting for one of them
+     * is not answered by the other.
+     */
+    void readFinished();
+
+    /**
+     * @brief This signal is emitted when a run of storeItems has ended.
+     *
+     * The counterpart of readFinished. See there.
+     */
+    void writeFinished();
 
 private:
     class Private;

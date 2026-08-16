@@ -85,6 +85,28 @@ struct CommandListDeleter
     void operator()(AB_TRANSACTION_LIST2 *list) const { AB_Transaction_List2_freeAll(list); }
 };
 
+/**
+ * Puts the interface of this instance into the slot of the running thread and
+ * empties the slot again on every way out.
+ *
+ * gwenhywfar keeps one interface per thread, not one per instance, so two
+ * instances that are up at once displace each other there. Whoever reaches into
+ * the library sets its own rather than relying on what the slot happens to
+ * hold, and leaves it empty afterwards: what stood there before belongs to
+ * another instance and is free to go at any moment.
+ */
+class ThreadGui
+{
+public:
+    explicit ThreadGui(GWEN_GUI *gui) { GWEN_Gui_SetGui(gui); }
+    ~ThreadGui() { GWEN_Gui_SetGui(nullptr); }
+
+    ThreadGui(const ThreadGui &) = delete;
+    ThreadGui &operator=(const ThreadGui &) = delete;
+    ThreadGui(ThreadGui &&) = delete;
+    ThreadGui &operator=(ThreadGui &&) = delete;
+};
+
 using CommandListPtr = std::unique_ptr<AB_TRANSACTION_LIST2, CommandListDeleter>;
 using ContextPtr = std::unique_ptr<AB_IMEXPORTER_CONTEXT, decltype(&AB_ImExporterContext_free)>;
 using GwenDatePtr = std::unique_ptr<GWEN_DATE, decltype(&GWEN_Date_free)>;
@@ -242,9 +264,9 @@ public:
                          QStringLiteral("Banking needs a user interface, GWEN_Gui_new() will do"));
         }
 
-        // We don't initialize AQ Banking & Gwen GUI twice. The flag used to be
-        // derived from the two handles, which no longer works: a caller may pass
-        // no user interface at all, and then gwenGui stays null on purpose.
+        // We don't initialize AQ Banking & Gwen GUI twice. The flag says so
+        // rather than the two handles: a caller may pass no user interface at
+        // all, and then gwenGui stays null on purpose.
         if (m_isInitialized) {
             return Error(ErrorCode::InvalidInput,
                          QStringLiteral("The banking backend is already initialized"));
@@ -256,6 +278,15 @@ public:
                          QStringLiteral("GWEN_Init failed with %1").arg(rv));
         }
 
+        // From here on every way out runs finalize, which takes back exactly
+        // what has been reached. Each of these flags stands for one step that
+        // has its own counterpart, and hanging the shutdown on them rather than
+        // on m_isInitialized is what makes a failure halfway through undoable:
+        // that one is set at the very end, and a failure before it would leave
+        // the backend, the counterpart of GWEN_Init and a thread-global
+        // interface behind.
+        m_gwenInitialized = true;
+
         // The interface belongs to the caller. Building it here would drag Qt
         // Widgets into a library that is meant to be usable without a display.
         gwenGui = gui;
@@ -263,6 +294,15 @@ public:
 
         const QByteArray local8BitName = name.toLocal8Bit();
         aqBanking = AB_Banking_new(local8BitName.data(), nullptr, 0);
+
+        // Asked before it is used, not after. The three calls below take it
+        // without looking.
+        if (aqBanking == nullptr) {
+            finalize();
+
+            return Error(ErrorCode::BankingFailure,
+                         QStringLiteral("AB_Banking_new answered with nothing"));
+        }
 
         const QByteArray local8BitKey = key.toLocal8Bit();
         AB_Banking_RuntimeConfig_SetCharValue(aqBanking,
@@ -276,24 +316,38 @@ public:
 
         rv = AB_Banking_Init(aqBanking);
         if (rv != AB_SUCCESS) {
+            finalize();
+
             return Error(ErrorCode::BankingFailure,
                          QStringLiteral("AB_Banking_Init failed with %1").arg(rv));
         }
 
+        m_bankingInitialized = true;
+
         AB_Gui_Extend(gwenGui, aqBanking);
+        m_guiExtended = true;
 
         const QByteArray local8BitAppName = m_applicationInfo.name.toLocal8Bit();
         const QByteArray local8BitAppVersion = m_applicationInfo.version.toLocal8Bit();
         m_chipCardClient = LC_Client_new(local8BitAppName.constData(),
                                          local8BitAppVersion.constData());
 
-        LC_Client_Init(m_chipCardClient);
-
-        m_isInitialized = (aqBanking != nullptr);
-        if (!m_isInitialized) {
-            return Error(ErrorCode::BankingFailure,
-                         QStringLiteral("The banking backend did not come up"));
+        if (m_chipCardClient != nullptr) {
+            // A machine without a running smart card service is the everyday
+            // case for whoever signs with a PIN, and this failing is no reason
+            // to keep the user from their bank. What it must not do is go
+            // unnoticed: the call takes its own half-built state down before it
+            // returns, so the counterpart below would run on a context that was
+            // never established.
+            const int rv = LC_Client_Init(m_chipCardClient);
+            if (rv != 0) {
+                qCInfo(lcBanking) << "no card reader service is available:" << rv;
+            } else {
+                m_chipCardInitialized = true;
+            }
         }
+
+        m_isInitialized = true;
 
         qCInfo(lcBanking) << "banking backend initialized for" << name << version;
 
@@ -317,8 +371,11 @@ public:
 
         // The interface of gwenhywfar lives per thread. The one set where
         // initialize ran does not reach this thread, and without one here the
-        // library would abort the process instead of reporting a failure.
-        GWEN_Gui_SetGui(gwenGui);
+        // library would abort the process instead of reporting a failure. Held
+        // for the length of the call, so that the slot of this thread is empty
+        // again whichever way the session ends, an exception included; a thread
+        // of the pool starts with it empty and is handed on that way.
+        const ThreadGui gui(gwenGui);
 
         AB_ACCOUNT_SPEC *offered = nullptr;
         AB_Banking_GetAccountSpecByUniqueId(aqBanking, uniqueAccountId, &offered);
@@ -331,8 +388,6 @@ public:
 
         if (!result.offersTransactions
             && !Banking::accountOffers(offered, AB_Transaction_CommandGetBalance)) {
-            GWEN_Gui_SetGui(nullptr);
-
             result.outcome = FetchOutcome::Received;
             result.offersNothing = true;
 
@@ -344,10 +399,6 @@ public:
         const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
 
         const int rv = AB_Banking_SendCommands(aqBanking, commands.get(), context.get());
-
-        // Detached before anything else happens, so that the thread leaves the
-        // interface as it found it whichever way the session ended.
-        GWEN_Gui_SetGui(nullptr);
 
         result.outcome = Banking::outcomeOfSession(rv, commands.get(), uniqueAccountId);
 
@@ -376,7 +427,27 @@ public:
     /** The answer of a session, reported in the thread this object belongs to. */
     void deliverSessionResult()
     {
-        const SessionResult result = fetchWatcher.result();
+        SessionResult result;
+
+        // The session runs in a thread of its own, and an exception it left
+        // behind is held in the future until the result is asked for. It is
+        // asked for here, in a slot, and an exception leaving a slot travels
+        // into the event loop, which does not carry it. A session that never
+        // returned an answer is reported as the failure it is.
+        const QString failure = exceptionOf([this, &result] { result = fetchWatcher.result(); });
+
+        if (!failure.isEmpty()) {
+            m_isFetching = false;
+
+            const auto reason = QStringLiteral("The session of account %1 ended in %2")
+                                    .arg(QString::number(m_fetchedAccountId), failure);
+
+            qCCritical(lcBanking) << reason;
+
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT q_ptr->finished();
+            return;
+        }
 
         m_isFetching = false;
 
@@ -386,8 +457,7 @@ public:
         if (result.offersNothing) {
             qCInfo(lcBanking) << "account" << m_fetchedAccountId << "carries no order at all";
 
-            Q_EMIT q_ptr->accountSkipped(m_fetchedAccountId,
-                                         tr("The bank offers no fetch for this account"));
+            Q_EMIT q_ptr->noOrderOffered(m_fetchedAccountId);
             Q_EMIT q_ptr->finished();
             return;
         }
@@ -442,45 +512,93 @@ public:
         // memory, so the shutdown waits for it. The window keeps this from
         // happening in the first place: it puts off closing while a fetch runs
         // and points at the progress dialog for stopping it.
-        fetchWatcher.waitForFinished();
+        //
+        // The wait hands on what the session threw. This one is reached from the
+        // destructor, which is implicitly noexcept, so an exception passing
+        // through here would end the process instead of reporting anything. What
+        // follows must run in either case: it is the counterpart of every step
+        // initialize reached.
+        if (const QString failure = exceptionOf([this] { fetchWatcher.waitForFinished(); });
+            !failure.isEmpty()) {
+            qCCritical(lcBanking) << "the session ended in" << failure;
+        }
+
         m_isFetching = false;
 
-        if (isInitialized()) {
-            AB_Gui_Unextend(gwenGui);
+        // The teardown reaches into the interface of this thread, and the slot
+        // holds one per thread rather than one per instance. Two instances may
+        // be up at once, the wizard and the window, and the second one to come
+        // up displaced the first. Whichever of them ends up going first, the
+        // other must not have to rely on what the slot happens to hold: this one
+        // puts its own back for the length of the shutdown.
+        //
+        // Without it AB_Banking_Fini below ends the process rather than
+        // reporting anything. It takes a file lock, and the lock reads the flags
+        // of the current interface without asking whether there is one.
+        if (gwenGui != nullptr) {
+            GWEN_Gui_SetGui(gwenGui);
+        }
 
-            int rv = AB_Banking_Fini(aqBanking);
-            if (rv == AB_SUCCESS) {
-                AB_Banking_free(aqBanking);
+        // Every step is undone by the state it actually reached, one flag per
+        // step, rather than by m_isInitialized alone: that one is set at the end
+        // of initialize, so a failure before it would leave the backend, the
+        // counterpart of GWEN_Init and the thread-global interface standing, and
+        // the interface would then point at a GWEN_GUI its owner is free to
+        // free.
+        if (m_guiExtended) {
+            AB_Gui_Unextend(gwenGui);
+            m_guiExtended = false;
+        }
+
+        if (aqBanking != nullptr) {
+            if (m_bankingInitialized) {
+                const int rv = AB_Banking_Fini(aqBanking);
+                if (rv != AB_SUCCESS) {
+                    // Noted and freed anyway. Leaving the structure behind on a
+                    // failed shutdown puts it out of reach for good, and the run
+                    // is ending here whatever the backend says.
+                    qCWarning(lcBanking) << "AB_Banking_Fini failed with" << rv;
+                }
+
+                m_bankingInitialized = false;
             }
 
-            // The interface is detached, not freed. It belongs to whoever passed
-            // it to initialize, and freeing it here would release it a second
-            // time when that owner goes.
-            //
-            // Only where it is still the current one. The setting is global per
-            // thread and two instances may hold one each: the wizard has one and
-            // the window has another. Detaching unconditionally would leave the
-            // other instance without an interface, and the shutdown of that one
-            // asserts on a missing one instead of reporting it.
+            AB_Banking_free(aqBanking);
+            aqBanking = nullptr;
+        }
+
+        if (m_chipCardClient != nullptr) {
+            if (m_chipCardInitialized) {
+                LC_Client_Fini(m_chipCardClient);
+                m_chipCardInitialized = false;
+            }
+
+            LC_Client_free(m_chipCardClient);
+            m_chipCardClient = nullptr;
+        }
+
+        // The interface is detached, not freed. It belongs to whoever passed it
+        // to initialize, and freeing it here would release it a second time when
+        // that owner goes.
+        //
+        // The slot is left empty rather than filled with what stood there
+        // before. What stood there belongs to another instance, and that one is
+        // free to go at any moment: a pointer put back here would outlive its
+        // owner. Nobody is left without an interface by this, because every
+        // instance sets its own at the top of this function.
+        if (gwenGui != nullptr) {
             if (GWEN_Gui_GetGui() == gwenGui) {
                 GWEN_Gui_SetGui(nullptr);
             }
 
-            GWEN_Fini();
-
-            LC_Client_Fini(m_chipCardClient);
-            LC_Client_free(m_chipCardClient);
-
             gwenGui = nullptr;
-            aqBanking = nullptr;
-            m_chipCardClient = nullptr;
         }
 
-        if (m_chipCardClient != nullptr) {
-            LC_Client_Fini(m_chipCardClient);
-            LC_Client_free(m_chipCardClient);
-            m_chipCardClient = nullptr;
+        if (m_gwenInitialized) {
+            GWEN_Fini();
+            m_gwenInitialized = false;
         }
+
         m_isInitialized = false;
     }
 
@@ -492,7 +610,27 @@ public:
             return AB_ERROR;
         }
 
+        // The header states the precondition, and a caller outside this project
+        // can break it. The dialog walks the same AB_BANKING a running session
+        // walks from the pool thread, and aqbanking takes no lock anywhere.
+        if (isFetching()) {
+            qCCritical(lcBanking) << "a fetch is running; the setup dialog cannot be opened "
+                                     "meanwhile";
+
+            return AB_ERROR;
+        }
+
+        // The dialog is run through the interface of this thread, and another
+        // instance that shut down in the meantime left the slot empty.
+        const ThreadGui gui(gwenGui);
+
         auto setupDialog = AB_Banking_CreateSetupDialog(aqBanking);
+        if (setupDialog == nullptr) {
+            qCCritical(lcBanking) << "the banking backend built no setup dialog";
+
+            return AB_ERROR;
+        }
+
         auto dialogTitle = tr("%1 Account Setup").arg(m_applicationInfo.name).toLocal8Bit();
 
         GWEN_Dialog_SetCharProperty(setupDialog,
@@ -510,10 +648,18 @@ public:
         return result;
     }
 
+    /**
+     * @param list The descriptions the backend holds. They stay with the caller,
+     *  which frees the list; this walks over it and copies what it needs into
+     *  records of the core.
+     *
+     * Walked as it stands rather than duplicated first: both list functions
+     * take a const list, and a copy would be left behind on the way out that
+     * finds no account.
+     */
     BankingItems accounts(const AB_ACCOUNT_SPEC_LIST *list)
     {
-        auto specList = AB_AccountSpec_List_dup(list);
-        const auto totalAccounts = AB_AccountSpec_List_GetCount(specList);
+        const auto totalAccounts = AB_AccountSpec_List_GetCount(list);
 
         if (totalAccounts == 0) {
             return {};
@@ -522,7 +668,7 @@ public:
         quint32 index = 0;
         auto accountList = BankingItems();
 
-        auto accountSpec = AB_AccountSpec_List_First(specList);
+        auto accountSpec = AB_AccountSpec_List_First(list);
         while (accountSpec) {
             accountList.append(std::make_shared<Account>(accountSpec));
             accountSpec = AB_AccountSpec_List_Next(accountSpec);
@@ -532,9 +678,6 @@ public:
 
             ++index;
         }
-
-        AB_AccountSpec_List_free(specList);
-        specList = nullptr;
 
         std::sort(accountList.begin(),
                   accountList.end(),
@@ -554,6 +697,15 @@ private:
     bool m_isFetching = false;
     quint32 m_fetchedAccountId = 0;
     bool m_isInitialized;
+
+    // One per step of initialize that has a counterpart in finalize. They are
+    // what lets a failure halfway through be undone; m_isInitialized says only
+    // that every step got through.
+    bool m_gwenInitialized = false;
+    bool m_bankingInitialized = false;
+    bool m_guiExtended = false;
+    bool m_chipCardInitialized = false;
+
     LC_CLIENT *m_chipCardClient;
     ApplicationInfo m_applicationInfo;
 
@@ -617,14 +769,27 @@ void Banking::accounts()
         return;
     }
 
+    // The header states the precondition, and a caller outside this project can
+    // break it: a session walks the same AB_BANKING from the pool thread, and
+    // aqbanking takes no lock anywhere.
+    if (d_ptr->isFetching()) {
+        reportError(ErrorCode::Busy,
+                    QStringLiteral("A fetch is running; the backend cannot be asked meanwhile"));
+        return;
+    }
+
+    // Reading the account records takes a file lock, and the lock reads the
+    // flags of the interface of this thread without asking whether there is
+    // one. Another instance that shut down in the meantime left the slot empty.
+    const ThreadGui gui(d_ptr->gwenGui);
+
     AB_ACCOUNT_SPEC_LIST *specList = nullptr;
 
     const int rv = AB_Banking_GetAccountSpecList(d_ptr->aqBanking, &specList);
 
     // A backend that holds no account answers with GWEN_ERROR_NOT_FOUND, which
-    // is not a failure of the call. It used to be reported as one, which left
-    // the NotFound branch below unreachable and told a user who has not set up
-    // an account yet that their banking backend was broken.
+    // is not a failure of the call. Reporting it as one would tell a user who
+    // has not set up an account yet that their banking backend is broken.
     if (rv == GWEN_ERROR_NOT_FOUND) {
         reportError(ErrorCode::NotFound, QStringLiteral("No accounts were found"));
         return;
@@ -743,11 +908,17 @@ BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
             continue;
         }
 
-        // Both filters open: every booking the bank sent belongs to the account
-        // it was sent for.
+        // Booked entries only. A bank that sends the noted ones as well puts
+        // them into the same list under a type of their own, and a noted entry
+        // is not a booking: it may still fall away, and where it is booked the
+        // next day it arrives with another date and another reference, so the
+        // fingerprint differs and the amount would stand twice.
+        //
+        // The command stays open. It says which order brought the entry in and
+        // does not tell a booking from a note.
         const AB_TRANSACTION *transaction
             = AB_ImExporterAccountInfo_GetFirstTransaction(accountInfo,
-                                                           AB_Transaction_TypeNone,
+                                                           AB_Transaction_TypeStatement,
                                                            AB_Transaction_CommandNone);
 
         while (transaction != nullptr) {
@@ -765,7 +936,7 @@ BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
             }
 
             transaction = AB_Transaction_List_FindNextByType(transaction,
-                                                             AB_Transaction_TypeNone,
+                                                             AB_Transaction_TypeStatement,
                                                              AB_Transaction_CommandNone);
         }
 
@@ -794,6 +965,12 @@ FetchOutcome Banking::outcomeOfSession(int sessionResult,
     // The user stopping the session is the one non-zero result that is no
     // failure. A session cut in the middle, say because the far end went away,
     // answers with something else and stays a failure.
+    //
+    // The library does not hand this up today: the backend turns every failure
+    // of the sending into a generic one, and the layer above it drops even that
+    // and answers success. Whoever needs to tell an abort apart asks the user
+    // interface, which is where the wish arrives. The branch stays because it
+    // is the right answer to the value, wherever it comes from.
     if (sessionResult == GWEN_ERROR_USER_ABORTED) {
         return FetchOutcome::Aborted;
     }
@@ -848,6 +1025,11 @@ void Banking::fetchAccount(const Account &account, const QDate &latestStoredDate
     // AqBanking sorts the queues by backend before it sends anything and answers
     // GWEN_ERROR_BAD_DATA for an account that carries none. Passing such an
     // account over is therefore what keeps the accounts beside it running.
+    //
+    // No interface is put into the slot of this thread for either read below.
+    // Both walk the account record this object duplicated when it was built, and
+    // a record of the backend is a plain structure: what wants an interface is
+    // the file lock, and no path from here takes one.
     const QString backendName = account.backendName();
     if (backendName.isEmpty() || backendName.compare(offlineBackendName, Qt::CaseInsensitive) == 0) {
         const QString reason = tr("The account has no online access");

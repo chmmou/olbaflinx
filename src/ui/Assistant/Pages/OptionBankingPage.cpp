@@ -29,6 +29,8 @@
 
 #include "ui_OptionBankingPage.h"
 
+#include <QtWidgets/QPushButton>
+
 using namespace olbaflinx::core;
 using namespace olbaflinx::ui::assistant::pages;
 
@@ -115,7 +117,16 @@ public:
 OptionBankingPage::OptionBankingPage(QWidget *parent)
     : QWizardPage(parent)
     , d_ptr(new Private(this))
-{}
+{
+    // Made here rather than in the form. A connection declared there becomes a
+    // SIGNAL()/SLOT() call in the generated header, where the slot is named as a
+    // string: renaming this one, or taking it out of the slot section, leaves
+    // the build green and the button dead.
+    connect(d_ptr->ui->btnSetupAccounts,
+            &QPushButton::clicked,
+            this,
+            &OptionBankingPage::showSetupDialog);
+}
 
 OptionBankingPage::~OptionBankingPage()
 {
@@ -204,7 +215,7 @@ void OptionBankingPage::showSetupDialog()
     d_ptr->isComplete = false;
 
     // 1 means the dialog was accepted, 0 that the user dismissed it. Anything
-    // below is a failure of the backend, which used to go by unnoticed.
+    // below is a failure of the backend and is told apart from both.
     const int result = d_ptr->banking->setupAccounts();
     if (result < 0) {
         qCWarning(lcUi) << "the account setup dialog failed with" << result;

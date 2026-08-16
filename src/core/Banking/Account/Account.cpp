@@ -28,9 +28,9 @@ using namespace olbaflinx::core::banking::account;
 class Account::Private
 {
 public:
-    // A duplicate is made only of what the caller handed in. The fallback used to
-    // build a spec and duplicate that one as well, so the structure it had just
-    // created was never released.
+    // A duplicate is made only of what the caller handed in. A fallback that
+    // built a spec and duplicated that one as well would never release the
+    // structure it had just created.
     explicit Private(const AB_ACCOUNT_SPEC *accountSpec, double balance)
         : abBalance(balance)
         , abAccountSpec(accountSpec ? AB_AccountSpec_dup(accountSpec) : AB_AccountSpec_new())
@@ -272,8 +272,7 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
     }
 
     AB_AccountSpec_SetType(accountSpec, map.value(QStringLiteral("type")).toInt());
-    // The key used to read "uniqueId" while toMap and the column both write
-    // "unique_id", so every account read back carried an id of zero. toUInt
+    // The key is the one toMap and the column both write, "unique_id". toUInt
     // keeps ids beyond the range of a signed int intact.
     AB_AccountSpec_SetUniqueId(accountSpec, map.value(QStringLiteral("unique_id")).toUInt());
     AB_AccountSpec_SetBackendName(accountSpec, backendName.toLocal8Bit().constData());
@@ -344,7 +343,12 @@ std::shared_ptr<Account> Account::fromMap(const QMap<QString, QVariant> &map)
 
 bool Account::isValid() const
 {
-    return type() != AB_AccountType_Invalid && type() != AB_AccountType_Unspecified;
+    // Unspecified is not a failure and no reason to drop an account. The library
+    // writes it wherever the institution names a kind it does not sort into one
+    // of its own, and it writes it over the unknown kind as well before a caller
+    // ever sees the record. An account of that kind is held at a real bank and
+    // its bookings are the user's like any other.
+    return type() != AB_AccountType_Invalid;
 }
 
 QString Account::toString() const

@@ -51,14 +51,24 @@ public:
      * tells one apart from the next.
      */
     void setTitle(const QString &title);
-    void setFileInfo(const QString &info) const;
-    void setFilePath(const QString &filePath) const;
+    void setFileInfo(const QString &info);
+    void setFilePath(const QString &filePath);
 
     [[nodiscard]] QString filePath() const;
 
 Q_SIGNALS:
     void storageOpened(const QString &filePath, const QString &password);
     void storageDeleted(bool success, NewStorageItem *item, const QString &errorMessage);
+
+    /**
+     * @brief Something the user needs to read, already worded for him.
+     *
+     * An entry sits inside a page and has no status bar of its own. The overview
+     * passes this on to the window, which is where such a sentence goes.
+     *
+     * @param message What the user gets to see. It names no path and no password.
+     */
+    void message(const QString &message);
 
 protected Q_SLOTS:
     void showMenu();

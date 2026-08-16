@@ -28,6 +28,7 @@
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <QtCore/QFuture>
+#include <QtCore/QSemaphore>
 #include <QtCore/QTemporaryDir>
 #include <QtCore/QThread>
 
@@ -155,14 +156,20 @@ void BankingGuiTest::aCallFromAWorkerThreadWaitsForTheOwningThread()
     QThread *ownerThread = QThread::currentThread();
     QThread *callThread = nullptr;
 
-    QFuture<void> handed = QtConcurrent::run([&gui, &dialog, &callThread] {
+    QSemaphore reachedTheCall;
+
+    QFuture<void> handed = QtConcurrent::run([&gui, &dialog, &callThread, &reachedTheCall] {
         callThread = QThread::currentThread();
+        reachedTheCall.release();
         gui.openDialog(dialog.get(), 0);
     });
 
-    // Long enough for the run to have reached the call, short enough not to
-    // stretch the suite. Nothing here waits for the answer, which is the point.
-    QThread::msleep(100);
+    // Waited for the worker to have reached the call, rather than for a span of
+    // time: the assertion below says nothing about a run that has not started.
+    QVERIFY(reachedTheCall.tryAcquire(1, 5000));
+
+    // Nothing here serves the queue of the owning thread, so the call cannot
+    // have come through.
     QVERIFY(!handed.isFinished());
 
     // Only now does the owning thread serve its queue, and only now can the call
@@ -206,8 +213,11 @@ void BankingGuiTest::aProgressFromAWorkerThreadWaitsForTheOwningThread()
     QThread *ownerThread = QThread::currentThread();
     QThread *callThread = nullptr;
 
-    QFuture<void> handed = QtConcurrent::run([&gui, &callThread] {
+    QSemaphore reachedTheCall;
+
+    QFuture<void> handed = QtConcurrent::run([&gui, &callThread, &reachedTheCall] {
         callThread = QThread::currentThread();
+        reachedTheCall.release();
 
         // The interface of gwenhywfar lives per thread, and a session sets it
         // in its own the same way before it reports anything.
@@ -224,7 +234,7 @@ void BankingGuiTest::aProgressFromAWorkerThreadWaitsForTheOwningThread()
         GWEN_Gui_SetGui(nullptr);
     });
 
-    QThread::msleep(100);
+    QVERIFY(reachedTheCall.tryAcquire(1, 5000));
     QVERIFY(!handed.isFinished());
 
     QTRY_VERIFY_WITH_TIMEOUT(handed.isFinished(), 5000);
@@ -357,7 +367,11 @@ void BankingGuiTest::aFetchWithinTheSpanKeepsTheCachedCredential()
     gui.holdPasswordCache();
     QVERIFY(!gui.isPasswordCacheExpiring());
 
-    // Well past the span. Without the hold the cache would be empty by now.
+    // A wait of a chosen length, where the rule asks for a condition to wait on.
+    // What is measured here is that something does not happen, and a timer that
+    // was stopped raises no signal to hang on: only the passing of the span it
+    // would have fired in shows it. Four times the span, so that a runner under
+    // load does not turn the assertion into a statement about its own slowness.
     QTest::qWait(shortLifetimeMs * 4);
     QVERIFY(GWEN_DB_GetCharValue(cache, passwordName, 0, nullptr) != nullptr);
 

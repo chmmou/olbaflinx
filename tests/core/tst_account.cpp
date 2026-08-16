@@ -29,6 +29,21 @@ namespace olbaflinx::core::banking::account::tests {
 
 using namespace olbaflinx::core::tests;
 
+/**
+ * The instance owns a C structure and frees it in its destructor. A copy would
+ * hand the same pointer to two destructors, and the compiler generated
+ * operations were there for the taking until they were withdrawn. Balance and
+ * ReferenceAccount withdrew theirs from the start.
+ *
+ * Held at compile time, because that is the only place it can be held: an
+ * implementation that offers the operations again cannot be caught by anything
+ * that runs.
+ */
+static_assert(!std::is_copy_constructible_v<Account>);
+static_assert(!std::is_copy_assignable_v<Account>);
+static_assert(!std::is_move_constructible_v<Account>);
+static_assert(!std::is_move_assignable_v<Account>);
+
 class AccountTest final : public QObject
 {
     Q_OBJECT
@@ -43,8 +58,8 @@ private Q_SLOTS:
     void toMapAndBackYieldsTheSameAccount();
     void toMapAndBackKeepsTheReferenceAccounts();
     void toMapKeepsTheReferenceAccountsAfterTheAccountIsGone();
-    void isValidRejectsTheUnusableTypes_data();
-    void isValidRejectsTheUnusableTypes();
+    void isValidRejectsTheInvalidType();
+    void isValidAcceptsAnAccountTheLibraryDidNotSort();
     void isValidAcceptsAKnownType();
     void typeStringIsEmptyForATypeOutsideTheEnum();
     void toStringNamesTheAccountAndTheBank();
@@ -236,22 +251,27 @@ void AccountTest::toMapKeepsTheReferenceAccountsAfterTheAccountIsGone()
     QCOMPARE(referenceAccounts.at(0)->iban(), QStringLiteral("DE02120300000000202051"));
 }
 
-void AccountTest::isValidRejectsTheUnusableTypes_data()
+void AccountTest::isValidRejectsTheInvalidType()
 {
-    QTest::addColumn<int>("accountType");
-
-    QTest::newRow("invalid") << static_cast<int>(AB_AccountType_Invalid);
-    QTest::newRow("unspecified") << static_cast<int>(AB_AccountType_Unspecified);
-}
-
-void AccountTest::isValidRejectsTheUnusableTypes()
-{
-    QFETCH(int, accountType);
-
-    const auto account = TestHelpers::createFakeAccount(accountType);
+    const auto account = TestHelpers::createFakeAccount(AB_AccountType_Invalid);
 
     QVERIFY(account != nullptr);
     QVERIFY(!account->isValid());
+}
+
+/**
+ * The kind the library writes wherever the institution names one it does not
+ * sort into a kind of its own, and over the unknown kind as well before a
+ * caller ever sees the record. Such an account is held at a real bank, and
+ * dropping it would keep the user from their own bookings.
+ */
+void AccountTest::isValidAcceptsAnAccountTheLibraryDidNotSort()
+{
+    const auto account = TestHelpers::createFakeAccount(AB_AccountType_Unspecified);
+
+    QVERIFY(account != nullptr);
+    QCOMPARE(account->type(), static_cast<qint32>(AB_AccountType_Unspecified));
+    QVERIFY(account->isValid());
 }
 
 void AccountTest::isValidAcceptsAKnownType()

@@ -17,6 +17,8 @@
 
 #include "core/Storage/StorageConnection.h"
 
+#include "core/Logging.h"
+
 #include <QtCore/QRandomGenerator>
 
 #include <QtSql/QSqlError>
@@ -40,10 +42,32 @@ StorageConnection::StorageConnection(const QString &fileName, const QString &dri
                            .arg(QRandomGenerator::system()->generate());
     QSqlDatabase db = QSqlDatabase::addDatabase(driver, m_connectionName);
     db.setDatabaseName(fileName);
-    db.open();
+
+    if (!db.open()) {
+        // Noted and left at that. The caller asks isOpen() and puts the file
+        // together with lastErrorMessage() into a message of its own, so a
+        // second report here would name one failure twice. The registration
+        // stays and the destructor takes it back.
+        qCDebug(lcStorage) << "a storage connection did not open";
+    }
 }
 
-StorageConnection::~StorageConnection() = default;
+StorageConnection::~StorageConnection()
+{
+    // Qt keeps a connection under its name for the life of the process until it
+    // is taken out again. An attempt that failed to open would otherwise leave
+    // one behind, because the way out of a failed open skips close(), and a
+    // wrong path or a mistyped password can be repeated as often as the user
+    // likes.
+    //
+    // close() is what does both halves, and doing it twice costs nothing:
+    // removing a name that is already gone does nothing.
+    if (m_connectionName.isEmpty()) {
+        return;
+    }
+
+    close();
+}
 
 QSqlDatabase StorageConnection::database() const
 {

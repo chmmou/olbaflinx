@@ -152,11 +152,15 @@ int BankingGui::forwardProgressAdvance(GWEN_GUI *gui, uint32_t id, uint64_t prog
         return GWEN_ERROR_NOT_SUPPORTED;
     }
 
-    return self->callOnOwnerThread([self, gui, id, progress] {
+    const int result = self->callOnOwnerThread([self, gui, id, progress] {
         const ThreadInterface interface(gui);
 
         return self->m_progressAdvance(gui, id, progress);
     });
+
+    self->noteAbort(result);
+
+    return result;
 }
 
 int BankingGui::forwardProgressSetTotal(GWEN_GUI *gui, uint32_t id, uint64_t total)
@@ -183,11 +187,15 @@ int BankingGui::forwardProgressLog(GWEN_GUI *gui,
         return GWEN_ERROR_NOT_SUPPORTED;
     }
 
-    return self->callOnOwnerThread([self, gui, id, level, text] {
+    const int result = self->callOnOwnerThread([self, gui, id, level, text] {
         const ThreadInterface interface(gui);
 
         return self->m_progressLog(gui, id, level, text);
     });
+
+    self->noteAbort(result);
+
+    return result;
 }
 
 int BankingGui::forwardProgressEnd(GWEN_GUI *gui, uint32_t id)
@@ -202,6 +210,29 @@ int BankingGui::forwardProgressEnd(GWEN_GUI *gui, uint32_t id)
 
         return self->m_progressEnd(gui, id);
     });
+}
+
+bool BankingGui::userAborted() const
+{
+    return m_userAborted;
+}
+
+void BankingGui::forgetAbort()
+{
+    m_userAborted = false;
+}
+
+/**
+ * The progress callbacks are where the wish to stop arrives: gwenhywfar asks
+ * through them whether the running operation is to be given up, and any answer
+ * other than nought means it is. The one that says the user asked for it is
+ * kept apart from a callback that simply could not be served.
+ */
+void BankingGui::noteAbort(int result)
+{
+    if (result == GWEN_ERROR_USER_ABORTED) {
+        m_userAborted = true;
+    }
 }
 
 void BankingGui::holdPasswordCache()
