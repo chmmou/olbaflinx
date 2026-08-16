@@ -59,6 +59,14 @@ public:
     explicit Account(const AB_ACCOUNT_SPEC *accountSpec = nullptr, double balance = 0.0);
     ~Account() override;
 
+    // The instance owns a C structure and frees it. A copy would hand the same
+    // pointer to two destructors, so the compiler generated ones are withdrawn
+    // rather than left to be called by accident.
+    Account(const Account &) = delete;
+    Account &operator=(const Account &) = delete;
+    Account(Account &&) = delete;
+    Account &operator=(Account &&) = delete;
+
     /**
      * @brief Creates an account from the column values of a database row.
      *

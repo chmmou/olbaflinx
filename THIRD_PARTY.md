@@ -15,8 +15,13 @@ Sie ist keine Rechtsberatung. Die SPDX-Bezeichner geben wieder, was die Lizenzda
 | libchipcard | 5.1.6 | 5.1.6 | `LGPL-2.1-only` | https://www.aquamaniac.de/rdm/projects/libchipcard |
 | qsqlcipher-qt6-cmake | keine | nicht feststellbar | `LGPL-3.0-only` | https://github.com/bAmpT/qsqlcipher-qt6-cmake |
 | Qt Advanced Docking System | keine | 5.0.0 | `LGPL-2.1-or-later` | https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System |
+| Feather | keine | nicht feststellbar | `MIT` | https://github.com/feathericons/feather |
 
 Die Mindestversionen stehen in `CMakeLists.txt` und `src/CMakeLists.txt`. Die verwendeten Versionen sind die, gegen die zuletzt gebaut wurde.
+
+Feather wird nicht gelinkt, sondern als Datei eingebettet. Erfasst ist es
+trotzdem, denn erfasst wird jede Drittanbieterkomponente, die mit der Anwendung
+ausgeliefert wird.
 
 ## Anmerkungen je Komponente
 
@@ -59,6 +64,23 @@ Der Treiber bindet SQLCipher ein. SQLCipher selbst steht unter einer BSD-artigen
 Verwendet wird Version 5.0.0.
 
 Die Lizenzangabe `LGPL-2.1-or-later` stammt aus den Metadaten des installierten Distributionspakets. Das Upstream-Repository nennt LGPL-2.1.
+
+### Feather
+
+Die 574 SVG-Dateien unter `res/themes/feather-dark/` und
+`res/themes/feather-light/` sind der Symbolsatz Feather. Belegt ist das an den
+Dateien selbst: jede trägt `class="feather feather-<name>"`. Beide Verzeichnisse
+führen denselben Satz von 287 Symbolen, einmal in Schwarz und einmal in Weiss.
+
+Die Version ist am Bestand nicht ablesbar. Eine SVG-Datei des Satzes trägt keine
+Versionsangabe, und die Dateien wurden ohne die übrigen Teile des Projekts
+übernommen, also ohne `package.json` und ohne `CHANGELOG.md`.
+
+Der Satz wird über `res/OlbaFlinxCore.qrc` in die Anwendung eingebettet und mit
+ihr ausgeliefert. Die MIT-Lizenz verlangt, den Vermerk bei jeder Kopie
+mitzugeben; er liegt als `res/themes/LICENSE.feather-icons` bei. Eine Auslieferung
+als reines Binärpaket führt diese Datei nicht von selbst mit, und der
+Über-Dialog nennt den Satz nicht. Das ist offen.
 
 ## Werkzeuge des Nachweises
 

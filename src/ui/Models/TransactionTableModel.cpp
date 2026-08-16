@@ -196,6 +196,22 @@ void TransactionTableModel::setStorage(Storage *storage)
         disconnect(m_storage, nullptr, this, nullptr);
     }
 
+    // The run that was going belonged to the storage that is being given up, and
+    // its end will never arrive. A model that stays on m_pending answers
+    // canFetchMore with false from here on and queues every request instead of
+    // sending it, so it would never ask for a row again.
+    ++m_generation;
+
+    m_pending = false;
+    m_queued = false;
+    m_deferred = false;
+    m_loadedRows = 0;
+    m_atEnd = false;
+    m_failed = false;
+
+    setItems({});
+    setTotalRows(0);
+
     m_storage = storage;
 
     if (m_storage == nullptr) {
@@ -208,16 +224,19 @@ void TransactionTableModel::setStorage(Storage *storage)
 
     connect(m_storage, &Storage::itemsCounted, this, [this](int count) { takeCount(count); });
 
-    // An end and a failure reach the model through this one signal, told apart
-    // by their code alone. Without listening to it the model would see both as
-    // the same event, namely the finished below.
-    connect(m_storage, &Storage::errorOccurred, this, [this](ErrorCode code, const QString &) {
+    // An end and a failure reach the model through two signals of the read path,
+    // told apart by the code alone. Without listening to the failure the model
+    // would see both as the same event, namely the end below.
+    connect(m_storage, &Storage::readFailed, this, [this](ErrorCode code, const QString &) {
         takeError(code);
     });
 
-    // finished arrives on every path, after a failure as well. It is what frees
-    // the storage for the next read, so it is what a waiting request waits for.
-    connect(m_storage, &Storage::finished, this, [this] { runEnded(); });
+    // readFinished arrives on every path of a read, after a failure as well. It
+    // is what frees the storage for the next one, so it is what a waiting
+    // request waits for. The write path has an end of its own and does not reach
+    // this model: a write that ended while this read was going would otherwise
+    // free a run that is still on its way.
+    connect(m_storage, &Storage::readFinished, this, [this] { runEnded(); });
 }
 
 void TransactionTableModel::setAccountId(quint32 accountId)
@@ -232,8 +251,7 @@ void TransactionTableModel::setAccountId(quint32 accountId)
     // The order belongs to the storage it was chosen in: it outlives a change of
     // account, it does not outlive the file.
     if (m_accountId == 0) {
-        m_sortColumn = DefaultSortColumn;
-        m_sortOrder = DefaultSortOrder;
+        applySort(DefaultSortColumn, DefaultSortOrder);
     }
 
     startOver();
@@ -262,10 +280,26 @@ void TransactionTableModel::sort(int column, Qt::SortOrder order)
         return;
     }
 
-    m_sortColumn = sortColumn;
-    m_sortOrder = order;
+    applySort(sortColumn, order);
 
     startOver();
+}
+
+/**
+ * The one place the order is changed. Every way there reports it, so that a
+ * header indicator hangs on the state of the model rather than on the one moment
+ * it was set up.
+ */
+void TransactionTableModel::applySort(Column column, Qt::SortOrder order)
+{
+    if (m_sortColumn == column && m_sortOrder == order) {
+        return;
+    }
+
+    m_sortColumn = column;
+    m_sortOrder = order;
+
+    Q_EMIT sortChanged(m_sortColumn, m_sortOrder);
 }
 
 TransactionTableModel::Column TransactionTableModel::sortColumn() const
@@ -370,18 +404,40 @@ void TransactionTableModel::requestItems()
 
     m_pending = true;
     m_queued = false;
+    m_deferred = false;
     m_requestGeneration = m_generation;
 
-    m_storage->receiveItems({.type = Storage::StorageTransaction,
-                             .accountId = m_accountId,
-                             .sort = sortColumnOf(m_sortColumn),
-                             .order = m_sortOrder,
-                             .offset = m_loadedRows,
-                             .limit = PageSize,
-                             .text = m_filter.text,
-                             .from = m_filter.from,
-                             .to = m_filter.to,
-                             .direction = m_filter.direction});
+    const auto error = m_storage->receiveItems({.type = Storage::StorageTransaction,
+                                                .accountId = m_accountId,
+                                                .sort = sortColumnOf(m_sortColumn),
+                                                .order = m_sortOrder,
+                                                .offset = m_loadedRows,
+                                                .limit = PageSize,
+                                                .text = m_filter.text,
+                                                .from = m_filter.from,
+                                                .to = m_filter.to,
+                                                .direction = m_filter.direction});
+
+    if (!error.isError()) {
+        return;
+    }
+
+    // No run was started, so not one of the signals of a read will arrive. The
+    // model would otherwise wait for an end that has nobody to send it.
+    m_pending = false;
+
+    // A storage with a read already going is not a failure of this request. The
+    // way is held for a moment, and the end of that read is what this one asks
+    // again on. Taking it for a failure would leave the view claiming the
+    // account holds no bookings while they lie untouched in the file.
+    if (error.code() == ErrorCode::Busy) {
+        m_deferred = true;
+        return;
+    }
+
+    m_failed = true;
+
+    Q_EMIT readRefused(error.code(), error.message());
 }
 
 /**
@@ -478,6 +534,14 @@ void TransactionTableModel::setTotalRows(int totalRows)
 void TransactionTableModel::runEnded()
 {
     if (!m_pending) {
+        // The end of a read this model did not start. What it frees is the way
+        // to the storage, and that is exactly what a request put off for a busy
+        // one is waiting for.
+        if (m_deferred) {
+            m_deferred = false;
+            requestItems();
+        }
+
         return;
     }
 

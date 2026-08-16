@@ -56,10 +56,16 @@ public:
     /**
      * @brief How a fetch ended.
      *
-     * Six ways out and each says something else to the user. Skipped is no
-     * failure: an account without online access is passed over before anything
-     * is sent. BalanceOnly is none either: the bank holds no order for the
-     * bookings of this account, so the fetch brought the balance alone.
+     * Seven ways out and each says something else to the user. Three of them
+     * are no failure. Skipped: the account has no online access and was passed
+     * over before anything was sent. NothingOffered: it has online access and
+     * the bank holds no order for it at all, neither the bookings nor the
+     * balance. BalanceOnly: the bank holds no order for the bookings, so the
+     * fetch brought the balance alone.
+     *
+     * Skipped and NothingOffered are apart, because one outcome for both would
+     * tell the user of either that the account has no online access.
+     *
      * StoreFailed is a failure, and the only one where the session was fine and
      * what it brought is lost.
      */
@@ -67,6 +73,7 @@ public:
         Received,
         BalanceOnly,
         Skipped,
+        NothingOffered,
         Aborted,
         Failed,
         StoreFailed,

@@ -12,13 +12,12 @@
 # The way is walked twice, under two locales. The steps name no visible text,
 # so both walks hold whatever the interface says.
 #
-# The second walk was meant to show more than that: with the interface speaking
-# another language, an element held by an id would still be found while one
-# held by its name would be lost. It cannot show that yet. Both translation
-# files of the project carry every string as unfinished, so there is no second
-# language for the interface to speak, and the sample below comes out the same
-# twice. What the second walk proves today is that a different locale does not
-# disturb the run; the rest of the evidence waits on a translation.
+# The second walk shows more than that: with the interface speaking another
+# language, an element held by an id is still found while one held by its name
+# would be lost. The sample below is what carries that, and it differs between
+# the two locales as long as the catalogue holds the menu bar the sample is
+# taken from. Where the two come out the same, the walk says so rather than
+# passing the pair off as evidence it is not.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -99,6 +98,10 @@ echo "=== what the two walks say ==="
 echo "the interface spoke \"${first_sample}\" and \"${second_sample}\""
 echo "ok    every step held under both locales, and no step named a visible text"
 if [ "$first_sample" = "$second_sample" ]; then
-    echo "note  the interface said the same both times: the project translates" \
-         "no second language yet, so this pair says nothing about the ids"
+    echo "note  the interface said the same both times, so this pair says" \
+         "nothing about the ids: the catalogue of the second locale is not" \
+         "carrying the text the sample is taken from"
+else
+    echo "ok    the interface spoke two languages and every element was still" \
+         "found, which is what holding an element by its id is for"
 fi

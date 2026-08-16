@@ -75,7 +75,7 @@ class OLBAFLINX_CORE_EXPORT Banking : public QObject
 
 public:
     /**
-     * @param applicationInfo Details used to sign on to the chip card service
+     * @param applicationInfo Details for signing on to the chip card service
      *  and for the title of the setup dialog.
      * @param parent Optional owner.
      */
@@ -248,10 +248,26 @@ Q_SIGNALS:
      * Not an error of the session: an account without online access is skipped
      * before anything is sent, so that the accounts beside it still run.
      *
+     * An account the bank holds no order at all for is a different case and has
+     * a signal of its own, noOrderOffered. Sharing one signal would tell the
+     * user of both that the account has no online access.
+     *
      * @param uniqueAccountId The account, as the banking backend keeps it.
      * @param reason Why it was passed over. It carries no account data.
      */
     void accountSkipped(quint32 uniqueAccountId, const QString &reason);
+
+    /**
+     * @brief This signal is emitted for an account the bank holds no order of
+     *  any kind for.
+     *
+     * The account has online access, so it is not the case accountSkipped
+     * names, and the bank offers neither the bookings nor the balance of it.
+     * Nothing is sent and the session ends here.
+     *
+     * @param uniqueAccountId The account, as the banking backend keeps it.
+     */
+    void noOrderOffered(quint32 uniqueAccountId);
 
     /**
      * @brief This signal is emitted for an account the bank holds no order for

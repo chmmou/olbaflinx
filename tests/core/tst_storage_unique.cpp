@@ -96,9 +96,13 @@ private:
     static int storeAndWait(Storage &storage, const BankingItems &items)
     {
         QSignalSpy storedSpy(&storage, &Storage::itemsStored);
-        QSignalSpy finishedSpy(&storage, &Storage::finished);
+        QSignalSpy finishedSpy(&storage, &Storage::writeFinished);
 
-        storage.storeItems(items);
+        // A run that was never started reports nothing, and -1 is what this
+        // function says that with.
+        if (storage.storeItems(items).isError()) {
+            return -1;
+        }
 
         if (finishedSpy.isEmpty() && !finishedSpy.wait(workerTimeout)) {
             return -1;
@@ -176,6 +180,11 @@ void StorageUniqueTest::initTestCase()
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
 
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
+
     // AqBanking keeps its configuration below AQBANKING_HOME. The fetch path is
     // reached here for the balance that travels from a response container into
     // the storage.
@@ -236,7 +245,7 @@ void StorageUniqueTest::theSameHundredWrittenAgainLeaveAHundred()
 
     QCOMPARE(storeAndWait(storage, items), 100);
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::writeFailed);
 
     QCOMPARE(storeAndWait(storage, items), 0);
     QCOMPARE(errorSpy.count(), 0);
@@ -444,7 +453,8 @@ void StorageUniqueTest::theBookingsOfAFetchAreFoundAgainUnderTheirAccount()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageTransaction, .accountId = testAccountId});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageTransaction, .accountId = testAccountId})
+                 .isError());
 
     QVERIFY(itemsSpy.wait(workerTimeout));
 
@@ -592,7 +602,7 @@ void StorageUniqueTest::transactionsAndBalanceOfOneAccountBothArrive()
 
     const auto transactions = TransactionHelpers::transactionRun(testAccountId, 5);
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::writeFailed);
 
     QCOMPARE(storeAndWait(storage, transactions), 5);
     QCOMPARE(storeAndWait(storage,
@@ -630,7 +640,7 @@ void StorageUniqueTest::aFailureInTheMiddleOfARunLeavesNoRowBehind()
     items << TransactionHelpers::unusableTransaction();
     items << TransactionHelpers::transactionRun(testAccountId, 10).mid(5);
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::writeFailed);
 
     QCOMPARE(storeAndWait(storage, items), 0);
     QCOMPARE(errorSpy.count(), 1);

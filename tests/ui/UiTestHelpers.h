@@ -77,8 +77,11 @@ public:
 
         Q_EMIT overview->storageOpened();
 
-        QSignalSpy finishedSpy(&storage, &Storage::finished);
-        storage.receiveItems({.type = Storage::StorageAccount});
+        QSignalSpy finishedSpy(&storage, &Storage::readFinished);
+
+        if (storage.receiveItems({.type = Storage::StorageAccount}).isError()) {
+            return false;
+        }
 
         return finishedSpy.wait(workerTimeout);
     }

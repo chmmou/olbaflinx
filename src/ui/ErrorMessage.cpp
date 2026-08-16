@@ -61,6 +61,10 @@ QString olbaflinx::ui::userMessage(const ErrorCode code)
         return QCoreApplication::translate("olbaflinx::ui",
                                            "This storage was written by a different version of "
                                            "the program and cannot be opened.");
+    case ErrorCode::Busy:
+        return QCoreApplication::translate("olbaflinx::ui",
+                                           "The storage is busy with another run. Try again in a "
+                                           "moment.");
     }
 
     return {};

@@ -34,11 +34,13 @@
 
 #include <QtCore/QTemporaryDir>
 
+#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QStackedWidget>
 #include <QtWidgets/QStatusBar>
+#include <QtWidgets/QTableView>
 #include <QtWidgets/QToolBar>
 #include <QtWidgets/QTreeView>
 
@@ -168,6 +170,7 @@ private Q_SLOTS:
     void aFilterWithoutAMatchGetsAnEmptyStateOfItsOwnWithAButton();
     void theCounterNamesWhatTheFilterLeaves();
     void closingTheStorageTakesTheFilterWithIt();
+    void closingTheStorageTakesTheSortIndicatorBackWithIt();
 
     void theAccountViewIsThereAndCarriesTheModel();
     void anEmptyModelPutsTheNoticeInPlaceOfTheTree();
@@ -191,6 +194,11 @@ void AppCentralWidgetTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 }
 
 void AppCentralWidgetTest::init()
@@ -458,7 +466,7 @@ void AppCentralWidgetTest::anAccountWithoutTransactionsSaysSoWithoutAMessage()
 
     const QString headlineWithoutAnAccount = headline->text();
 
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
     central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
 
     QVERIFY(finishedSpy.wait(workerTimeout));
@@ -674,6 +682,62 @@ void AppCentralWidgetTest::closingTheStorageTakesTheFilterWithIt()
 }
 
 /**
+ * The order belongs to the storage it was chosen in, and giving up the account
+ * puts the model back to the one it opens with. The indicator was set once at
+ * setup and heard nothing of that: the header went on pointing at a column the
+ * rows no longer stood under, and the next click on it turned around an order
+ * that was never in force. A single click could then no longer produce that
+ * column ascending at all.
+ */
+void AppCentralWidgetTest::closingTheStorageTakesTheSortIndicatorBackWithIt()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    const auto account = Account::fromMap(TestHelpers::namedAccountMap());
+    QVERIFY(!storage.storeItem(account.get()).isError());
+    QVERIFY(TransactionHelpers::putTransactions(storageFile(),
+                                                password(),
+                                                4711,
+                                                3,
+                                                QStringLiteral("Miete")));
+
+    App app(&logger, &storage);
+    app.initialize();
+
+    auto *central = app.findChild<AppCentralWidget *>();
+    auto *treeModel = app.findChild<AccountTreeModel *>();
+    auto *transactionModel = app.findChild<TransactionTableModel *>();
+    auto *view = app.findChild<QTableView *>(QStringLiteral("tableViewTransactions"));
+
+    QVERIFY(central != nullptr);
+    QVERIFY(treeModel != nullptr);
+    QVERIFY(transactionModel != nullptr);
+    QVERIFY(view != nullptr);
+
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    central->accountWidget()->setCurrentIndex(UiTestHelpers::firstAccountOf(*treeModel));
+    QTRY_COMPARE_WITH_TIMEOUT(transactionModel->rowCount(), 3, workerTimeoutMs);
+
+    auto *const header = view->horizontalHeader();
+
+    transactionModel->sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+
+    QCOMPARE(header->sortIndicatorSection(), int(TransactionTableModel::ValueColumn));
+    QCOMPARE(header->sortIndicatorOrder(), Qt::AscendingOrder);
+
+    app.closeStorage();
+
+    // The model went back to its default, and the header went with it.
+    QCOMPARE(int(transactionModel->sortColumn()), int(TransactionTableModel::DateColumn));
+    QCOMPARE(header->sortIndicatorSection(), int(TransactionTableModel::DateColumn));
+    QCOMPARE(header->sortIndicatorOrder(), Qt::DescendingOrder);
+}
+
+/**
  * The view used to be a widget that kept its entries in itself, and the getter
  * answered with nothing at all. Whoever asked for it got a null pointer and
  * would have dereferenced it.
@@ -826,8 +890,8 @@ void AppCentralWidgetTest::aReadThatOutlivesItsStorageReachesNoView()
     connect(&storage, &Storage::itemsReceived, &app, &App::setAccounts);
     Q_EMIT overview->storageOpened();
 
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     app.closeStorage();
 

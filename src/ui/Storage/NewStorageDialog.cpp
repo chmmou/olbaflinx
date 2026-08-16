@@ -44,8 +44,9 @@ public:
 
     /**
      * Puts the length the core enforces into the texts that announce it. The
-     * form carries the sentences with a placeholder; it used to carry the
-     * number as well, and named six where the core asks for twelve.
+     * form carries the sentences with a placeholder rather than the number,
+     * which would name whatever it was written with whatever the core asks
+     * for.
      */
     void applyPasswordGuideline() const
     {
@@ -130,9 +131,14 @@ NewStorageDialog::NewStorageDialog(Storage *storage, QWidget *parent, Qt::Window
 {
     d_ptr->applyPasswordGuideline();
 
-    // Ok used to be wired to accept() in the form, which closed the dialog
-    // before anything was looked at. It is gated on the check now.
+    // Wired here rather than to accept() in the form, which would close the
+    // dialog before anything was looked at.
     connect(d_ptr->ui->pushButtonOk, &QPushButton::clicked, this, &QDialog::accept);
+
+    // Cancel came out of the form as well, as a SIGNAL()/SLOT() call in the
+    // generated header. Both buttons of the dialog are wired the same way now,
+    // and both are checked when the file is compiled.
+    connect(d_ptr->ui->pushButtonCancel, &QPushButton::clicked, this, &QDialog::reject);
 
     for (auto *field : {d_ptr->ui->lineEditStorageName,
                         d_ptr->ui->lineEditPassword,

@@ -28,6 +28,21 @@ namespace olbaflinx::core::banking::transaction::tests {
 
 using namespace olbaflinx::core::tests;
 
+/**
+ * The instance owns a C structure and frees it in its destructor. A copy would
+ * hand the same pointer to two destructors, and the compiler generated
+ * operations were there for the taking until they were withdrawn. Balance and
+ * ReferenceAccount withdrew theirs from the start.
+ *
+ * Held at compile time, because that is the only place it can be held: an
+ * implementation that offers the operations again cannot be caught by anything
+ * that runs.
+ */
+static_assert(!std::is_copy_constructible_v<Transaction>);
+static_assert(!std::is_copy_assignable_v<Transaction>);
+static_assert(!std::is_move_constructible_v<Transaction>);
+static_assert(!std::is_move_assignable_v<Transaction>);
+
 class TransactionTest final : public QObject
 {
     Q_OBJECT
@@ -66,6 +81,7 @@ private Q_SLOTS:
     void dateSurvivesTheRoundTrip();
     void anUnreadableDateIsInvalidRatherThanToday();
     void itemTypeIsTheNameOfTheClass();
+    void aBookingWithoutAnAmountIsAnsweredInsteadOfDereferenced();
 };
 
 void TransactionTest::transactionIsValidRejectsUnknownType()
@@ -261,6 +277,26 @@ void TransactionTest::itemTypeIsTheNameOfTheClass()
     const Transaction transaction;
 
     QCOMPARE(transaction.itemType(), QStringLiteral("Transaction"));
+}
+
+/**
+ * A bank that sends an incomplete booking, a credit card entry without an
+ * amount among them, has it handed on rather than dropped. Asking the library
+ * for the currency of an amount that is not there reads from a null pointer
+ * wherever assertions are compiled out, and the whole storing path walks
+ * through the currency: the fingerprint is formed over it.
+ */
+void TransactionTest::aBookingWithoutAnAmountIsAnsweredInsteadOfDereferenced()
+{
+    AB_TRANSACTION *abTransaction = AB_Transaction_new();
+    AB_Transaction_SetType(abTransaction, AB_Transaction_TypeStatement);
+
+    const auto booking = std::make_shared<Transaction>(abTransaction);
+    AB_Transaction_free(abTransaction);
+
+    QCOMPARE(booking->value(), 0.0);
+    QVERIFY(booking->currency().isEmpty());
+    QVERIFY(!booking->toMap().isEmpty());
 }
 
 } // namespace olbaflinx::core::banking::transaction::tests

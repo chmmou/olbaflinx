@@ -41,9 +41,9 @@ using GwenBufferPtr = std::unique_ptr<GWEN_BUFFER, decltype(&GWEN_Buffer_free)>;
 class Transaction::Private
 {
 public:
-    // A duplicate is made only of what the caller handed in. The fallback used to
-    // build a transaction and duplicate that one as well, so the structure it had
-    // just created was never released.
+    // A duplicate is made only of what the caller handed in. A fallback that
+    // built a transaction and duplicated that one as well would never release
+    // the structure it had just created.
     explicit Private(Transaction *transaction, const AB_TRANSACTION *abTT)
         : abTransaction(abTT ? AB_Transaction_dup(abTT) : AB_Transaction_new())
         , q_ptr(transaction)
@@ -58,10 +58,9 @@ public:
     /**
      * The fingerprint a booking is recognised by.
      *
-     * It used to be taken over the end to end reference alone, which most
-     * bookings do not carry. Every one of those shared the hash of an empty
-     * string with every other, so they could not be told apart. The fields below
-     * are the ones that together identify a booking.
+     * Not the end to end reference alone, which most bookings do not carry:
+     * every one of those would share the hash of an empty string with every
+     * other. The fields below are the ones that together identify a booking.
      */
     QString calculateTransactionHash()
     {
@@ -84,11 +83,11 @@ public:
     /**
      * Reads a date out of the banking backend.
      *
-     * A GWEN_DATE carries a year, a month and a day and nothing else. The
-     * template used to ask for a time as well, which the source cannot fill.
+     * A GWEN_DATE carries a year, a month and a day and nothing else, so the
+     * template asks for no time the source cannot fill.
      *
-     * A date that cannot be read answers with an invalid QDate. It used to
-     * answer with today, which put an invented day into booking data.
+     * A date that cannot be read answers with an invalid QDate rather than with
+     * today, which would put an invented day into booking data.
      */
     static QDate toDate(const GWEN_DATE *gwenDate)
     {
@@ -96,7 +95,7 @@ public:
             return {};
         }
 
-        // The early return below used to leak this buffer.
+        // Held, so that the early return below releases it as well.
         const GwenBufferPtr buffer(GWEN_Buffer_new(nullptr, 16, 0, 1), &GWEN_Buffer_free);
 
         if (GWEN_Date_toStringWithTemplate(gwenDate, "DD.MM.YYYY", buffer.get()) != GWEN_SUCCESS) {
@@ -111,11 +110,11 @@ public:
      * Hands a date to the banking backend.
      *
      * Ownership stays here. Every setter of AB_TRANSACTION duplicates what it is
-     * given, so the handle has to be released again; it used to be dropped at all
+     * given, so the handle has to be released again, and a holder does it at all
      * seven call sites.
      *
      * A date that is not set answers with an empty handle, which the setters read
-     * as "no date". It used to answer with today.
+     * as "no date", rather than with today.
      */
     static GwenDatePtr fromDate(const QDate &date)
     {
@@ -315,7 +314,18 @@ qreal Transaction::value() const
 
 QString Transaction::currency() const
 {
-    return QString::fromUtf8(AB_Value_GetCurrency(AB_Transaction_GetValue(d_ptr->abTransaction)));
+    // A booking without an amount is one the bank sent incomplete, and the
+    // backend hands it on rather than dropping it. Asking the library for the
+    // currency of a value it does not have reads from a null pointer wherever
+    // assertions are compiled out, which is every release build.
+    const AB_VALUE *value = AB_Transaction_GetValue(d_ptr->abTransaction);
+    if (value == nullptr) {
+        return {};
+    }
+
+    const char *currency = AB_Value_GetCurrency(value);
+
+    return currency == nullptr ? QString() : QString::fromUtf8(currency);
 }
 
 qreal Transaction::fees() const

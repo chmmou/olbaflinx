@@ -26,9 +26,9 @@ using namespace olbaflinx::core::banking::account;
 class ReferenceAccount::Private
 {
 public:
-    // A duplicate is made only of what the caller handed in. The fallback used to
-    // build an account and duplicate that one as well, so the structure it had
-    // just created was never released.
+    // A duplicate is made only of what the caller handed in. A fallback that
+    // built an account and duplicated that one as well would never release the
+    // structure it had just created.
     explicit Private(const AB_REFERENCE_ACCOUNT *refAccount)
         : abRefAccount(refAccount ? AB_ReferenceAccount_dup(refAccount) : AB_ReferenceAccount_new())
     {}
@@ -109,8 +109,8 @@ std::shared_ptr<ReferenceAccount> ReferenceAccount::fromMap(const QMap<QString, 
         return {};
     }
 
-    // The values used to be dropped and an empty account handed back, so every
-    // reference account read from the database was blank.
+    // The values of the row go into the structure. Without them every reference
+    // account read from the database comes back blank.
     AB_REFERENCE_ACCOUNT *abRefAccount = AB_ReferenceAccount_new();
 
     const auto ownerName = map.value(QStringLiteral("owner_name")).toString().toUtf8();

@@ -294,7 +294,7 @@
      <item>
       <widget class="QLabel" name="labelVaultPasswordDescriptionBottom">
        <property name="text">
-        <string>The password is only known to you and can be reset if necessary. If you forget the password, you will no longer be able to access the storage.</string>
+        <string>The password is known only to you and cannot be reset. If you forget it, you will no longer be able to access the storage.</string>
        </property>
        <property name="textFormat">
         <enum>Qt::TextFormat::PlainText</enum>
@@ -396,22 +396,4 @@
  <resources>
   <include location="../../../res/app.qrc"/>
  </resources>
- <connections>
-  <connection>
-   <sender>pushButtonCancel</sender>
-   <signal>clicked()</signal>
-   <receiver>UiNewStorageDialog</receiver>
-   <slot>reject()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>384</x>
-     <y>365</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>188</x>
-     <y>322</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
 </ui>

@@ -43,6 +43,15 @@ public:
     explicit StorageDialog(olbaflinx::core::storage::Storage *storage, QWidget *parent = nullptr);
     ~StorageDialog() override;
 
+    /**
+     * @brief Builds the overview and remembers the window it reports to.
+     *
+     * @param window The application window. The accounts of an opened storage go
+     *  to it and there is no second way there, so a window of another kind, or
+     *  none at all, leaves the overview able to create a storage but not to open
+     *  one. That is said once and refused where it is asked for, rather than
+     *  taken as a precondition nobody checks.
+     */
     void initialize(QMainWindow *window);
 
     /**
@@ -111,7 +120,8 @@ Q_SIGNALS:
 protected:
     /**
      * Sizes that derive from the font are computed again when the font changes.
-     * They used to be set once at construction and never revisited.
+     * Set once at construction they would hold a measure of a font nobody uses
+     * any more.
      */
     void changeEvent(QEvent *event) override;
 

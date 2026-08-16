@@ -19,6 +19,8 @@
 
 #include "core/Logging.h"
 
+#include "TestHelpers.h"
+
 #include <QtTest/QtTest>
 
 #include <memory>
@@ -26,6 +28,8 @@
 using namespace olbaflinx::core::logger;
 
 namespace olbaflinx::core::logger::tests {
+
+using namespace olbaflinx::core::tests;
 
 /**
  * The logger binds a domain of the Gwenhywfar logger, which is global state. The
@@ -59,6 +63,7 @@ private:
     }
 
 private Q_SLOTS:
+    void initTestCase();
     void init();
     void cleanup();
 
@@ -72,7 +77,20 @@ private Q_SLOTS:
     void aCategoryMessageReachesTheSameFile();
     void aFileThatCannotBeOpenedIsReportedAndStopsNothing();
     void theDefaultFileSitsInTheDataLocationOfTheApplication();
+    void aLoggerDestroyedWithoutDisableTakesTheLogDownWithIt();
+    void aLoggerEnabledWithoutAFileLeavesTheDomainToTheNextOne();
+    void aSecondLoggerTakesNeitherTheDomainNorTheFileFromTheFirst();
 };
+
+void LoggerTest::initTestCase()
+{
+    // Logger::defaultLogFile() sits below the data location of the application,
+    // and one function here measures against it. Without this the run would
+    // reach the home directory of whoever started it.
+    QStandardPaths::setTestModeEnabled(true);
+
+    QVERIFY(TestHelpers::useTemporaryHome());
+}
 
 void LoggerTest::init()
 {
@@ -108,12 +126,26 @@ void LoggerTest::enableWritesTheMessageToTheGivenFile()
  */
 void LoggerTest::logWithoutEnableWritesNothing()
 {
-    const auto file = logFile("neverEnabled");
+    const auto file = logFile("withoutEnable");
 
     Logger logger;
     logger.log(QStringLiteral("this must not appear anywhere"));
 
+    // Nothing has been opened, so nothing can have been written.
     QVERIFY(!QFile::exists(file));
+
+    // The file is handed over afterwards, which is what makes the assertion
+    // above provable rather than a statement about a file nothing in this binary
+    // ever opens: whatever the call did before, it did not reach this file, and
+    // a run that had kept the message would show it here.
+    logger.enable(Logger::Notice, file);
+    logger.log(QStringLiteral("this one belongs in the file"));
+    logger.disable();
+
+    const QString contents = contentsOf(file);
+
+    QVERIFY(contents.contains(QStringLiteral("this one belongs in the file")));
+    QVERIFY(!contents.contains(QStringLiteral("this must not appear anywhere")));
 }
 
 void LoggerTest::logAfterDisableWritesNothing()
@@ -161,6 +193,17 @@ void LoggerTest::setLevelWithoutEnableHasNoEffect()
     logger.log(QStringLiteral("still nothing to write"));
 
     QVERIFY(!QFile::exists(file));
+
+    // Held against the same file afterwards, so that the silence above is shown
+    // and not merely asserted about a path nothing was ever handed.
+    logger.enable(Logger::Notice, file);
+    logger.log(QStringLiteral("written after the domain was opened"));
+    logger.disable();
+
+    const QString contents = contentsOf(file);
+
+    QVERIFY(contents.contains(QStringLiteral("written after the domain was opened")));
+    QVERIFY(!contents.contains(QStringLiteral("still nothing to write")));
 }
 
 void LoggerTest::nonAsciiMessageReachesTheFile()
@@ -244,6 +287,98 @@ void LoggerTest::theDefaultFileSitsInTheDataLocationOfTheApplication()
     QVERIFY(QFileInfo(file).isAbsolute());
     QCOMPARE(QFileInfo(file).fileName(), QStringLiteral("olbaflinx.log"));
     QVERIFY(file.startsWith(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)));
+}
+
+/**
+ * enable() puts the instance into a static owner, hands a QFile to a static
+ * pointer and installs the message handler. A member of this class holds none of
+ * it, so leaving the scope used to undo nothing: the owner stayed behind
+ * pointing at an object that was gone, and the next failed write emitted a
+ * signal on it.
+ *
+ * The file pointer stayed as well, which is what this measures: enable() answers
+ * a file that is already open by keeping the one it has, so a second logger
+ * could not open one at all.
+ */
+void LoggerTest::aLoggerDestroyedWithoutDisableTakesTheLogDownWithIt()
+{
+    const auto first = logFile("destroyedWithoutDisable");
+    const auto second = logFile("afterTheDestructor");
+
+    {
+        Logger logger;
+        logger.enable(Logger::Notice, first);
+        logger.log(QStringLiteral("written by the first logger"));
+    }
+
+    QVERIFY(contentsOf(first).contains(QStringLiteral("written by the first logger")));
+
+    // A second logger opens the file it names rather than finding one that is
+    // still standing.
+    Logger logger;
+    logger.enable(Logger::Notice, second);
+
+    qCWarning(lcStorage) << "written by the second logger";
+
+    logger.disable();
+
+    QVERIFY(QFile::exists(second));
+    QVERIFY(contentsOf(second).contains(QStringLiteral("written by the second logger")));
+
+    // And nothing of the second run reached the file of the first.
+    QVERIFY(!contentsOf(first).contains(QStringLiteral("written by the second logger")));
+}
+
+/**
+ * A call without a file opens the logging domain of gwenhywfar just the same,
+ * and only sets the level while it does. It used to leave no owner behind, so
+ * nothing closed the domain: the next logger found it open, skipped the open and
+ * the level with it, and wrote to the console at the level of the first call
+ * rather than to the file it was handed.
+ */
+void LoggerTest::aLoggerEnabledWithoutAFileLeavesTheDomainToTheNextOne()
+{
+    {
+        Logger console;
+        console.enable(Logger::Notice);
+    }
+
+    const auto file = logFile("afterAConsoleLogger");
+
+    Logger logger;
+    logger.enable(Logger::Debug, file);
+    logger.log(QStringLiteral("this one names a file and has to reach it"));
+    logger.disable();
+
+    QVERIFY(QFile::exists(file));
+    QVERIFY(contentsOf(file).contains(QStringLiteral("this one names a file and has to reach it")));
+}
+
+/**
+ * The domain and the file go together and go with one owner. A second logger
+ * that came up while the first still holds them used to take the file for
+ * itself, and its destructor then closed what the first was still writing to:
+ * the owner logged into nothing while it still counted as enabled.
+ */
+void LoggerTest::aSecondLoggerTakesNeitherTheDomainNorTheFileFromTheFirst()
+{
+    const auto held = logFile("theOwnerKeepsIt");
+    const auto taken = logFile("theSecondOneGetsNothing");
+
+    Logger owner;
+    owner.enable(Logger::Notice, held);
+
+    {
+        Logger second;
+        second.enable(Logger::Notice, taken);
+    }
+
+    owner.log(QStringLiteral("the owner is still writing"));
+
+    QVERIFY(!QFile::exists(taken));
+    QVERIFY(contentsOf(held).contains(QStringLiteral("the owner is still writing")));
+
+    owner.disable();
 }
 
 } // namespace olbaflinx::core::logger::tests

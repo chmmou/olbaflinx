@@ -53,6 +53,7 @@ private Q_SLOTS:
     void initializeOpensTheBackendUnderTheTemporaryHome();
     void accountsWithoutAnyConfiguredAccountReportsNotFound();
     void initializeWithoutAnInterfaceReportsAnError();
+    void theInstanceThatGoesFirstLeavesTheOtherItsInterface();
 };
 
 namespace {
@@ -216,6 +217,60 @@ void BankingTest::initializeWithoutAnInterfaceReportsAnError()
     QVERIFY(error.isError());
     QCOMPARE(error.code(), ErrorCode::InvalidInput);
     QVERIFY(error.message().contains(QStringLiteral("user interface")));
+}
+
+/**
+ * The interface of gwenhywfar is one slot per thread, and the application holds
+ * two instances at once: the window keeps one for its fetches, and the setup
+ * assistant builds a second one while it is open. Whichever of them goes first
+ * leaves the slot holding something the other did not put there.
+ *
+ * Each therefore sets its own for the length of its shutdown, instead of trusting
+ * what the slot holds. Without that, AB_Banking_Fini ends the process rather than
+ * reporting anything: it takes a file lock, and the lock reads the flags of the
+ * current interface without asking whether there is one.
+ *
+ * The order below is the one the application produces, the assistant closing
+ * while the window stays.
+ */
+void BankingTest::theInstanceThatGoesFirstLeavesTheOtherItsInterface()
+{
+    const ScopedConsoleGui windowGui;
+    const ScopedConsoleGui assistantGui;
+
+    Banking window(applicationInfo());
+    Banking assistant(applicationInfo());
+
+    QVERIFY(!window
+                 .initialize(QStringLiteral("OlbaFlinxBankingTest"),
+                             QStringLiteral("1.0.0"),
+                             QStringLiteral("0123456789ABCDEF"),
+                             windowGui.get())
+                 .isError());
+
+    QCOMPARE(GWEN_Gui_GetGui(), windowGui.get());
+
+    QVERIFY(!assistant
+                 .initialize(QStringLiteral("OlbaFlinxBankingTest"),
+                             QStringLiteral("1.0.0"),
+                             QStringLiteral("0123456789ABCDEF"),
+                             assistantGui.get())
+                 .isError());
+
+    QCOMPARE(GWEN_Gui_GetGui(), assistantGui.get());
+
+    // The one that goes first leaves the slot empty. What it displaced belongs
+    // to the other instance, and putting that back would hand on a pointer whose
+    // owner is free to go at any moment.
+    assistant.finalize();
+
+    QVERIFY(GWEN_Gui_GetGui() == nullptr);
+
+    // The window is still initialized and finds no interface, which is the state
+    // that used to end the process here.
+    window.finalize();
+
+    QVERIFY(GWEN_Gui_GetGui() == nullptr);
 }
 
 } // namespace olbaflinx::core::banking::tests

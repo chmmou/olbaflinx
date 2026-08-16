@@ -86,10 +86,15 @@ private Q_SLOTS:
     void storeItemRejectsNullItem();
     void storeItemRejectsUnsupportedType();
     void initializeReportsFailureOnUnwritablePath();
+    void initializeReportsFailureAgainOnASecondAttempt();
+    void initializeChecksTheSchemaOnASecondAttemptAsWell();
     void initializeNamesTheColumnsAnOlderStoreDoesNotHave();
+    void openingWithoutTheSchemaAsksForTheColumnsAllTheSame();
     void errorOccurredCarriesMatchingCode();
     void receiveItemsRejectsAnAccountFilterOnAnotherType_data();
     void receiveItemsRejectsAnAccountFilterOnAnotherType();
+    void receiveItemsRejectsASortColumnOnAnotherType_data();
+    void receiveItemsRejectsASortColumnOnAnotherType();
     void receiveItemsEmitsProgressWithinRange();
     void receiveItemsFillsTransactionFields();
     void storeItemsEndsAtTheFailingAccountAndKeepsWhatWentIn();
@@ -99,6 +104,11 @@ void StorageErrorTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 
     QVERIFY(workingDirectory.isValid());
 }
@@ -184,6 +194,66 @@ void StorageErrorTest::initializeReportsFailureOnUnwritablePath()
 }
 
 /**
+ * The attempt that failed to open leaves a connection behind, registered under
+ * the name of the same file. A second call used to find it, take the file name
+ * for the whole answer and report success without asking whether it was open.
+ * The caller then held a store no statement could reach and met the failure much
+ * later, under a code that named none of this.
+ *
+ * withSchema stays false here, because that is the way the check was missing on:
+ * the branch with a schema ran its statements and failed on them anyway.
+ */
+void StorageErrorTest::initializeReportsFailureAgainOnASecondAttempt()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+
+    // A directory cannot be opened as a database file, and it exists, so the
+    // driver answers with a connection that is registered and not open.
+    storage.setStorageFile(workingDirectory.path());
+
+    QVERIFY(storage.initialize(false).isError());
+
+    const auto second = storage.initialize(false);
+
+    QVERIFY(second.isError());
+    QCOMPARE(second.code(), ErrorCode::DatabaseFailure);
+    QVERIFY(!storage.isValid());
+
+    storage.close();
+}
+
+/**
+ * The second attempt on a file the first one opened and then refused. A refusal
+ * that left its connection standing used to be taken for a storage that had
+ * been checked, and the second call then answered success without looking at
+ * the version at all.
+ *
+ * A file that has never been set up is at version nought, which is below the one
+ * this build reads, so the refusal is the one about a store waiting to be
+ * migrated.
+ */
+void StorageErrorTest::initializeChecksTheSchemaOnASecondAttemptAsWell()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile("schemaOnSecondAttempt"));
+
+    const auto first = storage.initialize(false);
+
+    QVERIFY(first.isError());
+    QCOMPARE(first.code(), ErrorCode::SchemaMismatch);
+
+    const auto second = storage.initialize(false);
+
+    QVERIFY(second.isError());
+    QCOMPARE(second.code(), ErrorCode::SchemaMismatch);
+    QVERIFY(!storage.isValid());
+
+    storage.close();
+}
+
+/**
  * Version 3 gave accounts two columns of their own. They come into being with
  * the table, so a store written before that carries neither, and the schema run
  * cannot add them: setupTables replays the whole resource on every version step,
@@ -238,6 +308,46 @@ void StorageErrorTest::initializeNamesTheColumnsAnOlderStoreDoesNotHave()
 }
 
 /**
+ * The version alone does not answer for the columns. A file can carry the
+ * current number and still be missing one, and the way that opens without the
+ * schema statements used to answer success on the number alone: every later
+ * statement then failed on a column nobody had mentioned.
+ */
+void StorageErrorTest::openingWithoutTheSchemaAsksForTheColumnsAllTheSame()
+{
+    const auto file = storageFile("versionWithoutTheColumn");
+
+    {
+        Storage storage(applicationInfo());
+        QVERIFY(!storage.setKey(password()).isError());
+        storage.setStorageFile(file);
+
+        QVERIFY(!storage.initialize(true).isError());
+
+        storage.close();
+    }
+
+    // The file keeps the current version and loses a column the statements bind
+    // against, which is the state an older file reaches after a schema run.
+    QVERIFY(TestHelpers::runStatement(file,
+                                      password(),
+                                      QStringLiteral("ALTER TABLE accounts RENAME COLUMN "
+                                                     "active TO chosen;")));
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(file);
+
+    const auto error = storage.initialize(false);
+
+    QVERIFY(error.isError());
+    QCOMPARE(error.code(), ErrorCode::SchemaMismatch);
+    QVERIFY(error.message().contains(QStringLiteral("active")));
+
+    storage.close();
+}
+
+/**
  * The code that went out with the signal used to be PasswordChanged whatever the
  * cause. Reading a table that does not exist has nothing to do with a password.
  */
@@ -249,23 +359,25 @@ void StorageErrorTest::errorOccurredCarriesMatchingCode()
 
     QVERIFY(!storage.initialize(true).isError());
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
 
-    // A type without a table of its own is answered before anything is started,
-    // in this thread, so there is nothing to wait for here.
-    storage.receiveItems({.type = Storage::StorageContacts});
+    // A type without a table of its own starts no run, so it answers through the
+    // return value and emits nothing: the signals of a read belong to a read,
+    // and this one never became one.
+    const auto refused = storage.receiveItems({.type = Storage::StorageContacts});
 
-    QCOMPARE(errorSpy.count(), 1);
-    QCOMPARE(finishedSpy.count(), 1);
+    QVERIFY(refused.isError());
+    QCOMPARE(refused.code(), ErrorCode::NotImplemented);
+    QVERIFY(!refused.message().isEmpty());
 
-    const auto arguments = errorSpy.takeFirst();
-    QCOMPARE(arguments.at(0).value<ErrorCode>(), ErrorCode::NotImplemented);
-    QVERIFY(!arguments.at(1).toString().isEmpty());
+    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
 
-    // An empty table is not the same cause and has to carry its own code. This
-    // one is found by the reading thread, so the signal is waited for.
-    storage.receiveItems({.type = Storage::StorageAccount});
+    // An empty table is not the same cause and has to carry its own code. That
+    // one is found by the reading thread, so it does travel as a signal and is
+    // waited for.
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     QVERIFY(errorSpy.wait());
     QCOMPARE(errorSpy.count(), 1);
@@ -299,16 +411,71 @@ void StorageErrorTest::receiveItemsRejectsAnAccountFilterOnAnotherType()
 
     QVERIFY(!storage.initialize(true).isError());
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
 
-    // Answered before anything is started, in this thread, so there is nothing
-    // to wait for here.
-    storage.receiveItems({.type = type, .accountId = 815});
+    // Answered before anything is started, through the return value, and to
+    // nobody but the caller.
+    const auto refused = storage.receiveItems({.type = type, .accountId = 815});
 
-    QCOMPARE(errorSpy.count(), 1);
-    QCOMPARE(finishedSpy.count(), 1);
-    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::InvalidInput);
+    QVERIFY(refused.isError());
+    QCOMPARE(refused.code(), ErrorCode::InvalidInput);
+
+    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
+
+    storage.close();
+}
+
+/**
+ * The same for the column a read orders by. Every value of SortColumn names a
+ * column of the transactions table, so one of them on another type used to reach
+ * the statement as an ORDER BY over a column that table does not carry. What
+ * came back was a failure of the database naming a missing column, where the
+ * neighbouring check answers the very same mistake with InvalidInput.
+ */
+void StorageErrorTest::receiveItemsRejectsASortColumnOnAnotherType_data()
+{
+    QTest::addColumn<Storage::Type>("type");
+    QTest::addColumn<Storage::SortColumn>("sort");
+
+    QTest::newRow("accountByDate") << Storage::StorageAccount << Storage::SortColumn::Date;
+    QTest::newRow("accountByValue") << Storage::StorageAccount << Storage::SortColumn::Value;
+    QTest::newRow("referenceAccountByPurpose")
+        << Storage::StorageReferenceAccount << Storage::SortColumn::Purpose;
+}
+
+void StorageErrorTest::receiveItemsRejectsASortColumnOnAnotherType()
+{
+    QFETCH(Storage::Type, type);
+    QFETCH(Storage::SortColumn, sort);
+
+    Storage storage(applicationInfo());
+    QVERIFY(!storage.setKey(password()).isError());
+    storage.setStorageFile(storageFile(QTest::currentDataTag()));
+
+    QVERIFY(!storage.initialize(true).isError());
+
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
+
+    // Answered before anything is started, through the return value, and to
+    // nobody but the caller.
+    const auto refused = storage.receiveItems({.type = type, .sort = sort});
+
+    QVERIFY(refused.isError());
+    QCOMPARE(refused.code(), ErrorCode::InvalidInput);
+
+    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 0);
+
+    // The check does not reach further than it has to: the same type without a
+    // chosen column runs. The table is empty, so it ends with the code for
+    // nothing found rather than with the refusal above.
+    QVERIFY(!storage.receiveItems({.type = type}).isError());
+
+    QVERIFY(errorSpy.wait());
+    QCOMPARE(errorSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::NotFound);
 
     storage.close();
 }
@@ -330,10 +497,10 @@ void StorageErrorTest::receiveItemsEmitsProgressWithinRange()
         QVERIFY(!storage.storeItem(account.get()).isError());
     }
 
-    QSignalSpy progressSpy(&storage, &Storage::progressChanged);
+    QSignalSpy progressSpy(&storage, &Storage::readProgressChanged);
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageAccount});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageAccount}).isError());
 
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
@@ -369,7 +536,7 @@ void StorageErrorTest::receiveItemsFillsTransactionFields()
 
     QSignalSpy itemsSpy(&storage, &Storage::itemsReceived);
 
-    storage.receiveItems({.type = Storage::StorageTransaction});
+    QVERIFY(!storage.receiveItems({.type = Storage::StorageTransaction}).isError());
 
     QVERIFY(itemsSpy.wait());
     QCOMPARE(itemsSpy.count(), 1);
@@ -422,11 +589,11 @@ void StorageErrorTest::storeItemsEndsAtTheFailingAccountAndKeepsWhatWentIn()
     QVERIFY(!second->isValid());
     QVERIFY(third->isValid());
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::writeFailed);
     QSignalSpy storedSpy(&storage, &Storage::itemsStored);
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy finishedSpy(&storage, &Storage::writeFinished);
 
-    storage.storeItems(BankingItems{first, second, third});
+    QVERIFY(!storage.storeItems(BankingItems{first, second, third}).isError());
 
     QVERIFY(finishedSpy.wait());
 

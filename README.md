@@ -24,7 +24,7 @@ OlbaFlinx Core beinhaltet die Businesslogik für OlbaFlinx.
    1. Die Eingabe der PIN / TAN wird `nicht` gespeichert.
    2. Zum Verschlüsseln der Daten wird QSQLite mit SQLCipher verwendet.
    3. AqBanking legt die Kontodaten in Konfigurationsdateien ab, die im Hauptverzeichnis des Benutzers liegen. Diese Daten werden zwar im Datenspeicher ebenfalls abgelegt, sind dort aber verschlüsselt.
-2. Eine weitere Besonderheit ist die, dass in regelmäßigen Abständen bei Nutzung der Anwendung eine Sicherung des Datenspeichers erfolgt. Es ist jedoch ratsam, dass der Datenspeicher selbst von dem Benutzer gesichert werden sollte.
+2. Eine Sicherung des Datenspeichers lässt sich über das Menü eines Eintrags in der Übersicht anlegen. Sie erfolgt auf Anforderung und nicht selbsttätig; darüber hinaus ist es ratsam, dass der Datenspeicher vom Benutzer selbst gesichert wird.
    1. Hier könnte eine externe Festplatte und oder ein externer USB-Stick helfen. Wenn es ein Cloud-Anbieter sein sollte, würde ich einen aus der EU, respektiv Deutschland, wählen.
    2. Ebenfalls ist es ratsam das Konfigurationsverzeichnis von AqBanking `~/.aqbanking` zu sichern.
    3. Zu empfehlen ist eine Backupstrategie für das Benutzerverzeichnis
@@ -115,3 +115,4 @@ Der OlbaFlinx App Quellcode wird unter der [GNU General Public License Version 3
 | qsqlcipher-qt6-cmake       | [LGPL v3](https://github.com/bAmpT/qsqlcipher-qt6-cmake/blob/6.6-cmake/LICENSE)                               |
 | Qt Advanced Docking System | [LGPL v2.1](https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System?tab=LGPL-2.1-1-ov-file)            |
 | Qt 6                       | [Mehrfach Lizenz](https://www.qt.io/qt-licensing)                                                             |
+| Feather Icons              | [MIT](https://github.com/feathericons/feather/blob/main/LICENSE)                                              |

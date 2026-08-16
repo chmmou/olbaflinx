@@ -65,6 +65,11 @@ void AppErrorHandlingTest::initTestCase()
 {
     // Keeps QSettings out of the real user configuration, see QStandardPaths docs.
     QStandardPaths::setTestModeEnabled(true);
+
+    // Test mode alone puts the locations below ~/.qttest, which is a directory
+    // of the user like any other and survives the run. HOME goes into a
+    // temporary directory, so that nothing this binary writes outlives it.
+    QVERIFY(TestHelpers::useTemporaryHome());
 }
 
 void AppErrorHandlingTest::everyErrorCodeHasAUserMessage()
@@ -125,14 +130,25 @@ void AppErrorHandlingTest::storageErrorReachesTheWindow()
 
     QCOMPARE(app.statusBar()->currentMessage(), QString());
 
-    Q_EMIT storage.errorOccurred(ErrorCode::PermissionDenied,
-                                 QStringLiteral("PRAGMA key failed on /home/somebody/vault.obfx"));
+    Q_EMIT storage.readFailed(ErrorCode::PermissionDenied,
+                              QStringLiteral("PRAGMA key failed on /home/somebody/vault.obfx"));
 
     const QString shown = app.statusBar()->currentMessage();
 
     QCOMPARE(shown, userMessage(ErrorCode::PermissionDenied));
     QVERIFY(!shown.contains(QStringLiteral("PRAGMA")));
     QVERIFY(!shown.contains(QStringLiteral("/home/")));
+
+    // The write path reports through a signal of its own, because a read and a
+    // write may be going at the same time. Both reach the window: what they are
+    // told apart for is the state of a run, and the window shows either the same
+    // way. A window listening to one of them alone would leave the other silent.
+    app.statusBar()->clearMessage();
+
+    Q_EMIT storage.writeFailed(ErrorCode::DatabaseFailure,
+                               QStringLiteral("INSERT INTO transactions failed"));
+
+    QCOMPARE(app.statusBar()->currentMessage(), userMessage(ErrorCode::DatabaseFailure));
 }
 
 /**
@@ -149,14 +165,14 @@ void AppErrorHandlingTest::anEmptyReadDoesNotReachTheStatusBar()
 
     App app(&logger, &storage);
 
-    Q_EMIT storage.errorOccurred(ErrorCode::NotFound,
-                                 QStringLiteral("No items found in the table accounts"));
+    Q_EMIT storage.readFailed(ErrorCode::NotFound,
+                              QStringLiteral("No items found in the table accounts"));
 
     QCOMPARE(app.statusBar()->currentMessage(), QString());
 
     // Every other code still gets there.
-    Q_EMIT storage.errorOccurred(ErrorCode::DatabaseFailure,
-                                 QStringLiteral("No open storage connection"));
+    Q_EMIT storage.readFailed(ErrorCode::DatabaseFailure,
+                              QStringLiteral("No open storage connection"));
 
     QCOMPARE(app.statusBar()->currentMessage(), userMessage(ErrorCode::DatabaseFailure));
 }

@@ -90,6 +90,17 @@ constexpr int DockLayoutVersion = 1;
  */
 constexpr int RefreshRetryMs = 50;
 
+/**
+ * How long the window waits after the last move or resize before it writes its
+ * geometry down.
+ *
+ * Qt delivers an event for every step of a drag, and a write goes through
+ * QSettings::sync, which puts the whole file out and reads it back in the thread
+ * that draws. Long enough that one drag makes one write, short enough that a
+ * window closed right afterwards still has it.
+ */
+constexpr int GeometrySaveDelayMs = 400;
+
 } // namespace
 
 using namespace olbaflinx::core;
@@ -123,11 +134,18 @@ public:
         // Connected before the log is opened, because a file that cannot be
         // opened reports it during the call.
         QObject::connect(logger, &Logger::logFileUnavailable, q_ptr, [this] {
+            // Through the event loop, because this runs before setupUi. Asking
+            // for the status bar here builds an empty one, which setupUi then
+            // replaces by the one of the form; the message would go to the bar
+            // that was thrown away and the user would never see it.
+            //
             // Not the way of an error from core: that way leads into the log
             // that is missing.
-            q_ptr->statusBar()->showMessage(
-                App::tr("No log is being kept. The program runs on, but a report about a "
-                        "failure will carry no cause."));
+            QTimer::singleShot(0, q_ptr, [this] {
+                q_ptr->statusBar()->showMessage(
+                    App::tr("No log is being kept. The program runs on, but a report about a "
+                            "failure will carry no cause."));
+            });
         });
 
         logger->enable(Logger::LoggerLevel::Notice, Logger::defaultLogFile());
@@ -137,13 +155,37 @@ public:
         QApplication::setWindowIcon(QIcon(QStringLiteral(":/app/olbaflinx-logo-128")));
         q_ptr->setWindowIconText(QApplication::applicationName());
 
-        // Every error core reports on an asynchronous path ends up here. Without
-        // this the signal had no receiver at all and the user saw nothing.
-        QObject::connect(storage, &Storage::errorOccurred, q_ptr, &App::showError);
+        // Every failure core reports on an asynchronous path ends up here, from
+        // either run. Without this the signals had no receiver at all and the
+        // user saw nothing. What the two are told apart for is the state of the
+        // run, and the window shows both the same way.
+        QObject::connect(storage, &Storage::readFailed, q_ptr, &App::showError);
+        QObject::connect(storage, &Storage::writeFailed, q_ptr, &App::showError);
+
+        // A request the storage turned down never becomes a run and therefore
+        // never reaches either of the two above. The model says so itself.
+        QObject::connect(transactionTableModel,
+                         &TransactionTableModel::readRefused,
+                         q_ptr,
+                         &App::showError);
+
+        // The window writes its position and its size once it comes to rest.
+        geometryTimer = new QTimer(q_ptr);
+        geometryTimer->setSingleShot(true);
+        geometryTimer->setInterval(GeometrySaveDelayMs);
+
+        QObject::connect(geometryTimer, &QTimer::timeout, q_ptr, [this] { saveGeometry(); });
     }
 
     ~Private()
     {
+        // A move or a resize the window was closed on still has its write
+        // pending, and the timer will not fire any more.
+        if (geometryTimer != nullptr && geometryTimer->isActive()) {
+            geometryTimer->stop();
+            saveGeometry();
+        }
+
         // Here and not in a close event: the entry for quitting ends the program
         // without one, and an arrangement that only survives the window button
         // would be lost on the other way out.
@@ -287,11 +329,23 @@ public:
                            "account.");
         case AccountFetch::Outcome::Skipped:
             return App::tr("This account has no online access, so nothing was fetched.");
+        case AccountFetch::Outcome::NothingOffered:
+            return App::tr("Your bank offers neither transactions nor a balance for this account, "
+                           "so nothing was fetched.");
         case AccountFetch::Outcome::Aborted:
             return App::tr("The fetch was stopped. Nothing of this account was stored.");
         case AccountFetch::Outcome::StoreFailed:
-            return App::tr("The fetch could not be stored and nothing of it was kept. Please "
-                           "fetch again.");
+            // The bookings are written before the balance and in a run of their
+            // own. A count that survived the failure says the failure came after
+            // them, and telling the user nothing was kept would send them into a
+            // second fetch that finds those records already there.
+            return storedCount == 0
+                       ? App::tr("The fetch could not be stored and nothing of it was kept. "
+                                 "Please fetch again.")
+                       : App::tr("%n new transaction(s) came in, but the balance could not be "
+                                 "stored.",
+                                 "",
+                                 storedCount);
         case AccountFetch::Outcome::Failed:
             return App::tr("The fetch failed. Your bank could not be reached, or it refused the "
                            "request.");
@@ -333,17 +387,38 @@ public:
      */
     void refreshFromStorage()
     {
-        // The storage takes one read at a time and answers a second one with a
-        // failure, right where it was asked. A read of the transactions may well
-        // be going here, and its failure would land in the status bar over the
-        // outcome of the fetch, while the new balance stayed invisible.
+        // Both ways in here outlive the file: the retry below fires after it was
+        // closed, and the write of the wizard ends whether the window still has
+        // it open or not. A read on a closed storage answers with a failure that
+        // reads as a damaged file, and would send the user to a backup over a
+        // vault that is sound.
+        if (!storage->isOpen()) {
+            return;
+        }
+
+        // The storage takes one read at a time. A read of the transactions may
+        // well be going here, and a refusal that reached the receivers below
+        // would be taken for the end of the run they are waiting for: the tree
+        // would keep the balance of the fetch before, and the choice of the user
+        // would go with it.
         //
-        // Asked again after a moment rather than hung on the end of that read:
-        // its signal may already be in the queue when this runs, and a
-        // connection made now would not be among the receivers it was emitted
-        // to. The wait would then never end.
-        if (transactionTableModel->isReading()) {
-            QTimer::singleShot(RefreshRetryMs, q_ptr, [this] { refreshFromStorage(); });
+        // Asked first and listened to afterwards. A call that starts no run says
+        // so through its return value and emits nothing, so nothing can reach a
+        // connection that is not there yet, and the run that does start cannot
+        // report before the event loop is entered again.
+        if (const auto error = storage->receiveItems(
+                {.type = Storage::StorageAccount, .limit = Storage::MaxItemsPerQuery});
+            error.isError()) {
+            // A busy storage is a moment, not a failure. Asked again rather than
+            // hung on the end of the read that holds the way: its signal may
+            // already be in the queue, and a connection made now would not be
+            // among the receivers it was emitted to.
+            if (error.code() == ErrorCode::Busy) {
+                QTimer::singleShot(RefreshRetryMs, q_ptr, [this] { refreshFromStorage(); });
+                return;
+            }
+
+            q_ptr->showError(error.code(), error.message());
             return;
         }
 
@@ -355,17 +430,42 @@ public:
                          &App::setAccounts,
                          Qt::SingleShotConnection);
 
+        // The tree shows the whole holding and knows no second page, so the
+        // window is opened as wide as a read may go. What lies beyond it would
+        // otherwise leave the tree without a word, and with it the account the
+        // user had chosen.
         QObject::connect(
             storage,
-            &Storage::finished,
+            &Storage::itemsCounted,
+            q_ptr,
+            [](int count) {
+                if (count > Storage::MaxItemsPerQuery) {
+                    qCWarning(lcUi)
+                        << "the storage holds" << count << "accounts and the tree shows the first"
+                        << Storage::MaxItemsPerQuery;
+                }
+            },
+            Qt::SingleShotConnection);
+
+        QObject::connect(
+            storage,
+            &Storage::readFinished,
             q_ptr,
             [this, chosen] {
+                // A single shot connection only parts once its signal has fired.
+                // Every way out of a read that brings no record leaves both of
+                // the two above standing, and the empty account table is one the
+                // application itself treats as an everyday case. They would then
+                // take the result of the next read, which carries transactions;
+                // the tree cannot build an account from one, so it would empty
+                // itself and drop the choice of the user with it.
+                QObject::disconnect(storage, &Storage::itemsReceived, q_ptr, nullptr);
+                QObject::disconnect(storage, &Storage::itemsCounted, q_ptr, nullptr);
+
                 restoreSelection(chosen);
                 ui->appCentralWidget->refreshTransactions();
             },
             Qt::SingleShotConnection);
-
-        storage->receiveItems({.type = Storage::StorageAccount});
     }
 
     /**
@@ -615,6 +715,19 @@ public:
         }
     }
 
+    /**
+     * Writes down where the window stands and how big it is.
+     *
+     * Read from the window rather than from the event that started the timer:
+     * several moves may have happened since, and what is to be restored is where
+     * it came to rest.
+     */
+    void saveGeometry() const
+    {
+        storage->storeSetting(PositionKey, q_ptr->pos(), WindowGroup);
+        storage->storeSetting(SizeKey, q_ptr->size(), WindowGroup);
+    }
+
     void saveDockLayout() const
     {
         if (dockManager == nullptr) {
@@ -680,9 +793,9 @@ public:
 
         setUpAccountSelection();
 
-        // The overview used to be a window of its own, put up next to this one by
-        // main. It is the first page of the central area now. It needs the
-        // storage, which is why it is built here and not in the central widget.
+        // The overview is the first page of the central area. It needs the
+        // storage, which is why it is built here and not in the central
+        // widget.
         overview = new StorageDialog(storage, q_ptr);
         ui->appCentralWidget->setStorageOverview(overview);
         overview->initialize(q_ptr);
@@ -716,6 +829,10 @@ public:
     CDockWidget *accountDockWidget;
     QByteArray defaultDockLayout;
     bool dockLayoutFellBack = false;
+
+    // Owned by the window. It carries the write of the position and the size,
+    // which must not happen once per step of a drag.
+    QTimer *geometryTimer = nullptr;
 
     // Whether a fetch the user started is still going. It steers the entries and
     // the close command, and it is set from the two signals of the fetch rather
@@ -869,13 +986,17 @@ bool App::event(QEvent *event)
 
 void App::moveEvent(QMoveEvent *event)
 {
-    d_ptr->storage->storeSetting(PositionKey, event->pos(), WindowGroup);
+    // Restarted rather than written. Dragging the window delivers an event per
+    // step, and each write puts the whole settings file out and reads it back.
+    d_ptr->geometryTimer->start();
+
     QMainWindow::moveEvent(event);
 }
 
 void App::resizeEvent(QResizeEvent *event)
 {
-    d_ptr->storage->storeSetting(SizeKey, event->size(), WindowGroup);
+    d_ptr->geometryTimer->start();
+
     QMainWindow::resizeEvent(event);
 }
 

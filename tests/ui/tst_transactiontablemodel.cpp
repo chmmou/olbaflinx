@@ -262,6 +262,11 @@ private Q_SLOTS:
     void aHoldingThatFitsOnePageEndsWithIt();
     void aHoldingThatFitsOnePageEndsWithIt_data();
     void aFailureWhileLoadingMoreLeavesTheRowsAndStopsAsking();
+
+    void theEndOfAWriteDoesNotFreeAModelThatIsReading();
+    void givingUpTheStorageLetsTheModelAskAgainAfterwards();
+    void theOrderIsReportedWhenTheStorageIsGivenUp();
+    void aRequestTheStorageTurnedDownIsReportedRatherThanSwallowed();
 };
 
 void TransactionTableModelTest::init()
@@ -541,7 +546,7 @@ void TransactionTableModelTest::aChangeDuringARunningReadRaisesNoErrorAndTheLast
     TransactionTableModel model;
     model.setStorage(&storage);
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
 
     // Three in a row, none of them waiting for the one before.
     model.setAccountId(firstAccount);
@@ -653,8 +658,19 @@ void TransactionTableModelTest::theCountUnderTheFilterIsTheOneOfTheWholeHolding(
 
     // A filter that leaves nothing answers with nought rather than with the
     // number of the account.
+    //
+    // The count of the storage is what carries this, and the two numbers of the
+    // model are read afterwards for the record rather than as the proof: a
+    // change of filter starts over and sets both to nought at once, so they hold
+    // here whatever the read answers. That the model takes a count over is shown
+    // by the two cases above, where it has to move off a number it already had.
+    QSignalSpy countSpy(&storage, &Storage::itemsCounted);
+
     model.setFilter({.text = QStringLiteral("Versicherung")});
-    QTRY_COMPARE_WITH_TIMEOUT(model.totalRows(), 0, workerTimeoutMs);
+
+    QTRY_VERIFY_WITH_TIMEOUT(!countSpy.isEmpty(), workerTimeoutMs);
+    QCOMPARE(countSpy.constLast().at(0).toInt(), 0);
+    QCOMPARE(model.totalRows(), 0);
     QCOMPARE(model.rowCount(), 0);
 
     storage.close();
@@ -880,7 +896,7 @@ void TransactionTableModelTest::aChangeOfOrderDuringARunningRequestDiscardsItsRe
     TransactionTableModel model;
     model.setStorage(&storage);
 
-    QSignalSpy errorSpy(&storage, &Storage::errorOccurred);
+    QSignalSpy errorSpy(&storage, &Storage::readFailed);
 
     model.setAccountId(firstAccount);
     model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
@@ -968,7 +984,7 @@ void TransactionTableModelTest::aHoldingThatFitsOnePageEndsWithIt()
     TransactionTableModel model;
     model.setStorage(&storage);
 
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
 
     model.setAccountId(firstAccount);
     QTRY_COMPARE_WITH_TIMEOUT(finishedSpy.count(), 1, workerTimeoutMs);
@@ -1014,7 +1030,7 @@ void TransactionTableModelTest::aFailureWhileLoadingMoreLeavesTheRowsAndStopsAsk
                                       QStringLiteral("ALTER TABLE transactions RENAME COLUMN "
                                                      "`value` TO amount;")));
 
-    QSignalSpy finishedSpy(&storage, &Storage::finished);
+    QSignalSpy finishedSpy(&storage, &Storage::readFinished);
     model.fetchMore(QModelIndex());
     QTRY_COMPARE_WITH_TIMEOUT(finishedSpy.count(), 1, workerTimeoutMs);
 
@@ -1039,6 +1055,168 @@ void TransactionTableModelTest::aFailureWhileLoadingMoreLeavesTheRowsAndStopsAsk
     QVERIFY(model.atEnd());
 
     storage.close();
+}
+
+/**
+ * A read and a write of the storage may be going at the same time. They hang on
+ * watchers of their own and do not lock against each other, so the end of one of
+ * them says nothing about the other.
+ *
+ * Both used to end in one parameterless signal, and the model took whichever
+ * arrived for the end of its own request. A fetch writing beside a user who
+ * scrolls therefore freed the model in the middle of its read.
+ */
+void TransactionTableModelTest::theEndOfAWriteDoesNotFreeAModelThatIsReading()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 300));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
+    QVERIFY(model.isReading());
+
+    // The end of a write, raised the way the storage raises it at the end of a
+    // run of storeItems. Nothing of this model asked for that run.
+    Q_EMIT storage.writeFinished();
+
+    QVERIFY(model.isReading());
+
+    // The read of this model still ends, and it ends with its rows.
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), pageSize, workerTimeoutMs);
+    QVERIFY(!model.isReading());
+    QVERIFY(model.canFetchMore(QModelIndex()));
+
+    storage.close();
+}
+
+/**
+ * Giving up the storage while a read is going leaves that read without an end
+ * this model will ever see: every connection to it is cut in the same call.
+ *
+ * The state of the run therefore goes back with it. A model that stayed on its
+ * pending flag answered canFetchMore with false from then on and queued every
+ * request instead of sending it, so a storage handed to it afterwards was never
+ * asked for a single row.
+ */
+void TransactionTableModelTest::givingUpTheStorageLetsTheModelAskAgainAfterwards()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 300));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    QSignalSpy readFinishedSpy(&storage, &Storage::readFinished);
+
+    model.setAccountId(firstAccount);
+    QVERIFY(model.isReading());
+
+    // In the middle of the read. The header names nullptr as a supported call.
+    model.setStorage(nullptr);
+
+    QVERIFY(!model.isReading());
+    QCOMPARE(model.rowCount(), 0);
+
+    // The storage still has that run going and belongs to nobody while it does.
+    // Its end is waited for here, because the storage takes one read at a time
+    // and the model cannot know of a run it is no longer connected to.
+    QTRY_COMPARE_WITH_TIMEOUT(readFinishedSpy.count(), 1, workerTimeoutMs);
+
+    model.setStorage(&storage);
+
+    // The account is unchanged, so this is the way the window asks for the
+    // holding again after a fetch. A model still waiting for the end of the run
+    // that was cut off would queue it and never send it.
+    model.refresh();
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), pageSize, workerTimeoutMs);
+    QCOMPARE(model.totalRows(), 300);
+    QVERIFY(model.canFetchMore(QModelIndex()));
+
+    storage.close();
+}
+
+/**
+ * The order is not only changed by a click on a header. Giving up the account
+ * puts it back to what the model opens with, and whoever draws the indicator has
+ * to hear of it: a header still pointing at the column of a storage that was
+ * closed shows an order the rows do not stand under, and the next click on that
+ * column turns around an order that was never in force.
+ */
+void TransactionTableModelTest::theOrderIsReportedWhenTheStorageIsGivenUp()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 30));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    QSignalSpy sortSpy(&model, &TransactionTableModel::sortChanged);
+
+    model.setAccountId(firstAccount);
+    QTRY_VERIFY_WITH_TIMEOUT(!model.isReading(), workerTimeoutMs);
+
+    model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+    QTRY_VERIFY_WITH_TIMEOUT(!model.isReading(), workerTimeoutMs);
+
+    QCOMPARE(sortSpy.count(), 1);
+
+    auto reported = sortSpy.takeFirst();
+    QCOMPARE(reported.at(0).toInt(), int(TransactionTableModel::ValueColumn));
+    QCOMPARE(reported.at(1).value<Qt::SortOrder>(), Qt::AscendingOrder);
+
+    // Giving up the account is how the window says the storage was closed.
+    model.setAccountId(0);
+
+    QCOMPARE(sortSpy.count(), 1);
+
+    reported = sortSpy.takeFirst();
+    QCOMPARE(reported.at(0).toInt(), int(TransactionTableModel::DateColumn));
+    QCOMPARE(reported.at(1).value<Qt::SortOrder>(), Qt::DescendingOrder);
+
+    QCOMPARE(model.sortColumn(), TransactionTableModel::DateColumn);
+    QCOMPARE(model.sortOrder(), Qt::DescendingOrder);
+
+    storage.close();
+}
+
+/**
+ * A refusal reaches the caller through the return value alone, so none of the
+ * signals of the read path carries it. Without a word of its own the model
+ * falls silent and the view then shows the words for an account without
+ * transactions, over a holding that was never read.
+ */
+void TransactionTableModelTest::aRequestTheStorageTurnedDownIsReportedRatherThanSwallowed()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 10));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+    model.setAccountId(firstAccount);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 10, workerTimeoutMs);
+
+    QSignalSpy refusedSpy(&model, &TransactionTableModel::readRefused);
+
+    // The file is gone from under the model, which is not the everyday refusal
+    // of a storage that is busy: that one is put off and asked again.
+    storage.close();
+
+    model.refresh();
+
+    QCOMPARE(refusedSpy.count(), 1);
+    QCOMPARE(refusedSpy.takeFirst().at(0).value<ErrorCode>(), ErrorCode::DatabaseFailure);
 }
 
 } // namespace olbaflinx::ui::models::tests

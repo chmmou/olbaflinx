@@ -26,8 +26,15 @@ namespace olbaflinx::core::logger {
  * @brief Binds the Gwenhywfar logger to the application.
  *
  * Ownership: the creator owns the instance. If a parent is set, the parent
- * releases it, otherwise the enclosing scope does. The class holds no instance
- * of its own and releases none that belongs to someone else.
+ * releases it, otherwise the enclosing scope does. It releases no instance that
+ * belongs to someone else.
+ *
+ * Between enable() and disable() the class does hold something of its own, and
+ * it holds it statically: the log file, the previous message handler and a
+ * pointer to the instance that opened them. An instance that is destroyed
+ * without disable() takes them down in its destructor, so a caller need not do
+ * it; calling disable() explicitly stays the clearer way and is what the
+ * application does.
  */
 class OLBAFLINX_CORE_EXPORT Logger : public QObject
 {

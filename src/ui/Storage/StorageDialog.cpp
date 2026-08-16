@@ -43,6 +43,7 @@
 #include <QtWidgets/QStyle>
 #include <QtWidgets/QWidget>
 
+using namespace olbaflinx::core;
 using namespace olbaflinx::ui;
 using namespace olbaflinx::ui::storage;
 using namespace olbaflinx::core::storage;
@@ -50,13 +51,13 @@ using namespace olbaflinx::core::storage;
 namespace {
 
 // The header height and the logo size derive from the font metrics, so that they
-// hold at a different font size or scaling. The factors were measured against the
-// fixed values the dialog used to carry, 82 for the header and 64 for the logo,
-// at an average character width of 7 and a line height of 17.
+// hold at a different font size or scaling. The factors come from 82 for the
+// header and 64 for the logo, at an average character width of 7 and a line
+// height of 17.
 //
-// The outer dimensions used to be measured the same way, from 930 by 646. They
-// belonged to a window; this is a page now, and a page that carries the minimum
-// size of a window hands it on to the window it sits in.
+// The outer dimensions carry no such factor. They belong to a window, and a page
+// that carries the minimum size of a window hands it on to the window it sits
+// in.
 constexpr int HeaderHeightInLines = 5;
 constexpr int LogoSizeInLines = 4;
 
@@ -83,9 +84,8 @@ public:
     /**
      * Sizes the header and the logo from the current font.
      *
-     * They used to be set in two places, the constructor and initialize, each
-     * measuring for itself, and none of them ran again when the font changed.
-     * This one runs from initialize and from changeEvent.
+     * One place that measures, called from initialize and from changeEvent, so
+     * that a change of font reaches both.
      *
      * The scroll area is what handles a window too small for the entries.
      */
@@ -107,6 +107,13 @@ public:
     void initialize(QMainWindow *window)
     {
         app = qobject_cast<App *>(window);
+        if (app == nullptr) {
+            // The accounts of an opened storage go to the window and nowhere
+            // else. Named here, where it is decided, rather than at the null
+            // pointer the open path would otherwise walk into.
+            qCWarning(lcUiStorage) << "the overview has no application window; no storage can be "
+                                      "opened through it";
+        }
 
         const auto style = q_ptr->style();
         const int horizontalSpacing = style->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
@@ -179,9 +186,9 @@ public:
         btnNewStorageItem->setIcon(icon);
         btnNewStorageItem->setFlat(true);
 
-        // The shortcut used to sit on this button. It belongs to the menu entry
-        // now, which carries the same command; two widgets on one sequence make
-        // it ambiguous and neither of them fires.
+        // No shortcut on this button. It belongs to the menu entry, which
+        // carries the same command; two widgets on one sequence make it
+        // ambiguous and neither of them fires.
         connect(btnNewStorageItem, &QPushButton::clicked, q_ptr, [&] { addNewStorageItem(); });
 
         hlStoragePage->addWidget(btnNewStorageItem);
@@ -198,8 +205,8 @@ public:
 
     void loadStorageItems()
     {
-        // The overview used to be appended to rather than built, so a second
-        // call showed every entry a second time.
+        // Built rather than appended to, so that a second call does not show
+        // every entry twice.
         clearStorageItems();
 
         const QStringList stored = storedPaths();
@@ -207,10 +214,25 @@ public:
         QStringList existing;
         existing.reserve(stored.size());
 
+        const QString storageDirectory = QDir(storage->storagePath()).canonicalPath();
+
         for (const auto &file : stored) {
-            if (QFileInfo::exists(file)) {
-                existing.append(file);
+            if (!QFileInfo::exists(file)) {
+                continue;
             }
+
+            if (!staysInsideStorageDirectory(storageDirectory, file)) {
+                // Not shown and not kept. Every entry of the overview reaches
+                // QFile::remove and QFile::copy from this list, so one that
+                // points somewhere else offers a file of the user for deletion
+                // under the name of a vault.
+                qCWarning(lcUiStorage)
+                    << "an entry of the storage list points outside the storage directory and was "
+                       "dropped";
+                continue;
+            }
+
+            existing.append(file);
         }
 
         // Building the overview is the only moment the application looks at the
@@ -346,6 +368,38 @@ public:
     Storage *storage;
 
 private:
+    /**
+     * Whether a path out of the settings names a file in the directory the
+     * storages live in.
+     *
+     * The list is kept in a plain settings file, which is an input from outside
+     * the process like any other. What the overview does with an entry - remove
+     * it, copy it, open it - is the same whatever it points at, so the check
+     * belongs on the way in.
+     *
+     * Resolved rather than compared as text, because a relative step or a
+     * symbolic link reaches out of the directory without the text saying so. The
+     * write side does the same in createStorage; this is the read side of it.
+     *
+     * @param directory The storage directory, already resolved. Passed in rather
+     *  than looked up here, because the caller asks this once per entry of the
+     *  list and the directory is the same for all of them.
+     */
+    [[nodiscard]] static bool staysInsideStorageDirectory(const QString &directory,
+                                                          const QString &file)
+    {
+        if (directory.isEmpty()) {
+            return false;
+        }
+
+        const QString canonical = QFileInfo(file).canonicalFilePath();
+        if (canonical.isEmpty()) {
+            return false;
+        }
+
+        return QFileInfo(canonical).absolutePath() == directory;
+    }
+
     [[nodiscard]] QStringList storedPaths() const
     {
         return storage->setting(QStringLiteral("Paths"), QStringLiteral("Items"), QStringList())
@@ -394,8 +448,8 @@ private:
                 Private::dateFormat());
         }
 
-        // The label used to say "Created on" while showing this value. The two
-        // fall together only until something is written; from the first account
+        // The label names the change and not the creation. The two fall
+        // together only until something is written; from the first account
         // onwards the file carries a later time than the day it was made, and no
         // creation time is kept anywhere.
         storageItem->setFileInfo(tr("Changed on %1").arg(lastModifiedDateTimeString));
@@ -403,10 +457,26 @@ private:
         disconnect(storageItem, &NewStorageItem::storageOpened, nullptr, nullptr);
         disconnect(storageItem, &NewStorageItem::storageDeleted, nullptr, nullptr);
 
+        // Passed straight on. An entry has no status bar of its own, and the
+        // overview is only the way there.
+        connect(storageItem, &NewStorageItem::message, q_ptr, &StorageDialog::message);
+
         connect(storageItem,
                 &NewStorageItem::storageOpened,
                 q_ptr,
                 [&](const QString &filePath, const QString &password) {
+                    if (app == nullptr) {
+                        // Nothing is opened that cannot be shown. The accounts
+                        // would be read and then have nowhere to go, and the
+                        // storage would stand open behind a page that says
+                        // nothing about it.
+                        Q_EMIT q_ptr->message(
+                            tr("This overview is not connected to the application window, so no "
+                               "data vault can be opened from it."));
+
+                        return;
+                    }
+
                     // Two checks, and both are needed. The character classes are
                     // checked here, where a vault is created and the user can
                     // still choose another phrase. The length is checked in the
@@ -463,6 +533,37 @@ private:
                         return;
                     }
 
+                    // The tree shows the whole holding at once and pages through
+                    // nothing, so the window is opened as wide as a read may go.
+                    //
+                    // Started before anyone listens: a call that starts no run
+                    // emits nothing and reports here instead, so a refusal
+                    // cannot reach the connections below.
+                    if (const auto error = storage->receiveItems(
+                            {.type = Storage::StorageAccount, .limit = Storage::MaxItemsPerQuery});
+                        error.isError()) {
+                        qCWarning(lcUiStorage)
+                            << "could not read the accounts of a storage:" << error.message();
+
+                        // A read of somebody else holding the way is a moment
+                        // and says nothing about this vault. Closing it would
+                        // shut a file the user has just given his password for,
+                        // and ask him for it again. The window asks for the
+                        // accounts once the way is free.
+                        if (error.code() == ErrorCode::Busy) {
+                            Q_EMIT q_ptr->storageOpened();
+                            app->refreshAccounts();
+
+                            return;
+                        }
+
+                        storage->close();
+                        Q_EMIT q_ptr->message(
+                            tr("The accounts of \"%1\" could not be read. Open it again.").arg(name));
+
+                        return;
+                    }
+
                     // Only what this dialog connected. Passing nullptr took every
                     // receiver of the signal with it, the transaction view among
                     // them, which was left without its records from then on.
@@ -481,15 +582,13 @@ private:
 
                     // A read that finds no account reports no records at all, so
                     // the connection above would stand and catch the next read
-                    // instead. finished ends the run either way.
+                    // instead. readFinished ends the run either way.
                     connect(
                         storage,
-                        &Storage::finished,
+                        &Storage::readFinished,
                         q_ptr,
                         [this] { disconnect(storage, &Storage::itemsReceived, q_ptr, nullptr); },
                         Qt::SingleShotConnection);
-
-                    storage->receiveItems({.type = Storage::StorageAccount});
 
                     // Last, and only on the way that got through. The window turns
                     // to the page with the accounts on it when it sees this.
@@ -556,8 +655,8 @@ private:
         // Taking an item out of a layout gives its ownership back, and for a
         // spacer there is nobody to give it to. The two fields therefore hold a
         // spacer only as long as the layout holds it, and the next one is built
-        // where it goes in. Both used to be rebuilt right here, and a rebuilt
-        // spacer that the layout never got again was never freed.
+        // where it goes in. A spacer rebuilt here that the layout never gets
+        // again would never be freed.
         if (scrollAreaSpacerTop != nullptr) {
             const int indexOf = storageContentsLayout->indexOf(scrollAreaSpacerTop);
             if (indexOf >= 0) {
@@ -646,9 +745,9 @@ StorageDialog::~StorageDialog()
 
 void StorageDialog::initialize(QMainWindow *window)
 {
-    // Position and size used to be read here and written back in moveEvent and
-    // resizeEvent. The overview is a page of the window now, and a page gets
-    // neither event in any useful way. The window keeps its own geometry.
+    // No geometry of its own is read or written here. The overview is a page of
+    // the window, and a page gets neither a move nor a resize event in any
+    // useful way; the window keeps its own geometry.
     d_ptr->initialize(window);
     d_ptr->loadStorageItems();
 }

@@ -101,6 +101,17 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
     // asked for and cannot see afterwards: the tree shows the chosen ones alone.
     const int kept = static_cast<int>(chosenIds.size());
 
+    // Started first and listened to afterwards. A call that starts no run emits
+    // nothing and says so through its return value, so the two connections below
+    // are made only where there is a run for them to report on.
+    if (const auto error = storage.storeItems(accounts); error.isError()) {
+        qCCritical(lcUi) << error.message();
+
+        app.showMessage(
+            QCoreApplication::translate("main", "The setup could not be stored. Try again."));
+        return;
+    }
+
     // Single shot, because this run is the only one this connection is for. The
     // storage outlives the window and would otherwise report every later run
     // into a message about the wizard.
@@ -108,7 +119,7 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
     // The count carries the whole outcome: a run that ends early leaves fewer
     // accounts than it was given. The technical cause is already in the log, put
     // there by the storage, and none of it belongs on the screen.
-    QObject::connect(
+    const auto counted = QObject::connect(
         &storage,
         &Storage::itemsStored,
         &app,
@@ -134,12 +145,18 @@ void storeTheResultOfTheWizard(App &app, Storage &storage, const assistant::Setu
     // has changed the storage as well.
     QObject::connect(
         &storage,
-        &Storage::finished,
+        &Storage::writeFinished,
         &app,
-        [&app] { app.refreshAccounts(); },
-        Qt::SingleShotConnection);
+        [&app, counted] {
+            // A single shot connection only parts once its signal has fired, and
+            // a run whose storage was closed while it went reports its end alone.
+            // The count above would then stand until some later run of another
+            // caller sets it off, and speak of the wizard over a fetch.
+            QObject::disconnect(counted);
 
-    storage.storeItems(accounts);
+            app.refreshAccounts();
+        },
+        Qt::SingleShotConnection);
 }
 
 } // namespace
@@ -183,11 +200,9 @@ int main(int argc, char *argv[])
     app.initialize();
     app.show();
 
-    // The wizard used to run unconditionally at startup, modally, in front of the
-    // overview and before any storage could be open. It therefore never had
-    // anywhere to write, and the window it covered was the one the user needed
-    // first. It is a menu entry now, and that entry is only enabled while a
-    // storage is open.
+    // The wizard is a menu entry, and that entry is only enabled while a storage
+    // is open. Run at startup it would stand modally in front of the overview
+    // with nowhere to write and cover the window the user needs first.
     //
     // Building it here and not in the window keeps the window free of the
     // application info a wizard needs; assembling the parts is what this
@@ -196,8 +211,8 @@ int main(int argc, char *argv[])
         assistant::SetupAssistant wizard(applicationInfo, &app);
         wizard.exec();
 
-        // The wizard used to end here and its result was dropped. No account had
-        // ever reached the store because of it.
+        // What the wizard gathered is written here. Nothing else holds it, and
+        // it would go with the wizard.
         storeTheResultOfTheWizard(app, storage, wizard);
     });
 

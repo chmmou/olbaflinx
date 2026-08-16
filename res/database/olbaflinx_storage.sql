@@ -177,7 +177,8 @@ CREATE INDEX IF NOT EXISTS transactions_unit_price_date_index on transactions (u
 -- built, because an index over a holding that already has duplicates cannot be
 -- created at all, and a storage whose schema step fails is one the user has no
 -- way back into. Over a holding without duplicates it does nothing, so it is
--- safe to replay: the schema resource runs again on every version step.
+-- safe to replay: the schema resource runs again on every version step, and a
+-- file that already carries the current version is not put through it.
 --
 -- Per fingerprint the row with the smallest id stays, which is the one that was
 -- written first.
