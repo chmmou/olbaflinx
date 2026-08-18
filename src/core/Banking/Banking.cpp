@@ -131,6 +131,66 @@ GwenDatePtr fromDate(const QDate &date)
 }
 
 /**
+ * Puts the orders of one account at the end of a list that may already carry
+ * those of others.
+ *
+ * A fetch over all accounts sends one list, so the orders are appended rather
+ * than handed back in a list of their own: a list per account would have to be
+ * emptied into the shared one afterwards, and the ownership of an order would
+ * then hang on which of the two lists it currently sits in.
+ *
+ * @param commands The list the orders go into. It owns them.
+ * @param offered What the backend holds for this account, or nothing. Only what
+ *  it names is built.
+ */
+void appendFetchCommands(AB_TRANSACTION_LIST2 *commands,
+                         const Account &account,
+                         const QDate &latestStoredDate,
+                         const AB_ACCOUNT_SPEC *offered)
+{
+    // An account without a stored booking keeps an invalid date, and the order
+    // then goes out without a starting point at all.
+    const QDate startingPoint = latestStoredDate.isValid()
+                                    ? latestStoredDate.addDays(-fetchLeadDays)
+                                    : QDate();
+
+    const auto addCommand = [&account, &startingPoint, commands](AB_TRANSACTION_COMMAND kind) {
+        AB_TRANSACTION *command = AB_Transaction_new();
+
+        AB_Transaction_SetCommand(command, kind);
+
+        // Fills the identifiers of the local account out of its description, the
+        // unique id among them. The backend needs all of them, and it is the one
+        // that knows which.
+        AB_Banking_FillTransactionFromAccountSpec(command, account.accountSpec());
+
+        // The period travels in FirstDate. The field belongs to the group of
+        // standing orders by its name, but the FinTS backend reads it as the day
+        // a fetch starts at. No end date is set, so the bank delivers up to what
+        // it holds today.
+        if (const GwenDatePtr first = fromDate(startingPoint); first) {
+            AB_Transaction_SetFirstDate(command, first.get());
+        }
+
+        // StringIdForApplication stays untouched here and everywhere else:
+        // AB_Transaction_free does not release it.
+
+        AB_Transaction_List2_PushBack(commands, command);
+    };
+
+    // Only what the account carries. An order the backend cannot build for it
+    // never reaches the bank: it is marked as failed while the queue is filled,
+    // and that failure counts against the whole account, balance included.
+    if (Banking::accountOffers(offered, AB_Transaction_CommandGetTransactions)) {
+        addCommand(AB_Transaction_CommandGetTransactions);
+    }
+
+    if (Banking::accountOffers(offered, AB_Transaction_CommandGetBalance)) {
+        addCommand(AB_Transaction_CommandGetBalance);
+    }
+}
+
+/**
  * Whether an order ended in a failure of its own.
  *
  * A status the backend never touched is not one: an order that ran through and
@@ -228,6 +288,32 @@ struct SessionResult
 
     /** Whether it holds none at all, in which case no session was run. */
     bool offersNothing = false;
+};
+
+/**
+ * What one run over several accounts hands back to the thread that started it.
+ *
+ * The outcome is the one of the call, not of a single account: the backend
+ * answers success whatever a single institution did, and what became of an
+ * account stands on its own orders. The three lists say it per account.
+ */
+struct AllSessionsResult
+{
+    FetchOutcome outcome = FetchOutcome::Failed;
+    BankingItems items;
+    QString reason;
+
+    /** Accounts whose orders went out. */
+    QList<quint32> sent;
+
+    /** Accounts of those whose orders the bank refused. */
+    QList<quint32> failed;
+
+    /** Accounts the backend holds no order of any kind for. Nothing was sent. */
+    QList<quint32> nothingOffered;
+
+    /** Accounts the backend holds no order for the bookings of. */
+    QList<quint32> transactionsNotOffered;
 };
 
 } // namespace
@@ -424,6 +510,183 @@ public:
         return result;
     }
 
+    /**
+     * The session over several accounts, run in a thread of its own.
+     *
+     * One list of orders and one call, which is what the backend expects: it
+     * sorts the orders by account and by institution itself and runs one session
+     * per institution. Two accounts of the same bank therefore share a session,
+     * and what brings that session down brings down both.
+     */
+    AllSessionsResult runAllSessions(const QList<std::shared_ptr<Account>> &accounts,
+                                     const QHash<quint32, QDate> &latestStoredDates)
+    {
+        const ThreadGui gui(gwenGui);
+
+        AllSessionsResult result;
+
+        const CommandListPtr commands(AB_Transaction_List2_new());
+
+        for (const auto &account : accounts) {
+            const quint32 uniqueAccountId = account->uniqueId();
+
+            AB_ACCOUNT_SPEC *offered = nullptr;
+            AB_Banking_GetAccountSpecByUniqueId(aqBanking, uniqueAccountId, &offered);
+
+            const AccountSpecPtr held(offered, &AB_AccountSpec_free);
+
+            const bool offersTransactions
+                = Banking::accountOffers(offered, AB_Transaction_CommandGetTransactions);
+
+            if (!offersTransactions
+                && !Banking::accountOffers(offered, AB_Transaction_CommandGetBalance)) {
+                result.nothingOffered.append(uniqueAccountId);
+                continue;
+            }
+
+            if (!offersTransactions) {
+                result.transactionsNotOffered.append(uniqueAccountId);
+            }
+
+            appendFetchCommands(commands.get(),
+                                *account,
+                                latestStoredDates.value(uniqueAccountId),
+                                offered);
+
+            result.sent.append(uniqueAccountId);
+        }
+
+        // Nothing to ask about. A call with an empty list would still open the
+        // progress window of the library and sign on to nothing.
+        if (result.sent.isEmpty()) {
+            result.outcome = FetchOutcome::Received;
+
+            return result;
+        }
+
+        const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
+
+        const int rv = AB_Banking_SendCommands(aqBanking, commands.get(), context.get());
+
+        if (rv != AB_SUCCESS && rv != GWEN_ERROR_USER_ABORTED) {
+            // Only the two sorting steps answer this way, and they run before
+            // anything is sent. A single institution that failed does not: the
+            // backend logs it, keeps what it collected and goes on to the next.
+            result.outcome = FetchOutcome::Failed;
+            result.reason = QStringLiteral("AB_Banking_SendCommands failed with %1").arg(rv);
+
+            return result;
+        }
+
+        result.outcome = rv == GWEN_ERROR_USER_ABORTED ? FetchOutcome::Aborted
+                                                       : FetchOutcome::Received;
+
+        // Read even where the run was stopped. What the institutions before the
+        // stop delivered is in the container, and whether it is kept is the
+        // user's answer to give, not this one's.
+        const QSet<quint32> refused = accountsOfFailedCommands(commands.get());
+
+        for (const quint32 uniqueAccountId : std::as_const(result.sent)) {
+            if (refused.contains(uniqueAccountId)) {
+                result.failed.append(uniqueAccountId);
+            }
+        }
+
+        result.items = Banking::itemsFromContext(context.get(), commands.get());
+
+        return result;
+    }
+
+    /** The answer of a run over several accounts, in the thread of this object. */
+    void deliverAllSessionsResult()
+    {
+        AllSessionsResult result;
+
+        const QString failure = exceptionOf([this, &result] { result = allFetchWatcher.result(); });
+
+        m_isFetching = false;
+
+        if (!failure.isEmpty()) {
+            const auto reason = QStringLiteral("A fetch over %1 accounts ended in %2")
+                                    .arg(QString::number(m_fetchedAccounts), failure);
+
+            qCCritical(lcBanking) << reason;
+
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT q_ptr->finished();
+            return;
+        }
+
+        // Said before the answer, because they decide how the answer reads. An
+        // account that carries no order for the bookings brings a balance and
+        // nothing else, and that is no account without new bookings.
+        for (const quint32 uniqueAccountId : std::as_const(result.nothingOffered)) {
+            qCInfo(lcBanking) << "account" << uniqueAccountId << "carries no order at all";
+
+            Q_EMIT q_ptr->noOrderOffered(uniqueAccountId);
+        }
+
+        for (const quint32 uniqueAccountId : std::as_const(result.transactionsNotOffered)) {
+            qCInfo(lcBanking) << "account" << uniqueAccountId
+                              << "carries no order for transactions";
+
+            Q_EMIT q_ptr->transactionsNotOffered(uniqueAccountId);
+        }
+
+        switch (result.outcome) {
+        case FetchOutcome::Received:
+            // One by one rather than as a failure of the run: the accounts
+            // beside them went through, and the count of a collective fetch
+            // needs them apart.
+            for (const quint32 uniqueAccountId : std::as_const(result.failed)) {
+                qCWarning(lcBanking) << "the bank refused an order of account" << uniqueAccountId;
+
+                Q_EMIT q_ptr->accountFailed(uniqueAccountId);
+            }
+
+            qCDebug(lcBanking) << "fetched" << result.items.size() << "records";
+            Q_EMIT q_ptr->itemsReceived(result.items);
+            break;
+
+        case FetchOutcome::Aborted:
+            qCInfo(lcBanking) << "the fetch was aborted by the user";
+
+            // What the institutions before the stop delivered still goes up.
+            // Nothing of it is written yet, and the caller has to ask the user
+            // whether it is kept at all.
+            //
+            // The orders that were cut off carry a failure of their own, and
+            // they are not reported as refused accounts: they were stopped, not
+            // turned down, and the two say something else to whoever is told.
+            Q_EMIT q_ptr->itemsReceived(result.items);
+            Q_EMIT q_ptr->aborted();
+            break;
+
+        case FetchOutcome::Failed:
+            qCCritical(lcBanking) << result.reason;
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, result.reason);
+            break;
+        }
+
+        Q_EMIT q_ptr->finished();
+    }
+
+    /**
+     * @param accounts Copies of their own, for the reason startFetch names: the
+     *  accounts of the caller must not be reached into once fetchAccounts has
+     *  returned, and the session outlives that call.
+     */
+    void startFetchAll(const QList<std::shared_ptr<Account>> &accounts,
+                       const QHash<quint32, QDate> &latestStoredDates)
+    {
+        m_isFetching = true;
+        m_fetchedAccounts = accounts.size();
+
+        allFetchWatcher.setFuture(QtConcurrent::run([this, accounts, latestStoredDates] {
+            return runAllSessions(accounts, latestStoredDates);
+        }));
+    }
+
     /** The answer of a session, reported in the thread this object belongs to. */
     void deliverSessionResult()
     {
@@ -521,6 +784,11 @@ public:
         if (const QString failure = exceptionOf([this] { fetchWatcher.waitForFinished(); });
             !failure.isEmpty()) {
             qCCritical(lcBanking) << "the session ended in" << failure;
+        }
+
+        if (const QString failure = exceptionOf([this] { allFetchWatcher.waitForFinished(); });
+            !failure.isEmpty()) {
+            qCCritical(lcBanking) << "the session over several accounts ended in" << failure;
         }
 
         m_isFetching = false;
@@ -692,10 +960,12 @@ public:
     GWEN_GUI *gwenGui;
     AB_BANKING *aqBanking;
     QFutureWatcher<SessionResult> fetchWatcher;
+    QFutureWatcher<AllSessionsResult> allFetchWatcher;
 
 private:
     bool m_isFetching = false;
     quint32 m_fetchedAccountId = 0;
+    int m_fetchedAccounts = 0;
     bool m_isInitialized;
 
     // One per step of initialize that has a counterpart in finalize. They are
@@ -724,6 +994,10 @@ Banking::Banking(ApplicationInfo applicationInfo, QObject *parent)
     connect(&d_ptr->fetchWatcher, &QFutureWatcherBase::finished, this, [this] {
         d_ptr->deliverSessionResult();
     });
+
+    connect(&d_ptr->allFetchWatcher, &QFutureWatcherBase::finished, this, [this] {
+        d_ptr->deliverAllSessionsResult();
+    });
 }
 
 Banking::~Banking()
@@ -732,6 +1006,7 @@ Banking::~Banking()
     // Cutting the connection before the private part goes keeps it from being
     // delivered into freed memory.
     disconnect(&d_ptr->fetchWatcher, nullptr, this, nullptr);
+    disconnect(&d_ptr->allFetchWatcher, nullptr, this, nullptr);
 
     delete d_ptr;
 }
@@ -839,49 +1114,9 @@ AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account,
                                                   const QDate &latestStoredDate,
                                                   const AB_ACCOUNT_SPEC *offered)
 {
-    // An account without a stored booking keeps an invalid date, and the order
-    // then goes out without a starting point at all.
-    const QDate startingPoint = latestStoredDate.isValid()
-                                    ? latestStoredDate.addDays(-fetchLeadDays)
-                                    : QDate();
-
-    const auto addCommand = [&account, &startingPoint](AB_TRANSACTION_LIST2 *list,
-                                                       AB_TRANSACTION_COMMAND kind) {
-        AB_TRANSACTION *command = AB_Transaction_new();
-
-        AB_Transaction_SetCommand(command, kind);
-
-        // Fills the identifiers of the local account out of its description, the
-        // unique id among them. The backend needs all of them, and it is the one
-        // that knows which.
-        AB_Banking_FillTransactionFromAccountSpec(command, account.accountSpec());
-
-        // The period travels in FirstDate. The field belongs to the group of
-        // standing orders by its name, but the FinTS backend reads it as the day
-        // a fetch starts at. No end date is set, so the bank delivers up to what
-        // it holds today.
-        if (const GwenDatePtr first = fromDate(startingPoint); first) {
-            AB_Transaction_SetFirstDate(command, first.get());
-        }
-
-        // StringIdForApplication stays untouched here and everywhere else:
-        // AB_Transaction_free does not release it.
-
-        AB_Transaction_List2_PushBack(list, command);
-    };
-
     AB_TRANSACTION_LIST2 *commands = AB_Transaction_List2_new();
 
-    // Only what the account carries. An order the backend cannot build for it
-    // never reaches the bank: it is marked as failed while the queue is filled,
-    // and that failure counts against the whole account, balance included.
-    if (accountOffers(offered, AB_Transaction_CommandGetTransactions)) {
-        addCommand(commands, AB_Transaction_CommandGetTransactions);
-    }
-
-    if (accountOffers(offered, AB_Transaction_CommandGetBalance)) {
-        addCommand(commands, AB_Transaction_CommandGetBalance);
-    }
+    appendFetchCommands(commands, account, latestStoredDate, offered);
 
     return commands;
 }
@@ -1050,4 +1285,81 @@ void Banking::fetchAccount(const Account &account, const QDate &latestStoredDate
     // out of the configuration of the backend, and that read locks a group and
     // reports a progress while it waits.
     d_ptr->startFetch(std::make_shared<Account>(account.accountSpec()), latestStoredDate);
+}
+
+void Banking::fetchAccounts(const QList<std::shared_ptr<Account>> &accounts,
+                            const QHash<quint32, QDate> &latestStoredDates)
+{
+    const auto reportLater = [this](auto report) {
+        QMetaObject::invokeMethod(this, std::move(report), Qt::QueuedConnection);
+    };
+
+    if (d_ptr->isFetching()) {
+        const QString reason = QStringLiteral("A fetch is already running");
+
+        qCWarning(lcBanking) << reason;
+
+        // No finished here, for the reason fetchAccount gives: it belongs to the
+        // fetch that is running.
+        reportLater([this, reason] { Q_EMIT errorOccurred(ErrorCode::InvalidInput, reason); });
+        return;
+    }
+
+    if (!d_ptr->isInitialized()) {
+        const QString reason = QStringLiteral("The banking backend is not initialized");
+
+        qCCritical(lcBanking) << reason;
+
+        reportLater([this, reason] {
+            Q_EMIT errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT finished();
+        });
+        return;
+    }
+
+    // An account without a backend brings down the whole call rather than
+    // itself. It is therefore kept out of the list here, before anything is
+    // sent, which is what lets the accounts beside it run at all.
+    QList<std::shared_ptr<Account>> reachable;
+    QList<quint32> skipped;
+
+    for (const auto &account : accounts) {
+        if (account == nullptr) {
+            continue;
+        }
+
+        const QString backendName = account->backendName();
+
+        if (backendName.isEmpty()
+            || backendName.compare(offlineBackendName, Qt::CaseInsensitive) == 0) {
+            qCInfo(lcBanking) << "account" << account->uniqueId() << "skipped, no online access";
+
+            skipped.append(account->uniqueId());
+            continue;
+        }
+
+        // A copy of its own, for the reason fetchAccount names: the account of
+        // the caller must not be reached into once this call has returned.
+        reachable.append(std::make_shared<Account>(account->accountSpec()));
+    }
+
+    if (!skipped.isEmpty()) {
+        const QString reason = tr("The account has no online access");
+
+        reportLater([this, skipped, reason] {
+            for (const quint32 uniqueAccountId : skipped) {
+                Q_EMIT accountSkipped(uniqueAccountId, reason);
+            }
+        });
+    }
+
+    // Nothing is left to ask about, so no session is started and the end is
+    // reported from here. Without it the caller would wait for a finished that
+    // no session is going to send.
+    if (reachable.isEmpty()) {
+        reportLater([this] { Q_EMIT finished(); });
+        return;
+    }
+
+    d_ptr->startFetchAll(reachable, latestStoredDates);
 }

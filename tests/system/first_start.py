@@ -168,7 +168,8 @@ def walk_the_way(driver, password):
     # taken. A run inside the process can ask whether an action is disabled;
     # only a run from outside sees that a user meets it disabled.
     for locked in ("appCloseStorageAction", "appSetupAssistantAction",
-                   "appFetchTransactionsAction", "appResetLayoutAction"):
+                   "appFetchTransactionsAction", "appFetchAllTransactionsAction",
+                   "appResetLayoutAction"):
         report(not find(driver, locked).is_enabled(),
                f"{locked} is not available while no vault is open")
     for offered in ("appNewStorageAction", "appQuitAction"):
@@ -224,6 +225,13 @@ def walk_the_way(driver, password):
            "appFetchTransactionsAction is still offered once a vault is open")
     report(not find(driver, "appFetchTransactionsAction").is_enabled(),
            "appFetchTransactionsAction is not available while no account is chosen")
+
+    # The fetch over every account hangs on no choice, so what holds it back
+    # here is the empty tree rather than an unmade selection.
+    report(exists(driver, "appFetchAllTransactionsAction"),
+           "appFetchAllTransactionsAction is still offered once a vault is open")
+    report(not find(driver, "appFetchAllTransactionsAction").is_enabled(),
+           "appFetchAllTransactionsAction is not available while no account is set up")
 
     take_menu_entry(driver, "appFileMenu", "appCloseStorageAction")
     report(wait_until(lambda: find(driver, "pageStorages").is_displayed()),

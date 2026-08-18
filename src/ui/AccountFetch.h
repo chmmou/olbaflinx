@@ -21,7 +21,9 @@
 #include "core/Banking/Account/Account.h"
 #include "core/Error.h"
 
+#include <QtCore/QList>
 #include <QtCore/QObject>
+#include <QtCore/QString>
 
 #include <memory>
 
@@ -81,6 +83,42 @@ public:
     Q_ENUM(Outcome)
 
     /**
+     * @brief What a fetch over several accounts amounted to.
+     *
+     * The three counts add up to the accounts that were handed in. An account
+     * the bank holds no order of any kind for counts as fetched: it has online
+     * access, so it is not skipped, and nothing about it failed.
+     */
+    struct Summary
+    {
+        /** How the run as a whole ended. */
+        Outcome outcome = Outcome::Received;
+
+        /** Accounts whose orders went out and came back without a refusal. */
+        int fetched = 0;
+
+        /** Accounts without online access, passed over before anything was sent. */
+        int skipped = 0;
+
+        /**
+         * Accounts whose orders the bank refused.
+         *
+         * Nought after an abort: what did not come through was cut off and not
+         * refused, and the two read differently to whoever is told.
+         */
+        int failed = 0;
+
+        /** New bookings over all accounts. One already stored adds none. */
+        int storedCount = 0;
+
+        /** Whether an abort was answered by keeping what had already arrived. */
+        bool keptAfterAbort = false;
+
+        /** What to tell the user, already worded. Empty where the outcome says it. */
+        QString reason;
+    };
+
+    /**
      * @param applicationInfo What the application signs on to a bank with. Its
      *  registration key must not be empty; initialize refuses an empty one.
      * @param storage Externally owned storage, has to outlive this object.
@@ -119,6 +157,38 @@ public:
     void start(const std::shared_ptr<core::banking::account::Account> &account);
 
     /**
+     * @brief Fetches the transactions and the balances of every given account.
+     *
+     * The orders of all accounts travel in one session, and only after it has
+     * ended is anything written: the storage is reached account by account, the
+     * bookings of one and its balance before the next one begins. That order is
+     * what lets an abort be answered at all - at the moment the question is put,
+     * no row of this run stands in the file, so discarding is a matter of not
+     * writing rather than of deleting.
+     *
+     * started is emitted before the session goes out, allEnded once the whole
+     * run is over. ended is not emitted for a run of this kind.
+     *
+     * A call while a fetch of either kind runs is ignored, and so is an empty
+     * list.
+     *
+     * @param accounts The accounts to fetch. They stay with their caller.
+     */
+    void startAll(const QList<std::shared_ptr<core::banking::account::Account>> &accounts);
+
+    /**
+     * @brief The answer to abortNeedsAnswer.
+     *
+     * @param keep Whether what the run had already brought in is written. False
+     *  ends the run without a single row being written; the holding is then the
+     *  one from before it started.
+     *
+     * Does nothing while no question is open, so an answer that arrives twice is
+     * no failure.
+     */
+    void answerAbort(bool keep);
+
+    /**
      * @brief Whether the span the cached PIN outlives a fetch by is running.
      *
      * It is stopped while a fetch runs and started again at its end, so that a
@@ -146,9 +216,29 @@ Q_SIGNALS:
      */
     void ended(olbaflinx::ui::AccountFetch::Outcome outcome, int storedCount, const QString &reason);
 
+    /**
+     * @brief A fetch over several accounts has ended, on every path.
+     *
+     * @param summary What the run amounted to. It names no account and carries
+     *  no amount.
+     */
+    void allEnded(const olbaflinx::ui::AccountFetch::Summary &summary);
+
+    /**
+     * @brief The user stopped a fetch over several accounts, and the run is
+     *  waiting for the answer to answerAbort.
+     *
+     * The question belongs to the window: this class shows nothing. Nothing is
+     * written until the answer arrives, and the answer decides whether anything
+     * is written at all.
+     */
+    void abortNeedsAnswer();
+
 private:
     class Private;
     std::unique_ptr<Private> d_ptr;
 };
 
 } // namespace olbaflinx::ui
+
+Q_DECLARE_METATYPE(olbaflinx::ui::AccountFetch::Summary)

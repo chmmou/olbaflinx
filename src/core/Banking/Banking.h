@@ -32,7 +32,11 @@
 #include <aqbanking/types/transaction.h>
 
 #include <QtCore/QDate>
+#include <QtCore/QHash>
+#include <QtCore/QList>
 #include <QtCore/QObject>
+
+#include <memory>
 
 namespace olbaflinx::core::banking {
 
@@ -154,6 +158,38 @@ public:
     void fetchAccount(const Account &account, const QDate &latestStoredDate = {});
 
     /**
+     * @brief Fetch the transactions and the balances of every given account.
+     *
+     * The orders of all accounts travel in one list and one call. The backend
+     * sorts them by account and by institution and runs one session per
+     * institution, so two accounts of the same bank share a session and share
+     * whatever brings it down.
+     *
+     * @param accounts The accounts to fetch. They stay with their caller; what
+     *  the session works on is a copy made here. An empty list is no failure and
+     *  ends in finished without anything being sent.
+     * @param latestStoredDates The day the stored holding of an account ends on,
+     *  under the identifier of that account. An account that is missing from it
+     *  fetches everything the bank offers, which is what the first fetch of an
+     *  account does.
+     *
+     * Preconditions: the backend is initialized. The user interface handed to
+     *  initialize is set for the thread of the session by this call itself.
+     *
+     * Errors: an account without online access reports accountSkipped and is
+     *  kept out of the list, because the backend refuses the whole run over one
+     *  such account. An account whose orders the bank refused reports
+     *  accountFailed and its records are dropped; the accounts of other
+     *  institutions are not touched by it. Only a failure of the call itself
+     *  reports errorOccurred. Every path ends in finished.
+     *
+     * Concurrency: as fetchAccount. This call returns at once, runs the session
+     *  in a thread of its own, and is refused while a fetch of either kind runs.
+     */
+    void fetchAccounts(const QList<std::shared_ptr<Account>> &accounts,
+                       const QHash<quint32, QDate> &latestStoredDates = {});
+
+    /**
      * @brief Build the two orders of a fetch, without sending them.
      *
      * Separate from the session so that the orders can be read before they go
@@ -256,6 +292,22 @@ Q_SIGNALS:
      * @param reason Why it was passed over. It carries no account data.
      */
     void accountSkipped(quint32 uniqueAccountId, const QString &reason);
+
+    /**
+     * @brief This signal is emitted for an account whose orders the bank
+     *  refused, while the fetch went on for the accounts beside it.
+     *
+     * Only a fetch over several accounts reports this way. A fetch of one
+     * account has nothing to go on with, so its refusal is the failure of the
+     * whole run and travels through errorOccurred.
+     *
+     * Nothing of this account is reported: itemsReceived carries neither its
+     * bookings nor its balance. Whoever counts the outcome of a run counts this
+     * account as failed and no other way.
+     *
+     * @param uniqueAccountId The account, as the banking backend keeps it.
+     */
+    void accountFailed(quint32 uniqueAccountId);
 
     /**
      * @brief This signal is emitted for an account the bank holds no order of

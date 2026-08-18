@@ -131,12 +131,37 @@ public:
     {
         AB_IMEXPORTER_CONTEXT *context = AB_ImExporterContext_new();
 
+        addAccountToContext(context, uniqueId, transactionCount, balances, firstBookingDate);
+
+        return context;
+    }
+
+    /**
+     * A further account in a container that already stands.
+     *
+     * What a fetch over several accounts answers with: one container, one entry
+     * per account. Every entry carries an account number and an IBAN of its own,
+     * and that is not decoration: the lookup of the backend falls through from
+     * the identifier to the bank code and the account number, whatever
+     * identifier it was asked for. Entries that share those two would be one
+     * entry, and a container of three accounts would hold one.
+     */
+    static void addAccountToContext(AB_IMEXPORTER_CONTEXT *context,
+                                    quint32 uniqueId,
+                                    int transactionCount,
+                                    const QList<BalanceSpec> &balances,
+                                    const QDate &firstBookingDate = {})
+    {
+        const QString accountNumber = QString::number(uniqueId).rightJustified(10, u'0');
+        const QByteArray localAccountNumber = accountNumber.toLatin1();
+        const QByteArray localIban = (QStringLiteral("DE0212030000") + accountNumber).toLatin1();
+
         AB_IMEXPORTER_ACCOUNTINFO *info
             = AB_ImExporterContext_GetOrAddAccountInfo(context,
                                                        uniqueId,
-                                                       "DE02120300000000202051",
+                                                       localIban.constData(),
                                                        "12030000",
-                                                       "0000202051",
+                                                       localAccountNumber.constData(),
                                                        AB_AccountType_Checking);
 
         for (int index = 0; index < transactionCount; ++index) {
@@ -169,8 +194,6 @@ public:
 
             AB_ImExporterAccountInfo_AddBalance(info, balance);
         }
-
-        return context;
     }
 
     /** The command of the given kind, or null if the list carries none. */
