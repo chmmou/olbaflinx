@@ -616,6 +616,13 @@ bool AccountFetch::isPasswordCacheExpiring() const
     return d_ptr->gui && d_ptr->gui->isPasswordCacheExpiring();
 }
 
+void AccountFetch::clearPasswordCache()
+{
+    if (d_ptr->gui) {
+        d_ptr->gui->clearPasswordCache();
+    }
+}
+
 void AccountFetch::startAll(const QList<std::shared_ptr<Account>> &accounts)
 {
     if (d_ptr->running || accounts.isEmpty()) {

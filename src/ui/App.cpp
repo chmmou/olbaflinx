@@ -1086,6 +1086,11 @@ void App::closeStorage()
     d_ptr->storage->close();
     d_ptr->accountTreeModel->setItems({});
 
+    // The interface of the banking layer belongs to the window and outlives the
+    // storage. Left to the span that empties it after a fetch, a PIN entered for
+    // this storage would still be cached while the next one is open.
+    d_ptr->fetch->clearPasswordCache();
+
     // A choice of account does not outlive the storage it was made in. Emptying
     // the tree takes the selection with it, and the transactions of the account
     // that was shown go with it as well. Neither does the filter: it survives a

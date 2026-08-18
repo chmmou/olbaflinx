@@ -187,6 +187,17 @@ public:
      */
     [[nodiscard]] bool isPasswordCacheExpiring() const;
 
+    /**
+     * Empties the cached PIN at once, rather than at the end of the span.
+     *
+     * For the moment a storage is closed. The interface belongs to the window
+     * and outlives the storage, so a PIN entered for one would otherwise still
+     * be cached while the next one is open.
+     *
+     * Does nothing before the first fetch, when there is no interface yet.
+     */
+    void clearPasswordCache();
+
 Q_SIGNALS:
     /**
      * A fetch has begun.
