@@ -1056,13 +1056,9 @@ void AppCentralWidgetTest::theCommandsThatNeedAStorageWaitForOne()
 }
 
 /**
- * One entry belongs to a story that is not built yet. It exists so that the menu
- * keeps its shape once it is switched on, and it stays disabled until then rather
- * than doing nothing when pressed.
- *
- * Two used to stand here. One hid the accounts side, which is part of the
- * arrangement and not something to put away, and it is gone. The other puts the
- * arrangement back and belongs to the commands that wait for an open storage.
+ * The command behind this entry is not built yet. The entry exists so that the
+ * menu keeps its shape once it is switched on, and it stays disabled until then
+ * rather than doing nothing when pressed.
  */
 void AppCentralWidgetTest::theEntriesWithoutTheirStoryStayDisabled()
 {
@@ -1086,7 +1082,8 @@ void AppCentralWidgetTest::theEntriesWithoutTheirStoryStayDisabled()
 
     Q_EMIT overview->storageOpened();
 
-    // An open storage does not bring them to life either. Their story does.
+    // An open storage does not bring them to life either. Only the command
+    // behind them does, once it is built.
     for (const auto &name : names) {
         QVERIFY2(!actionOf(app, name)->isEnabled(), qPrintable(name));
     }

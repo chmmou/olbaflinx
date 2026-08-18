@@ -32,7 +32,7 @@ namespace olbaflinx::core {
 Q_NAMESPACE_EXPORT(OLBAFLINX_CORE_EXPORT)
 
 /**
- * @brief The one machine readable error code of the project.
+ * The one machine readable error code of the project.
  *
  * The enumeration is registered with the meta object system so that it can
  * travel through a signal and be read back by name in a log entry.
@@ -68,7 +68,7 @@ enum class ErrorCode {
 Q_ENUM_NS(ErrorCode)
 
 /**
- * @brief An error with a machine readable code and a human readable message.
+ * An error with a machine readable code and a human readable message.
  *
  * Ownership: a value type, it is copied. The message is meant for the log and
  * for the user interface to translate into something a user can act on. It
@@ -94,7 +94,7 @@ private:
 };
 
 /**
- * @brief Runs the given call and answers what it threw.
+ * Runs the given call and answers what it threw.
  *
  * An empty string means it returned. This is for the places that must not let
  * anything escape: a destructor, which is implicitly noexcept, and a slot,

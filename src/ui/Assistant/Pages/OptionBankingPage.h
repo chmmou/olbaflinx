@@ -26,8 +26,8 @@
 namespace olbaflinx::ui::assistant::pages {
 
 /**
- * @brief The wizard page that connects to the banking backend and lists the
- *  accounts it finds.
+ * The wizard page that connects to the banking backend and lists the accounts
+ * it finds.
  *
  * Ownership: belongs to the wizard it is added to. The Banking instance and the
  * gwenhywfar user interface it creates are owned by this page and released with
@@ -42,7 +42,7 @@ public:
     ~OptionBankingPage() override;
 
     /**
-     * @brief Sets up the connection to the banking backend and reads the accounts.
+     * Sets up the connection to the banking backend and reads the accounts.
      *
      * The setup happens here and not in the constructor because uic creates the
      * page without arguments and the application details are only available
@@ -52,7 +52,7 @@ public:
     [[nodiscard]] bool isComplete() const override;
 
     /**
-     * @brief Takes the accounts the page puts up for choice.
+     * Takes the accounts the page puts up for choice.
      *
      * Where they come from is not the concern of the page. initialize connects
      * the backend to this; a test hands them over directly.
@@ -62,7 +62,7 @@ public:
     [[nodiscard]] QList<quint32> selectedAccountIds() const;
 
     /**
-     * @brief The accounts the user chose, as objects.
+     * The accounts the user chose, as objects.
      *
      * Ownership is shared with whoever asked, the same way itemsReceived hands
      * over what it reports.
@@ -70,7 +70,7 @@ public:
     [[nodiscard]] olbaflinx::core::banking::BankingItems selectedAccounts() const;
 
     /**
-     * @brief Every account the page put up for choice.
+     * Every account the page put up for choice.
      *
      * Whoever stores the result needs both lists. An account in this one and not
      * in the chosen one was turned down; one in neither was never on offer, and

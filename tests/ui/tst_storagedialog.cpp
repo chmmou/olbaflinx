@@ -75,8 +75,8 @@ private:
     }
 
     /**
-     * @brief Opens the password change dialog of an entry and hands it to a check.
-     * @return Whether the dialog appeared and the check ran.
+     * Opens the password change dialog of an entry and hands it to a check.
+     * Answers whether the dialog appeared and the check ran.
      *
      * The dialog runs an event loop of its own, so nothing after the call gets to
      * see it. A timer looks for the modal window instead, runs the check while it
@@ -121,8 +121,8 @@ private:
     }
 
     /**
-     * @brief The single entry of an overview that holds exactly one storage.
-     * @return The entry, or null when there is not exactly one.
+     * The single entry of an overview, or null when it does not hold exactly
+     * one storage.
      */
     static NewStorageItem *singleEntryOf(const StorageDialog &dialog)
     {

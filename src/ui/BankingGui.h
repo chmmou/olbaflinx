@@ -33,19 +33,13 @@
 namespace olbaflinx::ui {
 
 /**
- * @brief The user interface the banking backend asks, usable from a session
- *  that runs in a thread of its own.
+ * The user interface the banking backend asks, usable from a session that runs
+ * in a thread of its own.
  *
  * A banking session blocks and therefore runs beside the window. Its callbacks
  * arrive in that thread, and every one of them that touches a widget has to
  * cross back. This class overrides those and hands them to the thread it was
  * built in, waiting for the answer.
- *
- * The callbacks come in two kinds and are taken over in two ways. The dialogs
- * are virtual functions of the C++ binding and are overridden below. The
- * progress of a session is not: gwenhywfar keeps those as function pointers on
- * the C interface, and they reach the widgets of the progress dialog just as
- * directly. They are exchanged for forwarding ones in the constructor.
  *
  * Ownership: the creator owns the instance. It outlives the banking instance
  * that uses it and is destroyed after it; the banking backend reaches into the
@@ -72,9 +66,8 @@ public:
     static constexpr int passwordCacheLifetimeMs = 5 * 60 * 1000;
 
     /**
-     * @param passwordCacheLifetimeMs How long the cached PIN outlives a fetch.
-     *  The default is the span the application uses; a shorter one is what makes
-     *  the expiry measurable without waiting for it.
+     * The lifetime is how long the cached PIN outlives a fetch. The default is
+     * the span the application uses.
      */
     explicit BankingGui(int passwordCacheLifetimeMs = BankingGui::passwordCacheLifetimeMs);
     ~BankingGui() override;
@@ -85,7 +78,7 @@ public:
     BankingGui &operator=(BankingGui &&) = delete;
 
     /**
-     * @brief Keep the cached PIN for a fetch that is starting.
+     * Keep the cached PIN for a fetch that is starting.
      *
      * Stops the running expiry. Without it the cache could be emptied while a
      * session reads it, and a session asks for the PIN once per signed message.
@@ -93,7 +86,7 @@ public:
     void holdPasswordCache();
 
     /**
-     * @brief Let the cached PIN expire, from now on.
+     * Let the cached PIN expire, from now on.
      *
      * Called when a fetch has ended, whichever way. The next fetch within the
      * lifetime finds the PIN, a later one does not.
@@ -101,7 +94,7 @@ public:
     void expirePasswordCacheLater();
 
     /**
-     * @brief Empty the cache of the interface at once.
+     * Empty the cache of the interface at once.
      *
      * Works on the interface itself and not through GWEN_Gui_SetPasswordStatus,
      * which reaches for the interface of the calling thread and would find none
@@ -113,7 +106,7 @@ public:
     [[nodiscard]] bool isPasswordCacheExpiring() const;
 
     /**
-     * @brief Whether the user asked for the running session to stop.
+     * Whether the user asked for the running session to stop.
      *
      * The banking layer cannot answer this. It smooths the abort of a session
      * away on the way up and hands its caller a plain success with an empty
@@ -126,7 +119,7 @@ public:
     [[nodiscard]] bool userAborted() const;
 
     /**
-     * @brief Forgets an abort of an earlier session.
+     * Forgets an abort of an earlier session.
      *
      * Called before a session starts. The mark belongs to one session and must
      * not decide the outcome of the next.

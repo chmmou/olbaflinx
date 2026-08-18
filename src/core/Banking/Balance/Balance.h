@@ -33,10 +33,10 @@ namespace olbaflinx::core::banking::balance {
 typedef AB_BALANCE_TYPE BalanceType;
 
 /**
- * @brief The balance of an account, as the bank reports it.
+ * The balance of an account, as the bank reports it.
  *
- * Carries the four values the balance table holds - amount, date, type and
- * currency - plus the id the banking backend keeps the account under. The
+ * Carries the four values the balance table holds, amount, date, type and
+ * currency, plus the id the banking backend keeps the account under. The
  * account itself carries the amount alone, which is not enough to choose
  * between the balances a bank sends: that choice goes by the type.
  *
@@ -59,7 +59,7 @@ public:
     Balance &operator=(Balance &&) = delete;
 
     /**
-     * @brief The account this balance belongs to, as the banking backend keeps it.
+     * The account this balance belongs to, as the banking backend keeps it.
      *
      * Not the row id of the stored account. The storage translates the one into
      * the other when it writes.

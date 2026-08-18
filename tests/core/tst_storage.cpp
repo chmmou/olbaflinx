@@ -599,7 +599,8 @@ void StorageTest::deselectingKeepsTheRowAndItsTransactions()
     QVERIFY(accountId > 0);
 
     // Transactions of their own, hung on the account the way the storage hangs
-    // them. Epic 1 has no way to fetch any, so the test puts them there.
+    // them. Written straight into the file rather than fetched, so that the
+    // test needs no bank.
     QVERIFY(scalarOf(file,
                      QStringLiteral("INSERT INTO transactions (account_id, purpose) VALUES (%1, "
                                     "'Miete'), (%1, 'Gehalt') RETURNING account_id;")

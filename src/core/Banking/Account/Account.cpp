@@ -89,25 +89,25 @@ QString Account::typeString() const
         typeString = QObject::tr("Bank");
         break;
     case AB_AccountType_CreditCard:
-        typeString = QObject::tr("Credit Card"); // Kreditkarte (Kreditkarten Konto?)
+        typeString = QObject::tr("Credit Card");
         break;
     case AB_AccountType_Checking:
-        typeString = QObject::tr("Checking"); // Gehaltskonto?
+        typeString = QObject::tr("Checking");
         break;
     case AB_AccountType_Savings:
-        typeString = QObject::tr("Savings"); // Sparkonto
+        typeString = QObject::tr("Savings");
         break;
     case AB_AccountType_Investment:
-        typeString = QObject::tr("Investment"); // Anlagen
+        typeString = QObject::tr("Investment");
         break;
     case AB_AccountType_Cash:
-        typeString = QObject::tr("Cash"); // Bargeld
+        typeString = QObject::tr("Cash");
         break;
     case AB_AccountType_MoneyMarket:
-        typeString = QObject::tr("Money Market"); // Kapitalmarkt?
+        typeString = QObject::tr("Money Market");
         break;
     case AB_AccountType_Credit:
-        typeString = QObject::tr("Credit"); // Guthaben Konto?
+        typeString = QObject::tr("Credit");
         break;
     case AB_AccountType_Unspecified:
         typeString = QObject::tr("Unspecified");

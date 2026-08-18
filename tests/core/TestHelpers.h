@@ -64,9 +64,9 @@ public:
      *
      * The directory is removed and the old value put back when the process ends.
      *
-     * @return false when no temporary directory could be created, in which case
-     *  nothing was changed and the caller is to fail rather than write into the
-     *  home directory of whoever started the run.
+     * Answers false when no temporary directory could be created. Nothing was
+     * changed then, and the caller is to fail rather than write into the home
+     * directory of whoever started the run.
      */
     static bool useTemporaryHome()
     {
@@ -174,8 +174,7 @@ public:
      * The number of rows a table holds, read past Storage. What a failed run
      * left behind is exactly what Storage offers no way to ask.
      *
-     * @return The count, or -1 when the file would not open or the table is not
-     *  there.
+     * Answers -1 when the file would not open or the table is not there.
      */
     static int rowCount(const QString &file, const QString &key, const QString &table)
     {

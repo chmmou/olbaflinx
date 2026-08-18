@@ -43,7 +43,7 @@ namespace olbaflinx::core::banking {
 using namespace ::account;
 
 /**
- * @brief How a session ended.
+ * How a session ended.
  *
  * The user interface needs the abort told apart from the failure: it says
  * something else, and it keeps what an earlier account of the same run had
@@ -59,15 +59,10 @@ enum class FetchOutcome {
 };
 
 /**
- * @brief
- *  The Banking Backend Object contains the encapsulated and complete business logic of AQBanking
- *  for Qt 6.
- * @note
- *  Currently only the fetching of accounts and their (SEPA) transfers / direct debits / standing
- *  orders are supported. The sending of transfers / direct debits will be added step by step.
- * @author Alexander Saal
- * @version 1.0
- * @package olbaflinx::core::banking
+ * The banking backend of the application, wrapping aqbanking.
+ *
+ * What it can do is fetch accounts and their transfers, direct debits and
+ * standing orders. Sending any of them is not part of the interface.
  *
  * Ownership: the creator owns the instance. The accounts reported through
  * itemsReceived pass into the ownership of the receiver. The user interface
@@ -79,136 +74,115 @@ class OLBAFLINX_CORE_EXPORT Banking : public QObject
 
 public:
     /**
-     * @param applicationInfo Details for signing on to the chip card service
-     *  and for the title of the setup dialog.
-     * @param parent Optional owner.
+     * The application info carries what the chip card service is signed on with
+     * and the title of the setup dialog.
      */
     explicit Banking(ApplicationInfo applicationInfo, QObject *parent = nullptr);
     ~Banking() override;
 
     /**
-     * @brief Initialize the banking backend.
+     * Name, version and key are the registration German HBCI ZKA issues.
      *
-     * @param name Application name registered by German HBCI ZKA
-     * @param version Application version registered by German HBCI ZKA
-     * @param key The FinTS registration key from German ZKA
-     * @param gui The user interface the backend asks for a PIN, a TAN and a
-     *  dialog. It stays the property of the caller: this class neither frees it
-     *  in finalize nor in its destructor, and it has to outlive this instance.
-     *  It must not be null. Without one the backend aborts the process instead
-     *  of reporting a failure: AB_Gui_Extend asserts on it, and AB_Banking_Init
-     *  before it runs through and answers success. A caller with no display passes
-     *  GWEN_Gui_new(), the non-interactive interface of gwenhywfar, and frees it
-     *  with GWEN_Gui_free() afterwards.
-     *
-     * @return A default constructed Error on success, otherwise the reason. The
-     *  caller has to check it, the return type is [[nodiscard]].
+     * The user interface is the one the backend asks for a PIN, a TAN and a
+     * dialog. It stays the property of the caller: this class neither frees it
+     * in finalize nor in its destructor, and it has to outlive this instance.
+     * It must not be null. Without one the backend aborts the process instead
+     * of reporting a failure, because AB_Gui_Extend asserts on it while
+     * AB_Banking_Init before it runs through and answers success. A caller with
+     * no display passes GWEN_Gui_new(), the non-interactive interface of
+     * gwenhywfar, and frees it with GWEN_Gui_free() afterwards.
      */
     Error initialize(const QString &name, const QString &version, const QString &key, GWEN_GUI *gui);
 
     /**
-     * @brief Finalize the banking backend and free all resources.
+     * Frees everything the backend holds. The user interface handed to
+     * initialize is not among it.
      */
     void finalize();
 
     /**
-     * @brief Open the aqbaking setup dialog.
-     *
-     * @return
-     *  If banking backend not initialized or other error occurred -1 is returned; otherwise
-     *  the return value from setup dialog.
+     * Opens the aqbanking setup dialog and answers what that dialog returned,
+     * or -1 where the backend is not initialized or the call failed.
      */
     int setupAccounts();
 
     /**
-     * @brief Get all accounts previously set up with Banking::setupAccounts
+     * Asks for the accounts that were set up through setupAccounts. They arrive
+     * through itemsReceived, and finished ends the call on every path.
+     *
+     * Refused while a fetch runs: aqbanking takes no lock, and the session
+     * walks the same handle from a thread of its own.
      */
     void accounts();
 
     /**
-     * @brief Fetch the transactions and the balance of one account.
+     * Fetches the transactions and the balance of one account. Both requests
+     * travel in one session. The result arrives through itemsReceived,
+     * transactions and balance in one list, each record carrying the id of the
+     * account it belongs to and told apart by its item type.
      *
-     * Both requests travel in one session. The result arrives through
-     * itemsReceived, transactions and balance in one list, each record carrying
-     * the id of the account it belongs to and told apart by its item type.
-     *
-     * @param account The account to fetch. It stays with its caller.
-     * @param latestStoredDate The day the stored holding of the account ends
-     *  on, as Storage::latestTransactionDate reports it. The fetch starts a
-     *  fixed lead time before it. An invalid date fetches everything the bank
-     *  offers, which is what the first fetch of an account does.
+     * The account stays with its caller. The stored date is the day its holding
+     * ends on, as Storage::latestTransactionDate reports it; the fetch starts a
+     * fixed lead time before it, and an invalid date fetches everything the
+     * bank offers.
      *
      * Preconditions: the backend is initialized. The user interface handed to
-     *  initialize is set for the thread of the session by this call itself; the
-     *  caller has nothing to do for it.
+     * initialize is set for the thread of the session by this call itself; the
+     * caller has nothing to do for it.
      *
      * Errors: a failed session reports errorOccurred. An abort by the user
-     *  reports aborted instead, which is the difference the user interface needs.
-     *  An account without online access reports accountSkipped and is not an
-     *  error. An empty result is none either, it reports an empty list. Every
-     *  path of an accepted fetch ends in finished.
+     * reports aborted instead. An account without online access reports
+     * accountSkipped and is not an error, and neither is an empty result. Every
+     * path of an accepted fetch ends in finished.
      *
-     * Concurrency: this call returns at once and runs the session in a thread of
-     *  its own. A second fetch while one runs is refused: it reports
-     *  errorOccurred and no finished, because a finished of its own would declare
-     *  the running one over. The instance belongs to one thread at a time, not to
-     *  one thread for good: while a session runs, no caller may reach into this
-     *  object, and finalize waits for the session rather than pulling it away.
+     * Concurrency: the call returns at once and runs the session in a thread of
+     * its own. A second fetch while one runs is refused with errorOccurred and
+     * no finished, which would otherwise declare the running one over. The
+     * instance belongs to one thread at a time: while a session runs, no caller
+     * may reach into this object, and finalize waits for the session rather
+     * than pulling it away.
      */
     void fetchAccount(const Account &account, const QDate &latestStoredDate = {});
 
     /**
-     * @brief Fetch the transactions and the balances of every given account.
+     * Fetches the transactions and the balances of every given account. The
+     * orders travel in one list and one call; the backend sorts them by
+     * institution and runs one session per institution, so two accounts of the
+     * same bank share a session and share whatever brings it down.
      *
-     * The orders of all accounts travel in one list and one call. The backend
-     * sorts them by account and by institution and runs one session per
-     * institution, so two accounts of the same bank share a session and share
-     * whatever brings it down.
+     * The accounts stay with their caller; the session works on a copy made
+     * here. An empty list is no failure and ends in finished without anything
+     * being sent. The stored dates are read under the identifier of the
+     * account; one that is missing fetches everything the bank offers.
      *
-     * @param accounts The accounts to fetch. They stay with their caller; what
-     *  the session works on is a copy made here. An empty list is no failure and
-     *  ends in finished without anything being sent.
-     * @param latestStoredDates The day the stored holding of an account ends on,
-     *  under the identifier of that account. An account that is missing from it
-     *  fetches everything the bank offers, which is what the first fetch of an
-     *  account does.
-     *
-     * Preconditions: the backend is initialized. The user interface handed to
-     *  initialize is set for the thread of the session by this call itself.
+     * Preconditions: as fetchAccount.
      *
      * Errors: an account without online access reports accountSkipped and is
-     *  kept out of the list, because the backend refuses the whole run over one
-     *  such account. An account whose orders the bank refused reports
-     *  accountFailed and its records are dropped; the accounts of other
-     *  institutions are not touched by it. Only a failure of the call itself
-     *  reports errorOccurred. Every path ends in finished.
+     * kept out of the list, because the backend refuses the whole run over one
+     * such account. An account whose orders the bank refused reports
+     * accountFailed and its records are dropped, while the accounts of other
+     * institutions run on. Only a failure of the call itself reports
+     * errorOccurred. Every path ends in finished.
      *
-     * Concurrency: as fetchAccount. This call returns at once, runs the session
-     *  in a thread of its own, and is refused while a fetch of either kind runs.
+     * Concurrency: as fetchAccount, and refused while a fetch of either kind
+     * runs.
      */
     void fetchAccounts(const QList<std::shared_ptr<Account>> &accounts,
                        const QHash<quint32, QDate> &latestStoredDates = {});
 
     /**
-     * @brief Build the two orders of a fetch, without sending them.
+     * Builds the two orders of a fetch without sending them. The lead time is
+     * subtracted here, so the orders start before the day the stored holding
+     * ends on and carry no starting point at all when that date is invalid.
      *
-     * Separate from the session so that the orders can be read before they go
-     * out, which is what makes them measurable without a bank. The lead time is
-     * subtracted here for that reason: a session cannot be run without one.
+     * What the backend offers decides which orders are built. Where the
+     * description names the orders it holds, only those are built; where it is
+     * missing or names none at all, both are built, because the description
+     * that comes with a stored account carries no such names and reading its
+     * silence as a refusal would leave every fetch empty.
      *
-     * @param account The account the orders are built for.
-     * @param latestStoredDate The day the stored holding ends on. The orders
-     *  start a fixed lead time before it, and carry no starting point at all
-     *  when it is invalid.
-     * @param offered What the backend currently holds for this account, or
-     *  nothing. Where it names the orders it holds, only those are built. Where
-     *  it is missing or names none at all, both orders are built: the
-     *  description that comes with a stored account carries no such names, and
-     *  reading its silence as a refusal would leave every fetch empty.
-     *
-     * @return A list of the orders that are to go out, at most one for the
-     *  transactions and one for the balance. The caller owns it and releases it,
-     *  orders included, with AB_Transaction_List2_freeAll.
+     * The caller owns the returned list and releases it, orders included, with
+     * AB_Transaction_List2_freeAll.
      */
     [[nodiscard]] static AB_TRANSACTION_LIST2 *buildFetchCommands(
         const Account &account,
@@ -216,53 +190,40 @@ public:
         const AB_ACCOUNT_SPEC *offered = nullptr);
 
     /**
-     * @brief Whether the backend holds an order of this kind for the account.
+     * Whether the backend holds an order of this kind for the account. It
+     * writes the limits of an order into the description exactly where it can
+     * build that order, and leaves them out where it cannot. Asking beforehand
+     * keeps an order out of a session that would come back as a failure of the
+     * whole account.
      *
-     * The backend writes the limits of an order into the description of an
-     * account exactly where it can build that order, and leaves them out where
-     * it cannot. Asking beforehand is what keeps an order out of a session that
-     * would come back as a failure of the whole account.
-     *
-     * @param offered The description the backend holds. Nothing, or a
-     *  description that names no order at all, means nothing is known: the field
-     *  is documented as one a backend may leave empty, so everything is taken as
-     *  offered. Only a description that names other orders and not this one is a
-     *  refusal of it.
-     * @param command The kind of order.
+     * Nothing, or a description that names no order at all, means nothing is
+     * known: the field may be left empty by a backend, so everything is taken
+     * as offered. Only a description that names other orders and not this one
+     * is a refusal of it.
      */
     [[nodiscard]] static bool accountOffers(const AB_ACCOUNT_SPEC *offered,
                                             AB_TRANSACTION_COMMAND command);
 
     /**
-     * @brief Read the answer of a session out of its container.
+     * Reads the transactions and the balance out of the container a session
+     * filled, in one list, and hands both to their new owner.
      *
-     * @param context The container the session filled.
-     * @param commands The orders that were sent. They carry the outcome of the
-     *  session per order, which decides whether an account is reported at all.
-     *
-     * @return The transactions and the balance, in one list. Both stay with
-     *  their new owner. An account whose order failed is not in it, neither
-     *  with its transactions nor with its balance.
+     * The orders that were sent carry the outcome per order. An account whose
+     * order failed is not in the list, neither with its transactions nor with
+     * its balance.
      */
     [[nodiscard]] static BankingItems itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
                                                        AB_TRANSACTION_LIST2 *commands);
 
     /**
-     * @brief Tell apart how a session ended, without running one.
+     * Tells apart how a session ended, from what AB_Banking_SendCommands
+     * returned and from the orders that were sent. A session can come back
+     * successful and still carry an order the bank refused.
      *
-     * Separate from the session for the same reason buildFetchCommands is: the
-     * three ways out cannot be brought about without a bank, and a distinction
-     * that cannot be measured is a promise without a proof.
-     *
-     * @param sessionResult What AB_Banking_SendCommands returned.
-     * @param commands The orders that were sent. A session can come back
-     *  successful and still carry an order the bank refused.
-     * @param uniqueAccountId The account the orders belong to.
-     *
-     * @return Aborted where the user stopped the session, Failed where the
-     *  session failed or an order of this account was refused, Received
-     *  otherwise. A session that was cut in the middle, say because the far end
-     *  went away, is a failure and not an abort.
+     * Aborted where the user stopped the session, Failed where the session
+     * failed or an order of the named account was refused, Received otherwise.
+     * A session that was cut in the middle, say because the far end went away,
+     * is a failure and not an abort.
      */
     [[nodiscard]] static FetchOutcome outcomeOfSession(int sessionResult,
                                                        AB_TRANSACTION_LIST2 *commands,
@@ -270,16 +231,15 @@ public:
 
 Q_SIGNALS:
     /**
-     * @brief This signal is emitted if an error occurred on an asynchronous path.
-     *
-     * @param errorCode @ref olbaflinx::core::ErrorCode
-     * @param reason Technical message, meant for the log. It carries the return
-     *  value of the banking backend where there is one.
+     * An error occurred on an asynchronous path. The reason is a technical
+     * message meant for the log, and it carries the return value of the banking
+     * backend where there is one.
      */
     void errorOccurred(olbaflinx::core::ErrorCode errorCode, const QString &reason);
 
     /**
-     * @brief This signal is emitted for an account a fetch has passed over.
+     * An account the fetch passed over, named by the identifier the banking
+     * backend keeps. The reason carries no account data.
      *
      * Not an error of the session: an account without online access is skipped
      * before anything is sent, so that the accounts beside it still run.
@@ -287,15 +247,12 @@ Q_SIGNALS:
      * An account the bank holds no order at all for is a different case and has
      * a signal of its own, noOrderOffered. Sharing one signal would tell the
      * user of both that the account has no online access.
-     *
-     * @param uniqueAccountId The account, as the banking backend keeps it.
-     * @param reason Why it was passed over. It carries no account data.
      */
     void accountSkipped(quint32 uniqueAccountId, const QString &reason);
 
     /**
-     * @brief This signal is emitted for an account whose orders the bank
-     *  refused, while the fetch went on for the accounts beside it.
+     * An account whose orders the bank refused, while the fetch went on for the
+     * accounts beside it.
      *
      * Only a fetch over several accounts reports this way. A fetch of one
      * account has nothing to go on with, so its refusal is the failure of the
@@ -304,44 +261,33 @@ Q_SIGNALS:
      * Nothing of this account is reported: itemsReceived carries neither its
      * bookings nor its balance. Whoever counts the outcome of a run counts this
      * account as failed and no other way.
-     *
-     * @param uniqueAccountId The account, as the banking backend keeps it.
      */
     void accountFailed(quint32 uniqueAccountId);
 
     /**
-     * @brief This signal is emitted for an account the bank holds no order of
-     *  any kind for.
+     * An account the bank holds no order of any kind for.
      *
      * The account has online access, so it is not the case accountSkipped
      * names, and the bank offers neither the bookings nor the balance of it.
      * Nothing is sent and the session ends here.
-     *
-     * @param uniqueAccountId The account, as the banking backend keeps it.
      */
     void noOrderOffered(quint32 uniqueAccountId);
 
     /**
-     * @brief This signal is emitted for an account the bank holds no order for
-     *  transactions for.
+     * An account the bank holds no order for transactions for.
      *
      * Not an error and not a skipped account: the fetch goes on and brings the
      * balance. What it says is that no booking can arrive for this account, so
      * that an empty result is not read as an account with nothing new.
      *
      * It arrives before the session starts, and finished still ends the fetch.
-     *
-     * @param uniqueAccountId The account, as the banking backend keeps it.
      */
     void transactionsNotOffered(quint32 uniqueAccountId);
 
     /**
-     * @brief This signal is emitted when the user stopped a session.
-     *
-     * An abort is no failure and therefore no errorOccurred. It has a way of its
-     * own for the same reason accountSkipped has: without one it would either be
-     * invisible or read like a failure, and the user interface says something
-     * else for each of the two.
+     * The user stopped a session. An abort is no failure and therefore no
+     * errorOccurred; the user interface says something else for each of the
+     * two.
      *
      * Nothing of the aborted account is reported. finished follows.
      */

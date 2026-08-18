@@ -47,7 +47,7 @@ typedef AB_TRANSACTION_LIMITS_LIST TransactionLimitsList;
 typedef AB_TRANSACTION_COMMAND TransactionCommand;
 
 /**
- * @brief An account reported by AqBanking.
+ * An account reported by AqBanking.
  *
  * Ownership: the creator owns the instance. Accounts read from the database are
  * created through fromMap and handed on as a BankingItemPtr. The reference
@@ -68,11 +68,9 @@ public:
     Account &operator=(Account &&) = delete;
 
     /**
-     * @brief Creates an account from the column values of a database row.
-     *
-     * @param map Column values, named after the binding names of the query.
-     *
-     * @return The new account, or an empty pointer if the map is empty.
+     * Creates an account from the column values of a database row, named after
+     * the binding names of the query. An empty map answers with an empty
+     * pointer.
      */
     [[nodiscard]] static std::shared_ptr<Account> fromMap(const QMap<QString, QVariant> &map);
 
@@ -95,7 +93,7 @@ public:
     [[nodiscard]] double balance() const;
 
     /**
-     * @brief Whether the user keeps this account.
+     * Whether the user keeps this account.
      *
      * Set by the wizard, not reported by the bank. An account nobody has decided
      * about counts as kept, and storing such an account leaves the state of an
@@ -106,7 +104,7 @@ public:
     void setActive(bool active);
 
     /**
-     * @brief The account as the banking backend describes it.
+     * The account as the banking backend describes it.
      *
      * Borrowed, it stays the property of this account and must not be freed by
      * the caller. It is here because building an order means filling it from

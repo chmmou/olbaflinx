@@ -809,9 +809,6 @@ public:
      * reach a manager that is built after them. And a central area has to be the
      * first area the manager is given; the library refuses it once another one
      * stands.
-     *
-     * The log area of the earlier draft is not built here. It belongs to a later
-     * epic, and an area that shows nothing would take room from the two that do.
      */
     void setUpDockAreas()
     {

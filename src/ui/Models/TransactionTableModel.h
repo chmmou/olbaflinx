@@ -28,7 +28,7 @@
 namespace olbaflinx::ui::models {
 
 /**
- * @brief Maps the transactions reported by core onto columns and display roles.
+ * Maps the transactions reported by core onto columns and display roles.
  *
  * Ownership: the model holds the records it receives through setItems. That is
  * not a second copy of the truth, because Storage lets go of them once the
@@ -40,7 +40,7 @@ class TransactionTableModel final : public QAbstractTableModel
 
 public:
     /**
-     * @brief The columns of the view, in the order it shows them.
+     * The columns of the view, in the order it shows them.
      *
      * The other party is one column and not two: the record names it in
      * remote_name whichever way the booking goes, while the own account stands
@@ -57,7 +57,7 @@ public:
     static constexpr int ColumnCount = ValueColumn + 1;
 
     /**
-     * @brief Every field of a transaction, whether a column shows it or not.
+     * Every field of a transaction, whether a column shows it or not.
      *
      * The view shows four of them. The rest stay reachable so that a later view
      * can offer them without the model being rebuilt for it.
@@ -86,15 +86,14 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     /**
-     * @brief Orders the whole holding of the account by one column.
+     * Orders the whole holding of the account by one column.
      *
      * The order lies in the query and not above the rows that are loaded, so it
      * reaches every transaction of the account and not only the page on screen.
      * Like a change of account it drops what stands and starts over; a result of
      * the previous order that arrives afterwards is discarded.
      *
-     * @param column One of Column. Anything outside that range is ignored.
-     * @param order Ascending or descending.
+     * A column outside Column is ignored.
      */
     void sort(int column, Qt::SortOrder order = Qt::AscendingOrder) override;
 
@@ -102,7 +101,7 @@ public:
     [[nodiscard]] Qt::SortOrder sortOrder() const;
 
     /**
-     * @brief Whether there is anything left to fetch.
+     * Whether there is anything left to fetch.
      *
      * When to ask is for the view to decide; it knows its visible area, which
      * nothing here does. This answers only whether asking would bring anything:
@@ -112,7 +111,7 @@ public:
     [[nodiscard]] bool canFetchMore(const QModelIndex &parent) const override;
 
     /**
-     * @brief Asks for the next page and appends it.
+     * Asks for the next page and appends it.
      *
      * Appends rather than replaces: a reset would take the view its position and
      * the user his selection. The call returns before the rows arrive.
@@ -120,7 +119,7 @@ public:
     void fetchMore(const QModelIndex &parent) override;
 
     /**
-     * @brief Whether the holding is loaded completely.
+     * Whether the holding is loaded completely.
      *
      * A run that ended with a failure does not set this, however many rows it
      * left standing. A part of the holding shown as the whole would mislead.
@@ -128,7 +127,7 @@ public:
     [[nodiscard]] bool atEnd() const;
 
     /**
-     * @brief Whether a read this model asked for is still going.
+     * Whether a read this model asked for is still going.
      *
      * It tells a failure that belongs to this model from one that belongs to
      * another reader. The storage names no owner on its read signals, and a
@@ -137,7 +136,7 @@ public:
     [[nodiscard]] bool isReading() const;
 
     /**
-     * @brief The storage the model reads from.
+     * The storage the model reads from.
      *
      * Externally owned and has to outlive the model.
      *
@@ -151,7 +150,7 @@ public:
     void setStorage(olbaflinx::core::storage::Storage *storage);
 
     /**
-     * @brief What the filter bar restricts the transactions by.
+     * What the filter bar restricts the transactions by.
      *
      * Every field is optional. The text is looked for in the name of the other
      * party and in the purpose, the dates are inclusive bounds, and a booking of
@@ -166,7 +165,7 @@ public:
             = olbaflinx::core::storage::Storage::Direction::Any;
 
         /**
-         * @brief Whether the filter takes anything away at all.
+         * Whether the filter takes anything away at all.
          *
          * It is what tells an account without transactions from an account whose
          * transactions the filter leaves out. The two need different words.
@@ -181,7 +180,7 @@ public:
     };
 
     /**
-     * @brief Restricts the transactions that are shown.
+     * Restricts the transactions that are shown.
      *
      * Like a change of account it drops the rows that stand and starts over: the
      * rows of one condition must not be read under another. A filter outlives a
@@ -192,7 +191,7 @@ public:
     [[nodiscard]] Filter filter() const;
 
     /**
-     * @brief How many transactions satisfy the condition.
+     * How many transactions satisfy the condition.
      *
      * The whole holding of the account under the filter, not the rows that are
      * loaded. It comes from the storage with the result of the read.
@@ -200,7 +199,7 @@ public:
     [[nodiscard]] int totalRows() const;
 
     /**
-     * @brief Shows the transactions of one account.
+     * Shows the transactions of one account.
      *
      * The rows of the account that was shown before are dropped at once. They do
      * not belong under the account that is chosen now, and leaving them standing
@@ -211,15 +210,15 @@ public:
      * move rather than a failure, so the request waits for the end of the run.
      * Only the latest one waits: three changes during one run make one request.
      *
-     * @param accountId The identifier the institution assigns. 0 stands for no
-     *  account and empties the model without asking for anything.
+     * The account is named by the identifier the institution assigns. 0 stands
+     * for no account and empties the model without asking for anything.
      */
     void setAccountId(quint32 accountId);
 
     [[nodiscard]] quint32 accountId() const;
 
     /**
-     * @brief Reads the holding of the account again, from the top.
+     * Reads the holding of the account again, from the top.
      *
      * What a fetch needs afterwards: the rows it stored are in the file and
      * nothing here knows of them. The account, the order and the filter stay as
@@ -233,7 +232,7 @@ public:
 
 public Q_SLOTS:
     /**
-     * @brief Takes over the reported records.
+     * Takes over the reported records.
      *
      * Records that are not a transaction are skipped.
      */
@@ -241,36 +240,29 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     /**
-     * @brief This signal is emitted when the number under the condition changed.
-     *
-     * @param totalRows What totalRows() answers from now on.
+     * What totalRows() answers from now on.
      */
     void totalRowsChanged(int totalRows);
 
     /**
-     * @brief This signal is emitted when the model ordered by something else.
+     * The model orders by something else from now on.
      *
      * A click on a header is not the only way the order changes: giving up the
      * account puts it back to the default, and a header indicator that was set
      * once at setup would then show a column the rows no longer stand under.
      * Whoever draws the indicator hangs it on this.
-     *
-     * @param column One of Column.
-     * @param order Ascending or descending.
      */
     void sortChanged(int column, Qt::SortOrder order);
 
     /**
-     * @brief This signal is emitted when the storage turned a request down.
+     * The storage turned a request down. The reason is technical and not for
+     * the screen.
      *
      * A refusal reaches the caller through the return value alone, so none of
      * the signals of the read path carries it and whoever shows failures to the
      * user would never learn of this one. The view falls back on the words for
      * an account without transactions otherwise, which is not merely silence
      * but the wrong answer.
-     *
-     * @param code The machine readable cause.
-     * @param reason The technical message. It is not for the screen.
      */
     void readRefused(olbaflinx::core::ErrorCode code, const QString &reason);
 

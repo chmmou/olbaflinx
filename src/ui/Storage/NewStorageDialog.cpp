@@ -61,8 +61,8 @@ public:
     }
 
     /**
-     * @return Empty if the input can carry a storage, otherwise the reason it
-     *  cannot, in the words the user is shown
+     * Empty if the input can carry a storage, otherwise the reason it cannot,
+     * in the words the user is shown.
      */
     [[nodiscard]] QString validationMessage() const
     {

@@ -278,9 +278,8 @@ void AppFetchTest::cleanup()
 }
 
 /**
- * The entry was built in the first epic and left switched off. What is measured
- * here is that it reaches the banking layer at all, and that the account it
- * reaches it with is the one the tree has chosen.
+ * What is measured here is that the entry reaches the banking layer at all, and
+ * that the account it reaches it with is the one the tree has chosen.
  *
  * The banking layer answers that this account has no online access, which it can
  * only say about the account it was handed. That a session with a bank cannot be

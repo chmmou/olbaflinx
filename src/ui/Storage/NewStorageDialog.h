@@ -25,7 +25,7 @@ class Storage;
 namespace olbaflinx::ui::storage {
 
 /**
- * @brief The dialog that asks for the details of a new storage file.
+ * The dialog that asks for the details of a new storage file.
  *
  * It checks its own input and releases Ok only once name and pass phrase can
  * carry a storage, so that the caller never has to reject after the fact. What
@@ -40,9 +40,7 @@ class NewStorageDialog : public QDialog
 
 public:
     /**
-     * @param storage Externally owned storage, asked for the pass phrase rule.
-     * @param parent Optional owner.
-     * @param f Optional window flags.
+     * The storage is owned elsewhere and is asked for the pass phrase rule.
      */
     explicit NewStorageDialog(olbaflinx::core::storage::Storage *storage,
                               QWidget *parent = nullptr,
@@ -50,13 +48,10 @@ public:
     ~NewStorageDialog() override;
 
     /**
-     * @return The name that was entered, the storage file is named after it
+     * The storage file is named after what was entered here.
      */
     [[nodiscard]] QString name() const;
 
-    /**
-     * @return The pass phrase that was entered
-     */
     [[nodiscard]] QString password() const;
 
 private:

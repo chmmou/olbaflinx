@@ -11,7 +11,7 @@
 namespace olbaflinx::ui::themes {
 
 /**
- * @brief Loads style sheets and renders the icons of the user interface.
+ * Loads style sheets and renders the icons of the user interface.
  *
  * Ownership: the creator owns the instance. The QApplication that is styled is
  * observed only, not owned.
@@ -41,28 +41,15 @@ public:
     void reload() const;
 
     /**
-     * Applies a specific theme to the provided QApplication instance by loading the styles
-     * from the specified file. The method ensures a theme is registered,
-     * sets the application styles accordingly, and allows multiple themes to be managed.
-     *
-     * @param application The QApplication instance to which the theme should be applied.
-     *                     This must be non-null and should represent the main application instance.
-     * @param filename The path to the theme file to be applied.
-     *                 The file must contain valid stylesheet data.
+     * Registers the theme file and sets the style sheet on the application,
+     * which must not be null. Several themes can be registered this way; see
+     * reload() for the order they take effect in.
      */
     void apply(QApplication *application, const QString &filename) const;
 
     /**
-     * Retrieves a QPixmap object corresponding to the specified icon name
-     * and mode (Light or Dark theme). This method loads the icon from a
-     * predefined resource path, processes the SVG if necessary, and
-     * returns a rendered pixmap.
-     *
-     * @param name The name of the icon resource to load.
-     * @param mode The theme mode (Light or Dark) for selecting the icon variant.
-     *             Defaults to Light mode if not specified.
-     * @return A QPixmap representing the requested icon. Returns an empty
-     *         QPixmap if the icon cannot be loaded.
+     * Renders the icon of that name in the variant the mode asks for. An icon
+     * that cannot be loaded answers with an empty pixmap.
      */
     static QPixmap pixmap(const QString &name, ThemeManager::Mode mode = ThemeManager::Mode::Light);
 

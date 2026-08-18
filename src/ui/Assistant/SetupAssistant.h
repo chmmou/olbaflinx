@@ -24,7 +24,7 @@
 namespace olbaflinx::ui::assistant {
 
 /**
- * @brief Guides the first run: banking backend and account setup.
+ * Guides the first run: banking backend and account setup.
  *
  * Ownership: belongs to its parent widget. The ApplicationInfo is copied into
  * the pages, nothing is kept by reference.
@@ -35,9 +35,7 @@ class SetupAssistant : public QWizard
 
 public:
     /**
-     * @param applicationInfo Details the banking page needs to set itself up.
-     * @param parent Optional owner.
-     * @param flags Window flags.
+     * The application info is what the banking page sets itself up with.
      */
     explicit SetupAssistant(const olbaflinx::core::ApplicationInfo &applicationInfo,
                             QWidget *parent = nullptr,
@@ -45,7 +43,7 @@ public:
     ~SetupAssistant() override;
 
     /**
-     * @brief The accounts the user chose, as objects.
+     * The accounts the user chose, as objects.
      *
      * Empty when the wizard was cancelled. Ownership is shared with the caller,
      * the same way itemsReceived hands over what it reports.
@@ -57,7 +55,7 @@ public:
     [[nodiscard]] olbaflinx::core::banking::BankingItems selectedAccounts() const;
 
     /**
-     * @brief Every account the wizard put up for choice.
+     * Every account the wizard put up for choice.
      *
      * Whoever stores the result needs both lists. An account in this one and not
      * in the chosen one was turned down; one in neither was never on offer, and
