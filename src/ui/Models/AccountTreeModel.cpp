@@ -169,11 +169,37 @@ QHash<int, QByteArray> AccountTreeModel::roleNames() const
     };
 }
 
+/**
+ * Whether the two hold the same accounts under the same banks, in the same
+ * places. Only then can the rows keep their indexes, and only the values in
+ * them have to be announced as changed.
+ */
+bool AccountTreeModel::sameShape(const QList<Bank> &left, const QList<Bank> &right)
+{
+    if (left.size() != right.size()) {
+        return false;
+    }
+
+    for (int bank = 0; bank < left.size(); ++bank) {
+        if (left.at(bank).name != right.at(bank).name
+            || left.at(bank).accounts.size() != right.at(bank).accounts.size()) {
+            return false;
+        }
+
+        for (int row = 0; row < left.at(bank).accounts.size(); ++row) {
+            if (left.at(bank).accounts.at(row)->uniqueId()
+                != right.at(bank).accounts.at(row)->uniqueId()) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 void AccountTreeModel::setItems(const BankingItems &items)
 {
-    beginResetModel();
-
-    m_banks.clear();
+    QList<Bank> banks;
 
     for (const auto &item : items) {
         auto account = std::dynamic_pointer_cast<Account>(item);
@@ -184,30 +210,30 @@ void AccountTreeModel::setItems(const BankingItems &items)
         const auto bankName = account->bankName();
 
         int bankRow = -1;
-        for (int row = 0; row < m_banks.size(); ++row) {
-            if (m_banks.at(row).name == bankName) {
+        for (int row = 0; row < banks.size(); ++row) {
+            if (banks.at(row).name == bankName) {
                 bankRow = row;
                 break;
             }
         }
 
         if (bankRow < 0) {
-            m_banks.append(Bank{bankName, {}});
-            bankRow = static_cast<int>(m_banks.size()) - 1;
+            banks.append(Bank{bankName, {}});
+            bankRow = static_cast<int>(banks.size()) - 1;
         }
 
-        m_banks[bankRow].accounts.append(std::move(account));
+        banks[bankRow].accounts.append(std::move(account));
     }
 
     // The order is the one of the language in use. Comparing character values
     // would put every name that starts with an umlaut behind all the others.
     const QCollator order;
 
-    std::sort(m_banks.begin(), m_banks.end(), [&order](const Bank &left, const Bank &right) {
+    std::sort(banks.begin(), banks.end(), [&order](const Bank &left, const Bank &right) {
         return order.compare(left.name, right.name) < 0;
     });
 
-    for (auto &bank : m_banks) {
+    for (auto &bank : banks) {
         std::sort(bank.accounts.begin(),
                   bank.accounts.end(),
                   [&order](const std::shared_ptr<Account> &left,
@@ -215,6 +241,28 @@ void AccountTreeModel::setItems(const BankingItems &items)
                       return order.compare(left->accountName(), right->accountName()) < 0;
                   });
     }
+
+    // The read after a fetch brings the same accounts with new figures. A reset
+    // would take the view its selection, the nodes it has open and where it
+    // stands, so where every row keeps its place only the values are announced.
+    if (sameShape(m_banks, banks)) {
+        m_banks = std::move(banks);
+
+        for (int bank = 0; bank < m_banks.size(); ++bank) {
+            const QModelIndex bankIndex = index(bank, 0);
+            const int rows = static_cast<int>(m_banks.at(bank).accounts.size());
+
+            if (rows > 0) {
+                Q_EMIT dataChanged(index(0, 0, bankIndex), index(rows - 1, 0, bankIndex));
+            }
+        }
+
+        return;
+    }
+
+    beginResetModel();
+
+    m_banks = std::move(banks);
 
     endResetModel();
 }

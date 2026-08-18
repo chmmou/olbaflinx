@@ -53,6 +53,8 @@ private Q_SLOTS:
     void banksAndAccountsFollowTheOrderOfTheLanguage();
     void twoAccountsOfTheSameBankShareOneNode();
     void anAccountWithoutAnIbanStaysInTheTree();
+    void theSameAccountsWithNewValuesLeaveTheTreeStanding();
+    void anAccountThatIsNewBuildsTheTreeAgain();
 };
 
 void AccountTreeModelTest::initTestCase()
@@ -253,6 +255,80 @@ void AccountTreeModelTest::anAccountWithoutAnIbanStaysInTheTree()
     QVERIFY(model.data(account, AccountTreeModel::IbanRole).toString().isEmpty());
     QCOMPARE(model.data(account, AccountTreeModel::AccountNameRole).toString(),
              QStringLiteral("Girokonto"));
+}
+
+/**
+ * The read after a fetch brings the same accounts with a new balance. A reset
+ * for that would take the view its selection, the nodes it has open and where
+ * it stands, and the user would watch the tree build itself again.
+ */
+void AccountTreeModelTest::theSameAccountsWithNewValuesLeaveTheTreeStanding()
+{
+    AccountTreeModel model;
+
+    BankingItems items;
+    items << Account::fromMap(TestHelpers::namedAccountMap(QStringLiteral("Girokonto"),
+                                                           QStringLiteral("Sparkasse"),
+                                                           4711));
+    items << Account::fromMap(TestHelpers::namedAccountMap(QStringLiteral("Sparkonto"),
+                                                           QStringLiteral("Sparkasse"),
+                                                           4712));
+
+    model.setItems(items);
+
+    QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
+    QSignalSpy changedSpy(&model, &QAbstractItemModel::dataChanged);
+
+    auto withANewBalance = TestHelpers::namedAccountMap(QStringLiteral("Girokonto"),
+                                                        QStringLiteral("Sparkasse"),
+                                                        4711);
+    withANewBalance[QStringLiteral("balance")] = 99.0;
+
+    BankingItems again;
+    again << Account::fromMap(withANewBalance);
+    again << Account::fromMap(TestHelpers::namedAccountMap(QStringLiteral("Sparkonto"),
+                                                           QStringLiteral("Sparkasse"),
+                                                           4712));
+
+    model.setItems(again);
+
+    QCOMPARE(resetSpy.count(), 0);
+    QVERIFY(changedSpy.count() > 0);
+
+    const QModelIndex bank = model.index(0, 0);
+    QCOMPARE(model.rowCount(bank), 2);
+    QCOMPARE(model.data(model.index(0, 0, bank), AccountTreeModel::BalanceRole).toDouble(), 99.0);
+}
+
+/**
+ * An account that was not there before changes the shape of the tree, and the
+ * rows below the bank move. That is what a reset is for.
+ */
+void AccountTreeModelTest::anAccountThatIsNewBuildsTheTreeAgain()
+{
+    AccountTreeModel model;
+
+    BankingItems items;
+    items << Account::fromMap(TestHelpers::namedAccountMap(QStringLiteral("Girokonto"),
+                                                           QStringLiteral("Sparkasse"),
+                                                           4711));
+
+    model.setItems(items);
+
+    QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
+
+    BankingItems again;
+    again << Account::fromMap(TestHelpers::namedAccountMap(QStringLiteral("Girokonto"),
+                                                           QStringLiteral("Sparkasse"),
+                                                           4711));
+    again << Account::fromMap(TestHelpers::namedAccountMap(QStringLiteral("Sparkonto"),
+                                                           QStringLiteral("Sparkasse"),
+                                                           4712));
+
+    model.setItems(again);
+
+    QCOMPARE(resetSpy.count(), 1);
+    QCOMPARE(model.rowCount(model.index(0, 0)), 2);
 }
 
 } // namespace olbaflinx::ui::models::tests

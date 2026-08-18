@@ -88,6 +88,12 @@ public Q_SLOTS:
      * Records that are not an account are skipped, and so are accounts the user
      * has deselected. A bank whose accounts are all deselected leaves no node
      * behind.
+     *
+     * A call that brings the same accounts under the same banks, in the same
+     * places, reports the new values and resets nothing. Every index therefore
+     * stays valid, and a view keeps its selection and the nodes it has open.
+     * Any other call resets the model, and every index taken from it before is
+     * void.
      */
     void setItems(const olbaflinx::core::banking::BankingItems &items);
 
@@ -97,6 +103,8 @@ private:
         QString name;
         QList<std::shared_ptr<olbaflinx::core::banking::account::Account>> accounts;
     };
+
+    static bool sameShape(const QList<Bank> &left, const QList<Bank> &right);
 
     QList<Bank> m_banks;
 };
