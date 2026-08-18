@@ -208,6 +208,7 @@ void TransactionTableModel::setStorage(Storage *storage)
     m_loadedRows = 0;
     m_atEnd = false;
     m_failed = false;
+    m_showingPreviousRows = false;
 
     setItems({});
     setTotalRows(0);
@@ -282,7 +283,11 @@ void TransactionTableModel::sort(int column, Qt::SortOrder order)
 
     applySort(sortColumn, order);
 
-    startOver();
+    // The rows stay on screen until the first page under the new order is here.
+    // The order lies in the query, so a new one is a new read of the whole
+    // holding, and an empty table for that span reads as a loss of the holding
+    // rather than as a moment of waiting.
+    startOver(PreviousRows::KeepUntilReplaced);
 }
 
 /**
@@ -371,14 +376,22 @@ int TransactionTableModel::totalRows() const
 
 /**
  * What the account, the order and the filter have in common: each of them makes
- * a running request stale, drops what is on screen, and asks again from the top.
+ * a running request stale and asks again from the top. They differ in what
+ * happens to the rows on screen in the meantime.
  */
-void TransactionTableModel::startOver()
+void TransactionTableModel::startOver(PreviousRows previousRows)
 {
     ++m_generation;
 
-    setItems({});
-    setTotalRows(0);
+    // Nothing to hold on to where nothing stands, and the count of the filter
+    // bar goes with the rows it counts.
+    m_showingPreviousRows = previousRows == PreviousRows::KeepUntilReplaced
+                            && !m_transactions.isEmpty();
+
+    if (!m_showingPreviousRows) {
+        setItems({});
+        setTotalRows(0);
+    }
 
     m_loadedRows = 0;
     m_atEnd = false;
@@ -389,6 +402,22 @@ void TransactionTableModel::startOver()
     m_failed = false;
 
     requestItems();
+}
+
+/**
+ * Takes the rows of the order before off the screen, where nothing replaced
+ * them. They stand under a header that no longer describes them.
+ */
+void TransactionTableModel::dropPreviousRows()
+{
+    if (!m_showingPreviousRows) {
+        return;
+    }
+
+    m_showingPreviousRows = false;
+
+    setItems({});
+    setTotalRows(0);
 }
 
 void TransactionTableModel::requestItems()
@@ -437,6 +466,8 @@ void TransactionTableModel::requestItems()
 
     m_failed = true;
 
+    dropPreviousRows();
+
     Q_EMIT readRefused(error.code(), error.message());
 }
 
@@ -476,7 +507,16 @@ void TransactionTableModel::takeResult(const BankingItems &items)
         return;
     }
 
-    appendItems(items);
+    if (m_showingPreviousRows) {
+        // The first page under the new order takes the place of what stood
+        // before. A reset and not an insert: every row moves, and there is no
+        // position left to keep.
+        m_showingPreviousRows = false;
+
+        setItems(items);
+    } else {
+        appendItems(items);
+    }
 
     m_loadedRows += static_cast<int>(items.size());
 
@@ -500,13 +540,18 @@ void TransactionTableModel::takeError(ErrorCode code)
     }
 
     // A read that found no record is not a failure. It is the end of the
-    // holding, and the rows that stand stay where they are.
+    // holding, and the rows that stand stay where they are, unless they are the
+    // ones of the order before: nothing came to replace them, and the holding
+    // under the new order is empty.
     if (code == ErrorCode::NotFound) {
         m_atEnd = true;
+        dropPreviousRows();
         return;
     }
 
     m_failed = true;
+
+    dropPreviousRows();
 }
 
 void TransactionTableModel::takeCount(int count)
@@ -550,7 +595,13 @@ void TransactionTableModel::runEnded()
     if (m_queued) {
         m_queued = false;
         requestItems();
+        return;
     }
+
+    // The read is through and nothing replaced them, so they are the rows of an
+    // order that no longer holds. Every way out of a read passes here, which is
+    // what makes this the one place that cannot be missed.
+    dropPreviousRows();
 }
 
 void TransactionTableModel::setItems(const BankingItems &items)

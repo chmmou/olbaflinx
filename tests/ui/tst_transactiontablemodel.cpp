@@ -255,6 +255,7 @@ private Q_SLOTS:
     void amountsOrderNumericallyAndDatesChronologically();
     void theOrderReachesTheWholeHoldingAndNotTheLoadedPage();
     void theOrderOutlivesAChangeOfAccountButNotTheStorage();
+    void theRowsOfTheOrderBeforeStandUntilTheNewOnesArrive();
 
     void pagingDeliversEveryTransactionExactlyOnce();
     void aChangeOfOrderDuringARunningRequestDiscardsItsResult();
@@ -692,9 +693,9 @@ void TransactionTableModelTest::everyColumnOrdersUpAndDown_data()
 }
 
 /**
- * Every column of the view orders, and it orders both ways. Ordering drops what
- * stands and reads again, so the rows are gone the moment the order changes and
- * come back under the new one.
+ * Every column of the view orders, and it orders both ways. Ordering reads the
+ * holding again, and the rows of the order before stand until that read is
+ * back.
  */
 void TransactionTableModelTest::everyColumnOrdersUpAndDown()
 {
@@ -713,14 +714,57 @@ void TransactionTableModelTest::everyColumnOrdersUpAndDown()
     QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
 
     model.sort(column, Qt::AscendingOrder);
-    QCOMPARE(model.rowCount(), 0);
-    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
-    QVERIFY(isOrdered(valuesOf(model, role), Qt::AscendingOrder));
+
+    // The rows of the order before, still standing. What is waited for is
+    // therefore the new order and not a count that never left.
+    QCOMPARE(model.rowCount(), 12);
+
+    QTRY_VERIFY_WITH_TIMEOUT(isOrdered(valuesOf(model, role), Qt::AscendingOrder), workerTimeoutMs);
+    QCOMPARE(model.rowCount(), 12);
 
     model.sort(column, Qt::DescendingOrder);
-    QCOMPARE(model.rowCount(), 0);
+    QCOMPARE(model.rowCount(), 12);
+
+    QTRY_VERIFY_WITH_TIMEOUT(isOrdered(valuesOf(model, role), Qt::DescendingOrder), workerTimeoutMs);
+    QCOMPARE(model.rowCount(), 12);
+
+    storage.close();
+}
+
+/**
+ * A new order is a new read of the whole holding, and until it comes back there
+ * is nothing to show under the new one. Emptying the table for that span makes
+ * the reading look like a loss.
+ */
+void TransactionTableModelTest::theRowsOfTheOrderBeforeStandUntilTheNewOnesArrive()
+{
+    Storage storage(applicationInfo());
+    QVERIFY(openStorage(storage));
+
+    QVERIFY(putOrderedTransactions(firstAccount, 12));
+
+    TransactionTableModel model;
+    model.setStorage(&storage);
+
+    model.setAccountId(firstAccount);
     QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
-    QVERIFY(isOrdered(valuesOf(model, role), Qt::DescendingOrder));
+
+    QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
+
+    model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
+
+    // Straight after the call, before the read under the new order has run. The
+    // count of the filter bar hangs on the same moment and must not fall to
+    // nought either.
+    QCOMPARE(model.rowCount(), 12);
+    QCOMPARE(model.totalRows(), 12);
+    QCOMPARE(resetSpy.count(), 0);
+
+    QTRY_VERIFY_WITH_TIMEOUT(isOrdered(valuesOf(model, TransactionTableModel::ValueRole),
+                                       Qt::AscendingOrder),
+                             workerTimeoutMs);
+
+    QCOMPARE(model.rowCount(), 12);
 
     storage.close();
 }
@@ -744,7 +788,12 @@ void TransactionTableModelTest::amountsOrderNumericallyAndDatesChronologically()
     QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
 
     model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
-    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+
+    // The rows of the order before stand until the new ones are here, so the
+    // count says nothing about which of the two is on screen.
+    QTRY_VERIFY_WITH_TIMEOUT(isOrdered(valuesOf(model, TransactionTableModel::ValueRole),
+                                       Qt::AscendingOrder),
+                             workerTimeoutMs);
 
     const auto amounts = valuesOf(model, TransactionTableModel::ValueRole);
     QCOMPARE(amounts.at(8).toDouble(), 9.0);
@@ -752,7 +801,9 @@ void TransactionTableModelTest::amountsOrderNumericallyAndDatesChronologically()
     QCOMPARE(amounts.last().toDouble(), 12.0);
 
     model.sort(TransactionTableModel::DateColumn, Qt::AscendingOrder);
-    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
+    QTRY_VERIFY_WITH_TIMEOUT(isOrdered(valuesOf(model, TransactionTableModel::DateRole),
+                                       Qt::AscendingOrder),
+                             workerTimeoutMs);
 
     const auto dates = valuesOf(model, TransactionTableModel::DateRole);
     QCOMPARE(dates.first().toDate(), QDate(2025, 12, 27));
@@ -785,20 +836,29 @@ void TransactionTableModelTest::theOrderReachesTheWholeHoldingAndNotTheLoadedPag
     QVERIFY(model.rowCount() > 0);
     QVERIFY(model.rowCount() < model.totalRows());
 
-    model.sort(TransactionTableModel::ValueColumn, Qt::DescendingOrder);
-    QCOMPARE(model.rowCount(), 0);
-    QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, workerTimeoutMs);
+    const int loadedBefore = model.rowCount();
 
-    QCOMPARE(model.data(model.index(0, 0), TransactionTableModel::ValueRole).toDouble(), 3000.0);
+    model.sort(TransactionTableModel::ValueColumn, Qt::DescendingOrder);
+
+    // The page of the order before, still standing. Waiting for a row to appear
+    // would therefore be over before the new page is here.
+    QCOMPARE(model.rowCount(), loadedBefore);
+
+    QTRY_COMPARE_WITH_TIMEOUT(model.data(model.index(0, 0), TransactionTableModel::ValueRole)
+                                  .toDouble(),
+                              3000.0,
+                              workerTimeoutMs);
 
     // The other way round as well. The largest amount stands at the top of the
     // order the view opens with, so descending alone would also be answered by a
     // view that never ordered.
     model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
-    QCOMPARE(model.rowCount(), 0);
-    QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, workerTimeoutMs);
+    QCOMPARE(model.rowCount(), loadedBefore);
 
-    QCOMPARE(model.data(model.index(0, 0), TransactionTableModel::ValueRole).toDouble(), 1.0);
+    QTRY_COMPARE_WITH_TIMEOUT(model.data(model.index(0, 0), TransactionTableModel::ValueRole)
+                                  .toDouble(),
+                              1.0,
+                              workerTimeoutMs);
 
     storage.close();
 }
@@ -824,8 +884,13 @@ void TransactionTableModelTest::theOrderOutlivesAChangeOfAccountButNotTheStorage
     QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
 
     model.sort(TransactionTableModel::ValueColumn, Qt::AscendingOrder);
-    QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
-    QVERIFY(isOrdered(valuesOf(model, TransactionTableModel::ValueRole), Qt::AscendingOrder));
+
+    // The rows of the order before stand until the new ones are here, so the
+    // count is the same throughout and says nothing about the change.
+    QTRY_VERIFY_WITH_TIMEOUT(isOrdered(valuesOf(model, TransactionTableModel::ValueRole),
+                                       Qt::AscendingOrder),
+                             workerTimeoutMs);
+    QCOMPARE(model.rowCount(), 12);
 
     model.setAccountId(secondAccount);
     QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 12, workerTimeoutMs);
