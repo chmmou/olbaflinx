@@ -666,8 +666,8 @@ void AppKeyboardTest::theAccountsComeBeforeTheTransactions()
  * The same for the second start and every one after it.
  *
  * A restore hands the areas to the manager again and rebuilds the ring. The
- * arrangement that comes back here is the default one, so it is the one FR-060a
- * measures, and the keyboard has to begin at the accounts there too.
+ * arrangement that comes back here is the default one, and the keyboard has to
+ * begin at the accounts there too.
  */
 void AppKeyboardTest::theAccountsStayBeforeTheTransactionsAfterARestore()
 {

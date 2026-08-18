@@ -904,8 +904,8 @@ void BankingFetchTest::aFailedAccountLeavesTheOthersOfTheSameListAlone()
  * bank stand in the same session and what brings it down brings down both.
  *
  * The sorting itself needs a bank and is not run here; it is read in
- * banking_online.c and held in FR-033. What is measured is the evaluation that
- * has to follow from it: both accounts are named failed, not one of them.
+ * banking_online.c. What is measured is the evaluation that has to follow from
+ * it: both accounts are named failed, not one of them.
  */
 void BankingFetchTest::twoAccountsOfOneInstitutionFallTogetherWhenTheirSessionFails()
 {
