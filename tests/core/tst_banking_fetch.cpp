@@ -30,6 +30,9 @@
 
 #include <QtTest/QtTest>
 
+#include <QtCore/QList>
+#include <QtCore/QSet>
+
 #include <memory>
 #include <utility>
 
@@ -92,6 +95,10 @@ private Q_SLOTS:
     void anAbortByTheUserIsToldApartFromAFailure();
     void aSessionCutInTheMiddleIsAFailureAndNoAbort();
     void aRefusedOrderIsAFailureOfItsAccountAndNoEmptyResult();
+
+    void aFailedAccountLeavesTheOthersOfTheSameListAlone();
+    void twoAccountsOfOneInstitutionFallTogetherWhenTheirSessionFails();
+    void aFetchForAllAccountsPassesOverEveryAccountWithoutOnlineAccess();
 };
 
 namespace {
@@ -764,6 +771,218 @@ void BankingFetchTest::aRefusedOrderIsAFailureOfItsAccountAndNoEmptyResult()
     QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, testAccountId), FetchOutcome::Failed);
 
     AB_Transaction_List2_freeAll(commands);
+}
+
+namespace {
+
+/**
+ * The orders of several accounts in one list, the way a fetch over all of them
+ * sends them. The lists of the single accounts are released, their orders are
+ * not: they travel into the list that is returned, and that one owns them.
+ */
+AB_TRANSACTION_LIST2 *commandsForAll(const QList<std::shared_ptr<Account>> &accounts,
+                                     const QDate &latestStoredDate = {})
+{
+    AB_TRANSACTION_LIST2 *all = AB_Transaction_List2_new();
+
+    for (const auto &account : accounts) {
+        AB_TRANSACTION_LIST2 *commands = Banking::buildFetchCommands(*account, latestStoredDate);
+
+        AB_TRANSACTION_LIST2_ITERATOR *iterator = AB_Transaction_List2_First(commands);
+        if (iterator != nullptr) {
+            AB_TRANSACTION *command = AB_Transaction_List2Iterator_Data(iterator);
+            while (command != nullptr) {
+                AB_Transaction_List2_PushBack(all, command);
+                command = AB_Transaction_List2Iterator_Next(iterator);
+            }
+            AB_Transaction_List2Iterator_free(iterator);
+        }
+
+        AB_Transaction_List2_free(commands);
+    }
+
+    return all;
+}
+
+/** Puts the given outcome on every order of one account. */
+void setStatusOfAccount(AB_TRANSACTION_LIST2 *commands,
+                        quint32 uniqueAccountId,
+                        AB_TRANSACTION_STATUS status)
+{
+    AB_TRANSACTION_LIST2_ITERATOR *iterator = AB_Transaction_List2_First(commands);
+    if (iterator == nullptr) {
+        return;
+    }
+
+    AB_TRANSACTION *command = AB_Transaction_List2Iterator_Data(iterator);
+    while (command != nullptr) {
+        if (AB_Transaction_GetUniqueAccountId(command) == uniqueAccountId) {
+            AB_Transaction_SetStatus(command, status);
+        }
+        command = AB_Transaction_List2Iterator_Next(iterator);
+    }
+
+    AB_Transaction_List2Iterator_free(iterator);
+}
+
+/** The identifiers of the accounts the given records belong to. */
+QSet<quint32> accountsOf(const BankingItems &items)
+{
+    QSet<quint32> accounts;
+
+    for (const BankingItemPtr &item : items) {
+        if (const auto transaction = std::dynamic_pointer_cast<Transaction>(item)) {
+            accounts.insert(transaction->uniqueAccountId());
+        } else if (const auto balance = std::dynamic_pointer_cast<Balance>(item)) {
+            accounts.insert(balance->uniqueAccountId());
+        }
+    }
+
+    return accounts;
+}
+
+constexpr quint32 secondAccountId = 4712;
+constexpr quint32 thirdAccountId = 4713;
+
+} // namespace
+
+/**
+ * The promise of a collective fetch: one account the bank refuses does not take
+ * the others with it.
+ *
+ * It rests on a value that was read on 2026-08-18: _sendProviderQueues in
+ * banking_online.c answers zero whatever a single institution did, and the
+ * outcome of an account stands on its own orders. The evaluation is measured
+ * here, on a container three accounts answered and one of them badly.
+ */
+void BankingFetchTest::aFailedAccountLeavesTheOthersOfTheSameListAlone()
+{
+    const QList<std::shared_ptr<Account>> accounts
+        = {BankingHelpers::accountFromBackend(testAccountId),
+           BankingHelpers::accountFromBackend(secondAccountId),
+           BankingHelpers::accountFromBackend(thirdAccountId)};
+
+    AB_TRANSACTION_LIST2 *commands = commandsForAll(accounts, QDate(2026, 1, 1));
+
+    setStatusOfAccount(commands, secondAccountId, AB_Transaction_StatusRejected);
+
+    AB_IMEXPORTER_CONTEXT *context = AB_ImExporterContext_new();
+    for (const quint32 id : {testAccountId, secondAccountId, thirdAccountId}) {
+        BankingHelpers::addAccountToContext(context,
+                                            id,
+                                            bookingCount,
+                                            {{AB_Balance_TypeBooked, QDate(2026, 2, 1), 1234.56}});
+    }
+
+    const BankingItems items = Banking::itemsFromContext(context, commands);
+
+    // The session itself answered success. Only the orders of the second account
+    // carry the refusal, and that is what tells the three apart.
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, testAccountId),
+             FetchOutcome::Received);
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, secondAccountId),
+             FetchOutcome::Failed);
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, thirdAccountId),
+             FetchOutcome::Received);
+
+    AB_ImExporterContext_free(context);
+    AB_Transaction_List2_freeAll(commands);
+
+    const QSet<quint32> delivered = accountsOf(items);
+
+    QVERIFY(delivered.contains(testAccountId));
+    QVERIFY(delivered.contains(thirdAccountId));
+    QVERIFY(!delivered.contains(secondAccountId));
+
+    QCOMPARE(BankingHelpers::itemsOfType(items, QStringLiteral("Transaction")).size(),
+             bookingCount * 2);
+}
+
+/**
+ * How far that promise reaches. The banking layer sorts the orders by
+ * institution and runs one session per institution, so two accounts of the same
+ * bank stand in the same session and what brings it down brings down both.
+ *
+ * The sorting itself needs a bank and is not run here; it is read in
+ * banking_online.c and held in FR-033. What is measured is the evaluation that
+ * has to follow from it: both accounts are named failed, not one of them.
+ */
+void BankingFetchTest::twoAccountsOfOneInstitutionFallTogetherWhenTheirSessionFails()
+{
+    const QList<std::shared_ptr<Account>> accounts
+        = {BankingHelpers::accountFromBackend(testAccountId),
+           BankingHelpers::accountFromBackend(secondAccountId),
+           BankingHelpers::accountFromBackend(thirdAccountId)};
+
+    AB_TRANSACTION_LIST2 *commands = commandsForAll(accounts, QDate(2026, 1, 1));
+
+    // The two that share a session. A failing session marks every order it
+    // carried, and both accounts hang on those orders.
+    setStatusOfAccount(commands, testAccountId, AB_Transaction_StatusError);
+    setStatusOfAccount(commands, secondAccountId, AB_Transaction_StatusError);
+
+    AB_IMEXPORTER_CONTEXT *context = AB_ImExporterContext_new();
+    for (const quint32 id : {testAccountId, secondAccountId, thirdAccountId}) {
+        BankingHelpers::addAccountToContext(context, id, bookingCount, {});
+    }
+
+    const BankingItems items = Banking::itemsFromContext(context, commands);
+
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, testAccountId), FetchOutcome::Failed);
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, secondAccountId),
+             FetchOutcome::Failed);
+    QCOMPARE(Banking::outcomeOfSession(GWEN_SUCCESS, commands, thirdAccountId),
+             FetchOutcome::Received);
+
+    AB_ImExporterContext_free(context);
+    AB_Transaction_List2_freeAll(commands);
+
+    QCOMPARE(accountsOf(items), QSet<quint32>{thirdAccountId});
+}
+
+/**
+ * An account without online access has to stay out of the list. The backend
+ * sorts the queues by institution before it sends anything and refuses the whole
+ * call over one account that carries none, so such an account in the list would
+ * take every other one with it.
+ */
+void BankingFetchTest::aFetchForAllAccountsPassesOverEveryAccountWithoutOnlineAccess()
+{
+    Banking banking(applicationInfo());
+
+    const ScopedConsoleGui gui;
+    QVERIFY(!initialized(banking, gui.get()).isError());
+
+    QSignalSpy skippedSpy(&banking, &Banking::accountSkipped);
+    QSignalSpy errorSpy(&banking, &Banking::errorOccurred);
+    QSignalSpy failedSpy(&banking, &Banking::accountFailed);
+    QSignalSpy finishedSpy(&banking, &Banking::finished);
+
+    const QList<std::shared_ptr<Account>> accounts
+        = {BankingHelpers::accountFromBackend(testAccountId, ""),
+           BankingHelpers::accountFromBackend(secondAccountId, ""),
+           BankingHelpers::accountFromBackend(thirdAccountId, "")};
+
+    banking.fetchAccounts(accounts, {});
+
+    QVERIFY(finishedSpy.wait(sessionTimeoutMs));
+
+    // Every one of them by its own identifier, and no session at all: with
+    // nothing left to send, nothing is sent.
+    QCOMPARE(skippedSpy.count(), 3);
+    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(failedSpy.count(), 0);
+    QCOMPARE(finishedSpy.count(), 1);
+
+    QSet<quint32> reported;
+    for (const auto &arguments : std::as_const(skippedSpy)) {
+        reported.insert(arguments.at(0).value<quint32>());
+        QVERIFY(!arguments.at(1).toString().isEmpty());
+    }
+
+    QCOMPARE(reported, (QSet<quint32>{testAccountId, secondAccountId, thirdAccountId}));
+
+    banking.finalize();
 }
 
 } // namespace olbaflinx::core::banking::tests

@@ -43,6 +43,7 @@
     </property>
     <addaction name="appSetupAssistantAction"/>
     <addaction name="appFetchTransactionsAction"/>
+    <addaction name="appFetchAllTransactionsAction"/>
    </widget>
    <widget class="QMenu" name="appViewMenu">
     <property name="title">
@@ -93,6 +94,11 @@
   <action name="appFetchTransactionsAction">
    <property name="text">
     <string>&amp;Fetch Transactions</string>
+   </property>
+  </action>
+  <action name="appFetchAllTransactionsAction">
+   <property name="text">
+    <string>Fetch &amp;All Transactions</string>
    </property>
   </action>
   <action name="appResetLayoutAction">

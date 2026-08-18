@@ -41,12 +41,19 @@
 #include <QtGui/QAccessibleInterface>
 #include <QtGui/QAction>
 
+#include <QtCore/QTimer>
+
+#include <QtWidgets/QApplication>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QMenu>
+#include <QtWidgets/QMessageBox>
+#include <QtWidgets/QPushButton>
 #include <QtWidgets/QStatusBar>
 #include <QtWidgets/QToolBar>
 #include <QtWidgets/QTreeView>
 
+#include <chrono>
+#include <functional>
 #include <memory>
 
 using namespace olbaflinx::core;
@@ -147,6 +154,23 @@ private:
         return app.findChild<QAction *>(QStringLiteral("appFetchTransactionsAction"));
     }
 
+    static QAction *collectiveActionOf(const App &app)
+    {
+        return app.findChild<QAction *>(QStringLiteral("appFetchAllTransactionsAction"));
+    }
+
+    /** Three accounts under the same bank, none of them with online access. */
+    [[nodiscard]] bool putThreeAccounts(Storage &storage) const
+    {
+        for (int index = 0; index < 3; ++index) {
+            if (!putAccount(storage, testAccountId + quint32(index))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     static AccountFetch *fetchOf(const App &app) { return app.findChild<AccountFetch *>(); }
 
     static QAccessibleInterface *entryFor(QMenu *menu, QAction *action)
@@ -207,6 +231,13 @@ private Q_SLOTS:
     void theSpanOfTheCachedCredentialRunsAfterAFetchAndNotDuringIt();
     void theAccountViewShowsANewBalanceWithoutARestart();
     void aFetchWithoutNewBookingsSaysSo();
+
+    void theCollectiveEntryRunsForEveryAccountAndHangsOnNoSelection();
+    void theCollectiveEntryCarriesAnIdentifierANameAndARole();
+    void theOutcomeOfACollectiveFetchNamesFourFigures();
+    void theClosingMessageComesOnlyAfterTheLastAccount();
+    void aStopBringsTheQuestionWithKeepingPreselected();
+    void keepingAndDiscardingSayDifferentThingsAndDiscardingWritesNothing();
 };
 
 /**
@@ -1002,6 +1033,360 @@ void AppFetchTest::aFetchWithoutNewBookingsSaysSo()
         QVERIFY(!message.contains(QStringLiteral("12,5")));
         QVERIFY(!message.contains(QStringLiteral("12.5")));
     }
+}
+
+namespace {
+
+/**
+ * Runs the given check on the modal window the application puts up, then lets it
+ * go through its default button.
+ *
+ * A box that never comes would leave the run waiting, so the driver gives up
+ * after a span of its own and the test fails instead of hanging.
+ */
+bool withTheModalQuestion(QObject *context,
+                          const std::function<void()> &trigger,
+                          const std::function<void(QMessageBox *)> &check)
+{
+    bool checked = false;
+    bool gaveUp = false;
+
+    QTimer::singleShot(std::chrono::seconds(5), context, [&gaveUp] { gaveUp = true; });
+
+    QTimer driver;
+    driver.setInterval(0);
+
+    QObject::connect(&driver, &QTimer::timeout, context, [&] {
+        auto *const box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+        if (box == nullptr && !gaveUp) {
+            return;
+        }
+
+        driver.stop();
+
+        if (box == nullptr) {
+            return;
+        }
+
+        if (!gaveUp) {
+            check(box);
+            checked = true;
+        }
+
+        box->defaultButton()->click();
+    });
+
+    driver.start();
+    trigger();
+
+    return checked;
+}
+
+} // namespace
+
+/**
+ * The second entry is the one for the whole holding. It hangs on no selection:
+ * a user who wants everything has nothing to choose first.
+ *
+ * Every account here is one without online access, which is what makes the run
+ * measurable without a bank. The banking layer passes such an account over by
+ * its identifier before anything is sent, and it does so for each of the three.
+ */
+void AppFetchTest::theCollectiveEntryRunsForEveryAccountAndHangsOnNoSelection()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putThreeAccounts(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    app.initialize();
+
+    auto *const action = collectiveActionOf(app);
+    QVERIFY(action != nullptr);
+
+    // On the overview, where no storage is open yet.
+    QVERIFY(action->isVisible());
+    QVERIFY(!action->isEnabled());
+
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    // Nothing is chosen, and that is beside the point for this one.
+    QVERIFY(action->isEnabled());
+
+    auto *const fetch = fetchOf(app);
+    QVERIFY(fetch != nullptr);
+
+    QSignalSpy startedSpy(fetch, &AccountFetch::started);
+    QSignalSpy allEndedSpy(fetch, &AccountFetch::allEnded);
+    QSignalSpy endedSpy(fetch, &AccountFetch::ended);
+
+    action->trigger();
+
+    QCOMPARE(startedSpy.count(), 1);
+    QVERIFY(!app.statusBar()->currentMessage().isEmpty());
+
+    QVERIFY(allEndedSpy.wait(sessionTimeoutMs));
+
+    // The single fetch has an end of its own and must not be reported here as
+    // well: the window would take a run of three accounts for a run of one.
+    QCOMPARE(endedSpy.count(), 0);
+    QCOMPARE(allEndedSpy.count(), 1);
+
+    const auto summary = allEndedSpy.first().first().value<AccountFetch::Summary>();
+
+    QCOMPARE(summary.skipped, 3);
+    QCOMPARE(summary.fetched, 0);
+    QCOMPARE(summary.failed, 0);
+    QCOMPARE(summary.storedCount, 0);
+}
+
+/**
+ * The entry is reachable in the menu and in the tool bar, and it carries what an
+ * assistive tool needs to name it.
+ */
+void AppFetchTest::theCollectiveEntryCarriesAnIdentifierANameAndARole()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    app.initialize();
+
+    auto *const action = collectiveActionOf(app);
+    QVERIFY(action != nullptr);
+
+    QVERIFY(!action->objectName().isEmpty());
+    QVERIFY(!action->text().isEmpty());
+
+    auto *const menu = app.findChild<QMenu *>(QStringLiteral("appAccountsMenu"));
+    QVERIFY(menu != nullptr);
+    QVERIFY(menu->actions().contains(action));
+
+    auto *const toolBar = app.findChild<QToolBar *>(QStringLiteral("appToolBar"));
+    QVERIFY(toolBar != nullptr);
+    QVERIFY(toolBar->actions().contains(action));
+
+    // Its own shortcut or none, but never the one of the entry beside it.
+    auto *const single = fetchActionOf(app);
+    QVERIFY(single != nullptr);
+    if (!action->shortcut().isEmpty()) {
+        QVERIFY(action->shortcut() != single->shortcut());
+    }
+
+    QAccessibleInterface *entry = entryFor(menu, action);
+    QVERIFY(entry != nullptr);
+    QVERIFY(!entry->text(QAccessible::Name).isEmpty());
+    QCOMPARE(entry->role(), QAccessible::MenuItem);
+
+    // Nothing is open, so it says that it does not grip rather than disappearing.
+    QVERIFY(action->isVisible());
+    QVERIFY(entry->state().disabled);
+}
+
+/**
+ * Four figures, because three would leave a sum that does not add up: an account
+ * without online access is neither fetched nor failed.
+ */
+void AppFetchTest::theOutcomeOfACollectiveFetchNamesFourFigures()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putThreeAccounts(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    app.initialize();
+
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    auto *const fetch = fetchOf(app);
+    QVERIFY(fetch != nullptr);
+
+    AccountFetch::Summary summary;
+    summary.fetched = 2;
+    summary.skipped = 3;
+    summary.failed = 4;
+    summary.storedCount = 17;
+
+    Q_EMIT fetch->allEnded(summary);
+
+    const QString message = app.statusBar()->currentMessage();
+
+    QVERIFY(!message.isEmpty());
+
+    // Told apart by their values, so that a message which carries one figure
+    // four times cannot pass for one that carries four.
+    QVERIFY(message.contains(QStringLiteral("2")));
+    QVERIFY(message.contains(QStringLiteral("3")));
+    QVERIFY(message.contains(QStringLiteral("4")));
+    QVERIFY(message.contains(QStringLiteral("17")));
+
+    // The bar is read out to assistive tools, and what is spoken in a room is
+    // not the place for an account or an amount.
+    QVERIFY(!message.contains(QStringLiteral("DE02")));
+    QVERIFY(!message.contains(QStringLiteral("0000202051")));
+    QVERIFY(!message.contains(QStringLiteral("12,5")));
+    QVERIFY(!message.contains(QStringLiteral("12.5")));
+}
+
+/**
+ * The progress window of the library comes and goes once per institution, so it
+ * is no sign of the end. The closing message is, and it must not stand there
+ * while the run is still going.
+ */
+void AppFetchTest::theClosingMessageComesOnlyAfterTheLastAccount()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putThreeAccounts(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    app.initialize();
+
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    auto *const fetch = fetchOf(app);
+    QVERIFY(fetch != nullptr);
+
+    AccountFetch::Summary summary;
+    summary.fetched = 3;
+    summary.storedCount = 17;
+
+    const QString closing = [&] {
+        Q_EMIT fetch->allEnded(summary);
+        return app.statusBar()->currentMessage();
+    }();
+
+    QVERIFY(!closing.isEmpty());
+
+    app.statusBar()->clearMessage();
+
+    // A run that has begun and not ended. Nothing of the closing message stands
+    // there, and the entries are switched off for as long.
+    Q_EMIT fetch->started();
+
+    QVERIFY(app.statusBar()->currentMessage() != closing);
+    QVERIFY(!collectiveActionOf(app)->isEnabled());
+    QVERIFY(!fetchActionOf(app)->isEnabled());
+
+    Q_EMIT fetch->allEnded(summary);
+
+    QCOMPARE(app.statusBar()->currentMessage(), closing);
+    QVERIFY(collectiveActionOf(app)->isEnabled());
+}
+
+/**
+ * The question belongs to the application and not to the library, so it falls
+ * under the promise about entries: reachable without a mouse, named, and with
+ * keeping as the button that is already chosen.
+ */
+void AppFetchTest::aStopBringsTheQuestionWithKeepingPreselected()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putThreeAccounts(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    QVERIFY(UiTestHelpers::showTheWindow(app));
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    auto *const fetch = fetchOf(app);
+    QVERIFY(fetch != nullptr);
+
+    QPushButton *keep = nullptr;
+    QPushButton *discard = nullptr;
+
+    const bool asked = withTheModalQuestion(
+        &app,
+        [fetch] { Q_EMIT fetch->abortNeedsAnswer(); },
+        [&](QMessageBox *box) {
+            QVERIFY(!box->objectName().isEmpty());
+            QVERIFY(!box->text().isEmpty());
+
+            keep = box->findChild<QPushButton *>(QStringLiteral("appFetchKeepButton"));
+            discard = box->findChild<QPushButton *>(QStringLiteral("appFetchDiscardButton"));
+
+            QVERIFY(keep != nullptr);
+            QVERIFY(discard != nullptr);
+
+            // Keeping is the answer a stray press of the return key gives. What was
+            // fetched cost minutes on the line, and it is gone for good either way.
+            QCOMPARE(box->defaultButton(), keep);
+
+            QAccessibleInterface *interface = QAccessible::queryAccessibleInterface(keep);
+            QVERIFY(interface != nullptr);
+            QVERIFY(!interface->text(QAccessible::Name).isEmpty());
+            QCOMPARE(interface->role(), QAccessible::Button);
+        });
+
+    QVERIFY2(asked, "the window put up no question after the fetch was stopped");
+
+    QVERIFY(keep != nullptr);
+    QVERIFY(discard != nullptr);
+}
+
+/**
+ * The two answers say different things, and the one that discards leaves the
+ * holding exactly as it was.
+ *
+ * What can be measured here is the window: no session can be run in this
+ * environment, so nothing arrives that could be written. That the run writes
+ * nothing at all after a discard is what the count and the write signals hold.
+ */
+void AppFetchTest::keepingAndDiscardingSayDifferentThingsAndDiscardingWritesNothing()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putThreeAccounts(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    app.initialize();
+
+    QVERIFY(UiTestHelpers::readAccountsInto(app, storage));
+
+    auto *const fetch = fetchOf(app);
+    QVERIFY(fetch != nullptr);
+
+    QSignalSpy writeFinishedSpy(&storage, &Storage::writeFinished);
+
+    AccountFetch::Summary kept;
+    kept.outcome = AccountFetch::Outcome::Aborted;
+    kept.keptAfterAbort = true;
+    kept.fetched = 1;
+    kept.storedCount = 17;
+
+    Q_EMIT fetch->allEnded(kept);
+
+    const QString afterKeeping = app.statusBar()->currentMessage();
+
+    QVERIFY(!afterKeeping.isEmpty());
+    QVERIFY(afterKeeping.contains(QStringLiteral("17")));
+
+    AccountFetch::Summary discarded;
+    discarded.outcome = AccountFetch::Outcome::Aborted;
+    discarded.keptAfterAbort = false;
+
+    Q_EMIT fetch->allEnded(discarded);
+
+    const QString afterDiscarding = app.statusBar()->currentMessage();
+
+    QVERIFY(!afterDiscarding.isEmpty());
+    QVERIFY2(afterDiscarding != afterKeeping, "keeping and discarding told the user the same thing");
+
+    // Neither answer wrote a row of its own. A discard that had to delete
+    // afterwards is what this ordering exists to avoid.
+    QCOMPARE(writeFinishedSpy.count(), 0);
 }
 
 } // namespace olbaflinx::ui::tests

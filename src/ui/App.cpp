@@ -257,6 +257,12 @@ public:
         // one chosen here. None of the other entries carries it.
         ui->appFetchTransactionsAction->setShortcut(QKeySequence::Refresh);
 
+        // The second command, and it hangs on no choice in the tree: whoever
+        // wants the whole holding has nothing to pick first.
+        QObject::connect(ui->appFetchAllTransactionsAction, &QAction::triggered, q_ptr, [this] {
+            fetchEveryAccount();
+        });
+
         // The third way to the command, beside the menu and the tool bar. A
         // plain addAction would leave it unreachable: the tree stands on the
         // default policy and shows no menu of its own for the actions it holds.
@@ -268,6 +274,7 @@ public:
 
         ui->appToolBar->addAction(ui->appSetupAssistantAction);
         ui->appToolBar->addAction(ui->appFetchTransactionsAction);
+        ui->appToolBar->addAction(ui->appFetchAllTransactionsAction);
         ui->appToolBar->addSeparator();
         ui->appToolBar->addAction(ui->appCloseStorageAction);
     }
@@ -305,6 +312,75 @@ public:
                                  QTimer::singleShot(0, q_ptr, [this] { refreshFromStorage(); });
                              }
                          });
+
+        QObject::connect(fetch,
+                         &AccountFetch::allEnded,
+                         q_ptr,
+                         [this](const AccountFetch::Summary &summary) {
+                             fetchIsRunning = false;
+                             applyActionStates();
+
+                             // The one sign the user has that the run is over.
+                             // The progress window of the library comes and goes
+                             // once per institution and says nothing about the
+                             // end of the whole fetch.
+                             q_ptr->statusBar()->showMessage(collectiveMessage(summary));
+
+                             // Asked on every way out that could have written
+                             // something, the count included: a run that brought
+                             // balances alone writes rows without raising it.
+                             const bool nothingWasWritten = summary.outcome
+                                                                == AccountFetch::Outcome::Failed
+                                                            || (summary.outcome
+                                                                    == AccountFetch::Outcome::Aborted
+                                                                && !summary.keptAfterAbort);
+
+                             if (!nothingWasWritten) {
+                                 QTimer::singleShot(0, q_ptr, [this] { refreshFromStorage(); });
+                             }
+                         });
+
+        // The question belongs to the window: the fetch shows nothing. Nothing
+        // of the run stands in the file while it is open, so the answer decides
+        // whether anything is written at all.
+        QObject::connect(fetch, &AccountFetch::abortNeedsAnswer, q_ptr, [this] {
+            askWhetherToKeep();
+        });
+    }
+
+    /**
+     * Asks whether what an interrupted collective fetch had already brought is
+     * written, and hands the answer back.
+     *
+     * Modal on purpose: the records are held nowhere else, and a question that
+     * can be walked past would lose them to a click elsewhere.
+     */
+    void askWhetherToKeep()
+    {
+        QMessageBox question(q_ptr);
+
+        question.setObjectName(QStringLiteral("appFetchAbortQuestion"));
+        question.setIcon(QMessageBox::Question);
+        question.setWindowTitle(App::tr("Fetch stopped"));
+        question.setText(App::tr("The fetch was stopped. Keep what has already been fetched?"));
+        question.setInformativeText(
+            App::tr("What was fetched is not stored yet. Discarding it leaves your holding as it "
+                    "was before the fetch."));
+
+        auto *const keep = question.addButton(App::tr("&Keep"), QMessageBox::AcceptRole);
+        auto *const discard = question.addButton(App::tr("&Discard"), QMessageBox::DestructiveRole);
+
+        keep->setObjectName(QStringLiteral("appFetchKeepButton"));
+        discard->setObjectName(QStringLiteral("appFetchDiscardButton"));
+
+        // Keeping is what a stray press of the return key answers. What was
+        // fetched cost minutes on the line and is gone for good the other way.
+        question.setDefaultButton(keep);
+        question.setEscapeButton(keep);
+
+        question.exec();
+
+        fetch->answerAbort(question.clickedButton() != discard);
     }
 
     /**
@@ -354,10 +430,100 @@ public:
         return {};
     }
 
+    /**
+     * What the status bar carries once a fetch over all accounts is over.
+     *
+     * Four figures, because three would leave a sum that does not add up: an
+     * account without online access is neither fetched nor failed. They are
+     * named rather than put into a sentence, so that no count has to agree with
+     * a word around it in any language.
+     *
+     * Never an IBAN, an account number or an amount, for the reason the message
+     * of a single fetch gives.
+     */
+    static QString collectiveMessage(const AccountFetch::Summary &summary)
+    {
+        const QString figures = App::tr("Fetched: %1. Skipped: %2. Failed: %3. New transactions: "
+                                        "%4.")
+                                    .arg(summary.fetched)
+                                    .arg(summary.skipped)
+                                    .arg(summary.failed)
+                                    .arg(summary.storedCount);
+
+        switch (summary.outcome) {
+        case AccountFetch::Outcome::Aborted:
+            // Told apart, because the two leave a different holding behind and
+            // the user has just chosen which.
+            return summary.keptAfterAbort
+                       ? App::tr("The fetch was stopped. What had already been fetched was kept. "
+                                 "%1")
+                             .arg(figures)
+                       : App::tr("The fetch was stopped. Nothing of it was stored.");
+
+        case AccountFetch::Outcome::StoreFailed:
+            return App::tr("The fetch could not be stored in full. Please fetch again. %1")
+                .arg(figures);
+
+        case AccountFetch::Outcome::Failed:
+            return summary.reason.isEmpty()
+                       ? App::tr("The fetch failed. Your bank could not be reached, or it refused "
+                                 "the request.")
+                       : summary.reason;
+
+        case AccountFetch::Outcome::Received:
+        case AccountFetch::Outcome::BalanceOnly:
+        case AccountFetch::Outcome::Skipped:
+        case AccountFetch::Outcome::NothingOffered:
+            break;
+        }
+
+        return App::tr("The fetch is through. %1").arg(figures);
+    }
+
     /** The account the tree has chosen, or an empty pointer for anything else. */
     [[nodiscard]] std::shared_ptr<Account> chosenAccount() const
     {
         return accountTreeModel->accountAt(ui->appCentralWidget->accountWidget()->currentIndex());
+    }
+
+    /**
+     * Every account the tree holds, banks first and their accounts under them.
+     *
+     * Read out of the model rather than out of the storage: the tree is what the
+     * user sees, and an account he cannot see is not one he asked to fetch.
+     */
+    [[nodiscard]] QList<std::shared_ptr<Account>> everyAccount() const
+    {
+        QList<std::shared_ptr<Account>> accounts;
+
+        for (int bank = 0; bank < accountTreeModel->rowCount(); ++bank) {
+            const QModelIndex bankIndex = accountTreeModel->index(bank, 0);
+
+            for (int row = 0; row < accountTreeModel->rowCount(bankIndex); ++row) {
+                if (auto account = accountTreeModel->accountAt(
+                        accountTreeModel->index(row, 0, bankIndex));
+                    account != nullptr) {
+                    accounts.append(std::move(account));
+                }
+            }
+        }
+
+        return accounts;
+    }
+
+    void fetchEveryAccount()
+    {
+        const auto accounts = everyAccount();
+        if (accounts.isEmpty()) {
+            return;
+        }
+
+        // Said before anything goes out, for the reason the single fetch gives:
+        // the starting points are read first, and until the progress window of
+        // the banking layer stands the command would be unacknowledged.
+        q_ptr->statusBar()->showMessage(App::tr("Your bank is being contacted."));
+
+        fetch->startAll(accounts);
     }
 
     void fetchTheChosenAccount()
@@ -560,6 +726,11 @@ public:
         ui->appSetupAssistantAction->setEnabled(storageIsOpen && idle);
         ui->appFetchTransactionsAction->setEnabled(storageIsOpen && idle
                                                    && chosenAccount() != nullptr);
+
+        // No choice is needed for this one, an account is: a fetch over an empty
+        // tree has nothing to ask any bank about.
+        ui->appFetchAllTransactionsAction->setEnabled(storageIsOpen && idle
+                                                      && accountTreeModel->rowCount() > 0);
 
         // The areas only stand on the second page, so there is nothing to put
         // back on the first. A fetch does not touch them.
@@ -892,6 +1063,10 @@ void App::initialize()
 void App::setAccounts(const BankingItems &items)
 {
     d_ptr->accountTreeModel->setItems(items);
+
+    // The fetch over all accounts hangs on the tree holding one, so its state
+    // follows every read that fills the tree or empties it.
+    d_ptr->applyActionStates();
 }
 
 void App::refreshAccounts()

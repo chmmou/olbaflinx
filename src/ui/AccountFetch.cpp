@@ -27,6 +27,8 @@
 #include "ui/Logging.h"
 
 #include <QtCore/QDate>
+#include <QtCore/QHash>
+#include <QtCore/QList>
 #include <QtCore/QMetaObject>
 #include <QtCore/QTimer>
 
@@ -57,6 +59,18 @@ public:
      */
     enum class StorePhase { None, Transactions, Balances };
 
+    /**
+     * One account waiting for the storage, with what the session brought it.
+     *
+     * A run stores account by account: the storage takes one writing run at a
+     * time, and a balance has to follow the bookings of the account it hangs on.
+     */
+    struct PendingAccount
+    {
+        BankingItems bookings;
+        BankingItems balances;
+    };
+
     Private(AccountFetch *fetch, ApplicationInfo info, Storage *appStorage)
         : applicationInfo(std::move(info))
         , storage(appStorage)
@@ -84,6 +98,48 @@ public:
     }
 
     /**
+     * Sorts what the session brought into one entry per account, in the order
+     * the records arrived in.
+     *
+     * The order is the one the storage is walked in afterwards, so a run that is
+     * stopped halfway has written whole accounts and nothing else.
+     */
+    void queueReceived()
+    {
+        QList<quint32> order;
+        QHash<quint32, PendingAccount> byAccount;
+
+        for (const auto &item : std::as_const(received)) {
+            const auto balance = std::dynamic_pointer_cast<Balance>(item);
+            const auto booking = balance ? nullptr : std::dynamic_pointer_cast<Transaction>(item);
+
+            if (!balance && !booking) {
+                continue;
+            }
+
+            const quint32 uniqueAccountId = balance ? balance->uniqueAccountId()
+                                                    : booking->uniqueAccountId();
+
+            if (!byAccount.contains(uniqueAccountId)) {
+                order.append(uniqueAccountId);
+            }
+
+            if (balance) {
+                byAccount[uniqueAccountId].balances.append(item);
+            } else {
+                byAccount[uniqueAccountId].bookings.append(item);
+            }
+        }
+
+        received.clear();
+        pending.clear();
+
+        for (const quint32 uniqueAccountId : std::as_const(order)) {
+            pending.append(byAccount.value(uniqueAccountId));
+        }
+    }
+
+    /**
      * The end of the session, whichever way it went. Only a session that came
      * back with records goes on to the storage.
      */
@@ -103,47 +159,99 @@ public:
             outcome = Outcome::Aborted;
         }
 
+        if (overAllAccounts) {
+            allSessionsEnded();
+            return;
+        }
+
         if (!sessionDelivered()) {
             finish(outcome, reason);
             return;
         }
 
-        auto bookings = BankingItems();
-        auto balances = BankingItems();
-
-        for (const auto &item : std::as_const(received)) {
-            if (std::dynamic_pointer_cast<Balance>(item)) {
-                balances.append(item);
-            } else if (std::dynamic_pointer_cast<Transaction>(item)) {
-                bookings.append(item);
-            }
-        }
-
-        received.clear();
-        pendingBalances = balances;
+        queueReceived();
 
         // An account the bank had nothing new for. Nothing is written, and the
         // outcome says so with a count of nought.
-        if (bookings.isEmpty() && balances.isEmpty()) {
+        if (pending.isEmpty()) {
             finish(outcome, {});
             return;
         }
 
-        if (bookings.isEmpty()) {
-            startStoring(StorePhase::Balances);
+        beginNextAccount();
+    }
+
+    /**
+     * The end of a run over several accounts.
+     *
+     * Nothing is written before this point, and that is what makes the question
+     * after an abort answerable at all: discarding is a matter of not writing
+     * rather than of removing rows that already stand.
+     */
+    void allSessionsEnded()
+    {
+        if (outcome == Outcome::Aborted) {
+            // What the stop cut off was stopped and not turned down. Counting it
+            // as failed would tell the user his bank had refused accounts.
+            summary.failed = 0;
+
+            queueReceived();
+
+            if (pending.isEmpty()) {
+                finishAll(Outcome::Aborted, {});
+                return;
+            }
+
+            waitingForAbortAnswer = true;
+
+            Q_EMIT q_ptr->abortNeedsAnswer();
             return;
         }
 
-        pendingBookings = bookings;
-        startStoring(StorePhase::Transactions);
+        if (!sessionDelivered()) {
+            finishAll(outcome, reason);
+            return;
+        }
+
+        queueReceived();
+
+        if (pending.isEmpty()) {
+            finishAll(outcome, {});
+            return;
+        }
+
+        beginNextAccount();
+    }
+
+    /**
+     * Begins the storing of the account at the head of the queue, and ends the
+     * run once nothing is left in it.
+     */
+    void beginNextAccount()
+    {
+        while (!pending.isEmpty() && pending.constFirst().bookings.isEmpty()
+               && pending.constFirst().balances.isEmpty()) {
+            pending.removeFirst();
+        }
+
+        if (pending.isEmpty()) {
+            finishRun(outcome, {});
+            return;
+        }
+
+        startStoring(pending.constFirst().bookings.isEmpty() ? StorePhase::Balances
+                                                             : StorePhase::Transactions);
     }
 
     void startStoring(StorePhase next)
     {
         storeFailed = false;
+        storedBeforeRun = storedCount;
 
-        const auto error = storage->storeItems(next == StorePhase::Transactions ? pendingBookings
-                                                                                : pendingBalances);
+        const auto &account = pending.constFirst();
+
+        const auto error = storage->storeItems(next == StorePhase::Transactions ? account.bookings
+                                                                                : account.balances);
 
         // The phase is set where a run of this class actually started, and only
         // there. It is what tells the three signals of the write path apart from
@@ -174,13 +282,13 @@ public:
         // The bookings are written in a run of their own and are committed by the
         // time the balances are attempted. A phase that never started therefore
         // takes nothing back with it, and only the failure of the first one
-        // leaves the holding as it was.
+        // leaves the holding of this account as it was.
         if (next == StorePhase::Transactions) {
-            storedCount = 0;
+            storedCount = storedBeforeRun;
         }
 
         phase = StorePhase::None;
-        finish(Outcome::StoreFailed, {});
+        finishRun(Outcome::StoreFailed, {});
     }
 
     void takeStoredCount(int count)
@@ -191,7 +299,10 @@ public:
 
         // The bookings are what the user is told about. A balance is one row
         // whichever way it goes and says nothing about what came in.
-        storedCount = count;
+        //
+        // Added rather than set: a run over several accounts writes once per
+        // account, and the figure the user is given is the one over all of them.
+        storedCount = storedBeforeRun + count;
     }
 
     /**
@@ -209,36 +320,50 @@ public:
             // rolls it back whole. That reaches this run and no further. The
             // bookings go in a run of their own and are committed before the
             // balances are attempted, so a failure of the balances leaves them
-            // standing and the count that goes out has to say so.
+            // standing and the count that goes out has to say so. The same holds
+            // for the accounts that were written before this one.
             if (phase == StorePhase::Transactions) {
-                storedCount = 0;
+                storedCount = storedBeforeRun;
             }
 
             phase = StorePhase::None;
-            finish(Outcome::StoreFailed, {});
+            finishRun(Outcome::StoreFailed, {});
             return;
         }
 
-        if (phase == StorePhase::Transactions && !pendingBalances.isEmpty()) {
+        if (phase == StorePhase::Transactions && !pending.constFirst().balances.isEmpty()) {
             startStoring(StorePhase::Balances);
             return;
         }
 
         phase = StorePhase::None;
+        pending.removeFirst();
 
         // Whatever the session said it delivered, which is what the user is told
         // apart: a balance alone is not an account without new bookings.
-        finish(outcome, {});
+        beginNextAccount();
     }
 
-    void finish(Outcome ended, const QString &endedReason)
+    /** Ends the run through the way out that belongs to the kind it is. */
+    void finishRun(Outcome ended, const QString &endedReason)
+    {
+        if (overAllAccounts) {
+            finishAll(ended, endedReason);
+            return;
+        }
+
+        finish(ended, endedReason);
+    }
+
+    /** What every way out shares, whichever kind of run it ends. */
+    void closeRun()
     {
         running = false;
         phase = StorePhase::None;
+        waitingForAbortAnswer = false;
 
         received.clear();
-        pendingBookings.clear();
-        pendingBalances.clear();
+        pending.clear();
 
         // The span the cached PIN outlives a fetch by starts here, at every way
         // out. Held while the session ran, because a session asks for the PIN
@@ -246,11 +371,39 @@ public:
         if (gui) {
             gui->expirePasswordCacheLater();
         }
+    }
+
+    void finish(Outcome ended, const QString &endedReason)
+    {
+        closeRun();
 
         const int count = storedCount;
         storedCount = 0;
 
         Q_EMIT q_ptr->ended(ended, count, endedReason);
+    }
+
+    void finishAll(Outcome ended, const QString &endedReason)
+    {
+        closeRun();
+
+        summary.outcome = ended;
+        summary.reason = endedReason;
+        summary.storedCount = storedCount;
+
+        // What is left over from the three that were counted along the way. An
+        // account the bank holds no order for is among them: it has online
+        // access and nothing about it failed.
+        summary.fetched = qMax(0, attempted - summary.skipped - summary.failed);
+
+        const Summary reported = summary;
+
+        summary = {};
+        attempted = 0;
+        storedCount = 0;
+        overAllAccounts = false;
+
+        Q_EMIT q_ptr->allEnded(reported);
     }
 
     ApplicationInfo applicationInfo;
@@ -267,12 +420,25 @@ public:
     bool storeFailed = false;
     int storedCount = 0;
 
+    /** What the count stood at when the running writing run was started. */
+    int storedBeforeRun = 0;
+
+    /** Whether the run covers every account, which decides how it is reported. */
+    bool overAllAccounts = false;
+
+    /** Whether the run stands still waiting for the answer to an abort. */
+    bool waitingForAbortAnswer = false;
+
+    /** How many accounts a run over all of them was handed. */
+    int attempted = 0;
+
+    Summary summary;
+
     Outcome outcome = Outcome::Received;
     QString reason;
 
     BankingItems received;
-    BankingItems pendingBookings;
-    BankingItems pendingBalances;
+    QList<PendingAccount> pending;
 
 private:
     AccountFetch *q_ptr;
@@ -321,19 +487,38 @@ Error AccountFetch::initialize()
         d_ptr->takeSessionResult(items);
     });
 
+    // The four that speak about a single account. A run over one of them says
+    // what became of it through its outcome; a run over all of them counts
+    // instead, because one outcome cannot stand for twenty accounts.
     connect(d_ptr->banking.get(), &Banking::accountSkipped, this, [this](quint32, const QString &) {
+        if (d_ptr->overAllAccounts) {
+            ++d_ptr->summary.skipped;
+            return;
+        }
+
         d_ptr->outcome = Outcome::Skipped;
     });
 
     connect(d_ptr->banking.get(), &Banking::noOrderOffered, this, [this](quint32) {
-        d_ptr->outcome = Outcome::NothingOffered;
+        if (!d_ptr->overAllAccounts) {
+            d_ptr->outcome = Outcome::NothingOffered;
+        }
     });
 
     // Arrives before the session and says that no booking can come in for this
     // account. Without it an empty result would read like an account the bank
     // had nothing new for.
     connect(d_ptr->banking.get(), &Banking::transactionsNotOffered, this, [this](quint32) {
-        d_ptr->outcome = Outcome::BalanceOnly;
+        if (!d_ptr->overAllAccounts) {
+            d_ptr->outcome = Outcome::BalanceOnly;
+        }
+    });
+
+    // Only a run over several accounts is reported this way. A run over one has
+    // nothing to go on with, so its refusal arrives as a failure of the whole
+    // fetch.
+    connect(d_ptr->banking.get(), &Banking::accountFailed, this, [this](quint32) {
+        ++d_ptr->summary.failed;
     });
 
     connect(d_ptr->banking.get(), &Banking::aborted, this, [this] {
@@ -381,9 +566,11 @@ void AccountFetch::start(const std::shared_ptr<Account> &account)
     }
 
     d_ptr->running = true;
+    d_ptr->overAllAccounts = false;
     d_ptr->outcome = Outcome::Received;
     d_ptr->reason.clear();
     d_ptr->storedCount = 0;
+    d_ptr->pending.clear();
 
     Q_EMIT started();
 
@@ -427,4 +614,103 @@ void AccountFetch::start(const std::shared_ptr<Account> &account)
 bool AccountFetch::isPasswordCacheExpiring() const
 {
     return d_ptr->gui && d_ptr->gui->isPasswordCacheExpiring();
+}
+
+void AccountFetch::startAll(const QList<std::shared_ptr<Account>> &accounts)
+{
+    if (d_ptr->running || accounts.isEmpty()) {
+        return;
+    }
+
+    d_ptr->running = true;
+    d_ptr->overAllAccounts = true;
+    d_ptr->outcome = Outcome::Received;
+    d_ptr->reason.clear();
+    d_ptr->storedCount = 0;
+    d_ptr->summary = {};
+    d_ptr->attempted = 0;
+    d_ptr->pending.clear();
+
+    Q_EMIT started();
+
+    // Reported through the event loop rather than from here, so that a fetch
+    // answers after it has returned. A caller that sets its own state after the
+    // call would otherwise see the end of a fetch before its start.
+    const auto failLater = [this](const QString &failure) {
+        QMetaObject::invokeMethod(
+            this,
+            [this, failure] { d_ptr->finishAll(Outcome::Failed, failure); },
+            Qt::QueuedConnection);
+    };
+
+    if (const auto error = initialize(); error.isError()) {
+        qCCritical(lcUi) << "the banking backend of the window did not come up:" << error.message();
+
+        failLater(userMessage(error.code()));
+        return;
+    }
+
+    // The mark belongs to one session. Left standing it would end the next one
+    // as an abort the user never asked for.
+    d_ptr->gui->forgetAbort();
+    d_ptr->gui->holdPasswordCache();
+
+    QList<std::shared_ptr<Account>> reachable;
+    QHash<quint32, QDate> startingPoints;
+    QString firstFailure;
+
+    for (const auto &account : accounts) {
+        if (account == nullptr) {
+            continue;
+        }
+
+        ++d_ptr->attempted;
+
+        const Result<QDate> latest = d_ptr->storage->latestTransactionDate(account->uniqueId());
+        if (!latest.hasValue()) {
+            // Without the starting point the session would ask the bank for the
+            // whole holding of this account again. It is left out rather than
+            // asked for that way, and the accounts beside it still run.
+            qCWarning(lcUi) << "could not read the starting point of a fetch:"
+                            << latest.error().message();
+
+            if (firstFailure.isEmpty()) {
+                firstFailure = userMessage(latest.error().code());
+            }
+
+            ++d_ptr->summary.failed;
+            continue;
+        }
+
+        startingPoints.insert(account->uniqueId(), latest.value());
+        reachable.append(account);
+    }
+
+    // Not one account is left to ask about, and the reason is a storage that
+    // could not be read. Nothing is sent, and the run ends where it stands.
+    if (reachable.isEmpty()) {
+        failLater(firstFailure);
+        return;
+    }
+
+    d_ptr->banking->fetchAccounts(reachable, startingPoints);
+}
+
+void AccountFetch::answerAbort(bool keep)
+{
+    if (!d_ptr->waitingForAbortAnswer) {
+        return;
+    }
+
+    d_ptr->waitingForAbortAnswer = false;
+    d_ptr->summary.keptAfterAbort = keep;
+
+    if (!keep) {
+        // Not a row of this run stands in the file, so there is nothing to take
+        // back. The holding is the one from before the fetch started.
+        d_ptr->finishAll(Outcome::Aborted, {});
+        return;
+    }
+
+    d_ptr->beginNextAccount();
 }
