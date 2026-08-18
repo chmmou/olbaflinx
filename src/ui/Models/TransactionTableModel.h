@@ -90,8 +90,12 @@ public:
      *
      * The order lies in the query and not above the rows that are loaded, so it
      * reaches every transaction of the account and not only the page on screen.
-     * Like a change of account it drops what stands and starts over; a result of
-     * the previous order that arrives afterwards is discarded.
+     * A result of the previous order that arrives afterwards is discarded.
+     *
+     * The rows that stand are left on screen until the first page under the new
+     * order is here, and are replaced by it. A read that brings nothing takes
+     * them off, and so does one that fails: they belong to an order the header
+     * no longer shows.
      *
      * A column outside Column is ignored.
      */
@@ -275,8 +279,12 @@ private:
     static constexpr Column DefaultSortColumn = DateColumn;
     static constexpr Qt::SortOrder DefaultSortOrder = Qt::DescendingOrder;
 
+    /** Whether a fresh read leaves the rows that stand on screen or takes them off. */
+    enum class PreviousRows { Drop, KeepUntilReplaced };
+
     void applySort(Column column, Qt::SortOrder order);
-    void startOver();
+    void startOver(PreviousRows previousRows = PreviousRows::Drop);
+    void dropPreviousRows();
     void requestItems();
     void appendItems(const olbaflinx::core::banking::BankingItems &items);
     void takeResult(const olbaflinx::core::banking::BankingItems &items);
@@ -323,6 +331,13 @@ private:
     int m_loadedRows = 0;
 
     bool m_atEnd = false;
+
+    /**
+     * Whether the rows on screen are the ones of the order before, waiting for
+     * the first page of the new one to take their place. Every way out of that
+     * read clears it, so no result of a later run is taken for the replacement.
+     */
+    bool m_showingPreviousRows = false;
 
     /**
      * Whether the last run ended with a failure. It blocks further fetching
