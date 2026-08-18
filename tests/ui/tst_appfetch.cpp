@@ -33,6 +33,9 @@
 #include "TransactionHelpers.h"
 #include "UiTestHelpers.h"
 
+#include <gwenhywfar/db.h>
+#include <gwenhywfar/gui.h>
+
 #include <QtTest/QtTest>
 
 #include <QtCore/QTemporaryDir>
@@ -77,6 +80,9 @@ constexpr double storedBalance = 12.5;
 
 /** What a fetch brings back for it. */
 constexpr double fetchedBalance = 99.0;
+
+/** The name a run puts into the cache of the interface to watch it. */
+constexpr auto cachedCredentialName = "probe-token";
 
 } // namespace
 
@@ -229,6 +235,7 @@ private Q_SLOTS:
     void theRegistrationKeyIsNotEmptyWhenTheBankingLayerComesUp();
     void theWindowComesUpBesideAnInstanceOfTheWizard();
     void theSpanOfTheCachedCredentialRunsAfterAFetchAndNotDuringIt();
+    void closingTheStorageEmptiesTheCachedCredential();
     void theAccountViewShowsANewBalanceWithoutARestart();
     void aFetchWithoutNewBookingsSaysSo();
 
@@ -887,6 +894,50 @@ void AppFetchTest::theSpanOfTheCachedCredentialRunsAfterAFetchAndNotDuringIt()
 
     // Started at the end of a fetch, whichever way it ended.
     QVERIFY(fetch->isPasswordCacheExpiring());
+}
+
+/**
+ * The interface belongs to the window and outlives the storage. Left to the
+ * span, a PIN entered for one storage would still be cached while the next one
+ * is open.
+ */
+void AppFetchTest::closingTheStorageEmptiesTheCachedCredential()
+{
+    Logger logger;
+    Storage storage(applicationInfo());
+
+    QVERIFY(openStorage(storage));
+    QVERIFY(putAccount(storage));
+
+    App app(&logger, &storage, applicationInfo());
+    app.initialize();
+
+    QVERIFY(chooseTheAccount(app, storage));
+
+    auto *const fetch = fetchOf(app);
+    QVERIFY(fetch != nullptr);
+
+    // The interface comes up with the first fetch, so the cache is only there
+    // once one has run.
+    QSignalSpy endedSpy(fetch, &AccountFetch::ended);
+
+    fetchActionOf(app)->trigger();
+
+    QVERIFY(endedSpy.wait(sessionTimeoutMs));
+
+    GWEN_DB_NODE *const cache = GWEN_Gui_GetPasswordDb(GWEN_Gui_GetGui());
+    QVERIFY(cache != nullptr);
+
+    GWEN_DB_SetCharValue(cache, GWEN_DB_FLAGS_OVERWRITE_VARS, cachedCredentialName, "1234");
+    QVERIFY(GWEN_DB_GetCharValue(cache, cachedCredentialName, 0, nullptr) != nullptr);
+
+    auto *const closeAction = app.findChild<QAction *>(QStringLiteral("appCloseStorageAction"));
+    QVERIFY(closeAction != nullptr);
+    QVERIFY(closeAction->isEnabled());
+
+    closeAction->trigger();
+
+    QVERIFY(GWEN_DB_GetCharValue(cache, cachedCredentialName, 0, nullptr) == nullptr);
 }
 
 /**
