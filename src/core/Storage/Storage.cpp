@@ -981,6 +981,11 @@ public:
         // the moment the other holds the lock, and the whole run falls: a fetch
         // that cost minutes on the line is rolled back because the user clicked
         // an account while it was being written.
+        //
+        // Interpolating into a statement is normally forbidden. It is
+        // unavoidable here for the reason given at keyLiteral above: SQLite
+        // accepts no bound parameter in a PRAGMA. The value is a constant of
+        // this file and comes from no input.
         if (!query.exec(QStringLiteral("PRAGMA busy_timeout=%1;").arg(LockWaitMs))) {
             qCWarning(lcStorage) << "could not set the lock wait on" << fileName << ":"
                                  << query.lastError().text();
