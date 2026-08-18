@@ -1424,7 +1424,6 @@ public:
         const auto type = bankingItem->itemType();
 
         if (!bankingItem->isValid()) {
-            // Used to return success without having written anything.
             return Error(ErrorCode::InvalidInput,
                          QStringLiteral("Invalid banking item of type %1").arg(type));
         }

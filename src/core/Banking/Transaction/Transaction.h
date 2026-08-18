@@ -40,7 +40,7 @@ typedef AB_TRANSACTION_CHARGE TransactionCharge;
 typedef AB_TRANSACTION_PERIOD TransactionPeriod;
 
 /**
- * @brief A transaction of an account.
+ * A transaction of an account.
  *
  * Ownership: the creator owns the instance. Transactions read from the database
  * are created through fromMap and handed on as a BankingItemPtr.
@@ -51,18 +51,16 @@ public:
     explicit Transaction(const AB_TRANSACTION *transaction = nullptr);
 
     /**
-     * @brief A transaction that is told which account it belongs to.
+     * A transaction that is told which account it belongs to.
      *
      * A statement that came over the wire names no account: the importer of the
      * backend fills the fields of the booking and leaves that one empty, and
      * only the entry of the response container it sits in carries it. Without
      * it the booking is stored under no account and is never read again.
      *
-     * @param uniqueAccountId The account, as the banking backend keeps it. It is
-     *  used only where the record names none of its own; a booking that carries
-     *  one keeps it.
-     * @param transaction The record. It stays with its caller, a copy of it is
-     *  kept here.
+     * The account is used only where the record names none of its own; a
+     * booking that carries one keeps it. The record stays with its caller and a
+     * copy of it is kept here.
      */
     Transaction(quint32 uniqueAccountId, const AB_TRANSACTION *transaction);
 
@@ -77,11 +75,7 @@ public:
     Transaction &operator=(Transaction &&) = delete;
 
     /**
-     * @brief Creates a transaction from the column values of a database row.
-     *
-     * @param map Column values of the row.
-     *
-     * @return The new transaction.
+     * Creates a transaction from the column values of a database row.
      */
     [[nodiscard]] static std::shared_ptr<Transaction> fromMap(const QMap<QString, QVariant> &map);
 
@@ -94,7 +88,7 @@ public:
     [[nodiscard]] quint32 refUniqueId() const;
     [[nodiscard]] quint32 idForApplication() const;
     /**
-     * @brief The string id an application may assign to a booking.
+     * The string id an application may assign to a booking.
      *
      * Answers empty for every transaction that comes from the database. The
      * value is deliberately not restored, see the comment in fromMap.

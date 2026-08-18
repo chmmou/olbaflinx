@@ -159,8 +159,8 @@ QPixmap ThemeManager::pixmap(const QString &name, const ThemeManager::Mode mode)
     const auto filenameFormat = QStringLiteral(":/icons/%1/%2");
     auto filename = QString();
 
-    // No default branch. It turned off the warning about an unhandled value, was
-    // word for word the same as the branch for Light, and had no break.
+    // No default branch, so that a value added to the enumeration is a compiler
+    // warning here rather than silently taking the light variant.
     switch (mode) {
     case Mode::Dark:
         filename = filenameFormat.arg(QStringLiteral("dark"), name);

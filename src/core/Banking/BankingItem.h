@@ -30,7 +30,7 @@
 namespace olbaflinx::core::banking {
 
 /**
- * @brief The common interface of every banking record.
+ * The common interface of every banking record.
  *
  * Ownership: instances are created through the static factory methods of the
  * derived classes and are held in a BankingItemPtr only.
@@ -41,40 +41,26 @@ public:
     explicit BankingItem() = default;
     virtual ~BankingItem() = default;
 
-    /**
-     * @brief Checks whether the corresponding class is valid
-     *
-     * @return true if we have a valid corresponding class; otherwise false.
-     */
     [[nodiscard]] virtual bool isValid() const = 0;
 
-    /**
-     * @brief Presents the corresponding class as a string.
-     *
-     * @return Corresponding class as a string.
-     */
     [[nodiscard]] virtual QString toString() const = 0;
 
     /**
-     * @brief Converts the corresponding class into a QMap.
-     *
-     * @return A corresponding class as a QMap
+     * The keys of the map are the column names the storage writes under.
      */
     [[nodiscard]] virtual QMap<QString, QVariant> toMap() const = 0;
 
     /**
-     * @brief Corresponding class type.
-     *
-     * @return Corresponding class type.
+     * Names the derived class, which is how a receiver of a mixed list tells
+     * the records apart.
      */
     [[nodiscard]] virtual QString itemType() const = 0;
 };
 
 /**
- * Storage and Banking create the records and hand them on through a signal. A
- * shared pointer makes the transfer of ownership visible and survives the
- * creator. A raw pointer did not: the creator released the list right after
- * emitting the signal.
+ * Storage and Banking create the records and hand them on through a signal.
+ * The shared pointer makes the transfer of ownership visible and lets a record
+ * outlive its creator, which releases the list right after emitting.
  */
 using BankingItemPtr = std::shared_ptr<BankingItem>;
 using BankingItems = QList<BankingItemPtr>;

@@ -25,8 +25,8 @@
 namespace olbaflinx::core {
 
 /**
- * @brief Brings a value and an error together for functions that return
- *  something and can fail.
+ * Brings a value and an error together for functions that return
+ * something and can fail.
  *
  * The caller checks hasValue() before it reads value(). Reading the value of a
  * result that carries an error is a programming error.

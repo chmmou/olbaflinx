@@ -29,7 +29,7 @@ QT_END_NAMESPACE
 namespace olbaflinx::ui {
 
 /**
- * @brief The central area of the main window.
+ * The central area of the main window.
  *
  * Ownership: belongs to its parent widget, as every QWidget does. The window
  * passed to initialize() is only borrowed, it is not kept beyond the call.
@@ -40,7 +40,7 @@ class AppCentralWidget : public QWidget
 
 public:
     /**
-     * @brief The two pages the central area carries.
+     * The two pages the central area carries.
      *
      * Storages is what stands there before a storage is open, Banking what comes
      * after it. The numbers are the ones the QStackedWidget counts by.
@@ -49,7 +49,7 @@ public:
     Q_ENUM(Page)
 
     /**
-     * @brief Why the transaction view has nothing to show.
+     * Why the transaction view has nothing to show.
      *
      * Three states, and the view names the one it is in rather than leaving the
      * area blank. A blank area could as well be a failure.
@@ -66,7 +66,7 @@ public:
     Q_ENUM(TransactionNotice)
 
     /**
-     * @brief Clears the filter bar and with it the restriction on the model.
+     * Clears the filter bar and with it the restriction on the model.
      *
      * The filter outlives a change of account, so that a user who is looking for
      * something keeps looking for it. It does not outlive the storage.
@@ -79,7 +79,7 @@ public:
     void initialize(QMainWindow *window);
 
     /**
-     * @brief Shows one of the two pages. The other one stays built.
+     * Shows one of the two pages. The other one stays built.
      *
      * Closing a storage drops the records of the models, not the widgets of the
      * page that is left.
@@ -89,80 +89,72 @@ public:
     [[nodiscard]] Page page() const;
 
     /**
-     * @brief Puts the overview of the storages onto the first page.
+     * Puts the overview of the storages onto the first page.
      *
      * The overview needs the storage of the application and is therefore built
      * by the window, not here. It becomes a child of this widget through the
-     * layout of the page.
-     *
-     * @param overview The widget to show. It is taken over.
+     * layout of the page. The widget is taken over.
      */
     void setStorageOverview(QWidget *overview);
 
     /**
-     * @brief The tree of accounts, grouped by bank.
-     *
-     * @return The view. Never null once the widget is built.
+     * The tree of accounts, grouped by bank. Never null once the widget is
+     * built.
      */
     [[nodiscard]] QTreeView *accountWidget() const;
 
     /**
-     * @brief The second page, the one that carries the dock areas.
+     * The second page, the one that carries the dock areas.
      *
      * The dock manager is built by the window and needs a parent that is not the
      * window itself: a dock manager whose parent is a QMainWindow makes itself
      * the central widget and would push out the stack that holds both pages.
      *
-     * @return The page. Its layout is empty once the two panels below have been
-     *  taken over by dock widgets.
+     * Its layout is empty once the two panels below have been taken over by
+     * dock widgets.
      */
     [[nodiscard]] QWidget *bankingPage() const;
 
     /**
-     * @brief Everything the accounts side shows: the tree and its notice.
+     * Everything the accounts side shows: the tree and its notice.
      *
      * Not the tree alone. The notice about accounts that are missing or could
      * not be read stands in the same place, and a dock area that held only the
-     * tree would lose it.
-     *
-     * @return The panel. Never null once the widget is built.
+     * tree would lose it. Never null once the widget is built.
      */
     [[nodiscard]] QWidget *accountPanel() const;
 
     /**
-     * @brief Everything the transactions side shows, with its tabs.
-     *
-     * @return The panel. Never null once the widget is built.
+     * Everything the transactions side shows, with its tabs. Never null once
+     * the widget is built.
      */
     [[nodiscard]] QWidget *transactionPanel() const;
 
     /**
-     * @brief Hands the accounts to the view and takes over showing the notices.
+     * Hands the accounts to the view and takes over showing the notices.
      *
      * The view keeps no records of its own, so an empty tree and a tree that was
      * never filled look the same. This is where the difference is told: as long
      * as the model reports no row, the notice from setUpAccountNotice() stands in
      * its place.
      *
-     * @param model Externally owned model, has to outlive this widget. Passing
-     *  nullptr detaches the view.
+     * The model is owned elsewhere and has to outlive this widget. Passing
+     * nullptr detaches the view.
      */
     void setAccountModel(QAbstractItemModel *model);
 
     /**
-     * @brief Says that the accounts could not be read.
+     * Says that the accounts could not be read.
      *
      * A failed read is not an empty storage. What the view already shows stays
      * where it is; only a view that has nothing to show trades the notice about
-     * the missing accounts for this one.
-     *
-     * @param message What the user gets to see. It names no file and no
-     *  statement.
+     * the missing accounts for this one. The message names no file and no
+     * statement.
      */
     void showAccountsUnreadable(const QString &message);
 
     /**
-     * @brief Hands the transactions to the view and takes over the empty states.
+     * Hands the transactions to the view and takes over the empty states.
      *
      * As long as the model reports no row, the notice for the state set through
      * setTransactionNotice() stands in place of the table.
@@ -170,13 +162,13 @@ public:
      * The concrete type, not the interface: the filter bar of this widget sets
      * the restriction on the model and reads the number the model was told.
      *
-     * @param model Externally owned model, has to outlive this widget. Passing
-     *  nullptr detaches the view.
+     * The model is owned elsewhere and has to outlive this widget. Passing
+     * nullptr detaches the view.
      */
     void setTransactionModel(olbaflinx::ui::models::TransactionTableModel *model);
 
     /**
-     * @brief Reads the transactions again and puts the view back where it stood.
+     * Reads the transactions again and puts the view back where it stood.
      *
      * What a fetch needs afterwards. The model starts over, which resets the
      * view, so the position of the scroll bar is taken beforehand and set again
@@ -186,7 +178,7 @@ public:
     void refreshTransactions();
 
     /**
-     * @brief Says why the transaction view is empty.
+     * Says why the transaction view is empty.
      *
      * Only read while the model reports no row. Whoever changes the selection
      * sets it along with the account, so that the right text is in place by the

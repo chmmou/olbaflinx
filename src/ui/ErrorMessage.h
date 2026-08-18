@@ -24,13 +24,12 @@
 namespace olbaflinx::ui {
 
 /**
- * @brief Turns an error code from core into a sentence the user can act on.
+ * Turns an error code from core into a sentence the user can act on.
  *
  * The technical message that comes with the code belongs in the log. It can name
  * a file path or an SQL statement, neither of which is of any use on screen.
  *
- * @param code The machine readable cause.
- * @return What failed and what the user can do about it.
+ * What comes back says what failed and what the user can do about it.
  */
 [[nodiscard]] QString userMessage(core::ErrorCode code);
 

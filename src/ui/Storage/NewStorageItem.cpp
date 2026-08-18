@@ -142,10 +142,9 @@ void NewStorageItem::showMenu()
 {
     auto itemMenu = new QMenu(this);
 
-    // The command is not built yet. It stays in the menu and says so through its
-    // state, rather than being dropped: a tool can then tell the user that there
-    // is such an entry and that it does not act. A missing entry tells nobody
-    // anything, and a working one would have to be written first.
+    // Disabled rather than absent, so that an assistive tool can tell the user
+    // there is such an entry and that it does not act. A missing entry tells
+    // nobody anything.
     itemMenu->addAction(tr("Information"))->setEnabled(false);
 
     itemMenu->addAction(tr("Change password"), this, &NewStorageItem::showPasswordChangeDialog);

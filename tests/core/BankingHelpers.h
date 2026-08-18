@@ -61,10 +61,8 @@ class BankingHelpers
 {
 public:
     /**
-     * An account the way AqBanking reports one.
-     *
-     * @param backendName The backend that holds the account. An empty name is
-     *  an account without online access, which a fetch passes over.
+     * An account the way AqBanking reports one. An empty backend name is an
+     * account without online access, which a fetch passes over.
      */
     static std::shared_ptr<Account> accountFromBackend(quint32 uniqueId,
                                                        const char *backendName = "aqhbci")
@@ -114,9 +112,9 @@ public:
      *
      * The caller owns the result and releases it with AB_ImExporterContext_free.
      *
-     * @param firstBookingDate The day of the first booking, every further one a
-     *  day on. Left invalid, the bookings carry no date at all, which is what a
-     *  test that does not look at the period wants.
+     * The first booking date is the day of the first booking, every further one
+     * a day on. Left invalid, the bookings carry no date at all, which is what
+     * a test that does not look at the period wants.
      *
      * The bookings carry no account of their own, and that is not an omission of
      * the helper. A statement arrives through the importer of the backend, which

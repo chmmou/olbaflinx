@@ -31,7 +31,7 @@ using namespace olbaflinx::core::banking;
 namespace olbaflinx::core::banking::account {
 
 /**
- * @brief A reference account held with an account.
+ * A reference account held with an account.
  *
  * Ownership: the creator owns the instance. Reference accounts read from the
  * database are created through fromMap and handed on as a BankingItemPtr.
@@ -51,11 +51,8 @@ public:
     ReferenceAccount &operator=(ReferenceAccount &&) = delete;
 
     /**
-     * @brief Creates a reference account from the column values of a database row.
-     *
-     * @param map Column values of the row.
-     *
-     * @return The new reference account, or an empty pointer if the map is empty.
+     * Creates a reference account from the column values of a database row. An
+     * empty map answers with an empty pointer.
      */
     [[nodiscard]] static std::shared_ptr<ReferenceAccount> fromMap(
         const QMap<QString, QVariant> &map);

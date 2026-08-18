@@ -137,11 +137,11 @@ GwenDatePtr fromDate(const QDate &date)
  * A fetch over all accounts sends one list, so the orders are appended rather
  * than handed back in a list of their own: a list per account would have to be
  * emptied into the shared one afterwards, and the ownership of an order would
- * then hang on which of the two lists it currently sits in.
+ * then hang on which of the two lists it currently sits in. The list the
+ * orders go into owns them.
  *
- * @param commands The list the orders go into. It owns them.
- * @param offered What the backend holds for this account, or nothing. Only what
- *  it names is built.
+ * Only what the backend names as offered is built; nothing at all means both
+ * orders are built.
  */
 void appendFetchCommands(AB_TRANSACTION_LIST2 *commands,
                          const Account &account,
@@ -672,9 +672,9 @@ public:
     }
 
     /**
-     * @param accounts Copies of their own, for the reason startFetch names: the
-     *  accounts of the caller must not be reached into once fetchAccounts has
-     *  returned, and the session outlives that call.
+     * The accounts are copies of their own, for the reason startFetch names:
+     * the accounts of the caller must not be reached into once fetchAccounts
+     * has returned, and the session outlives that call.
      */
     void startFetchAll(const QList<std::shared_ptr<Account>> &accounts,
                        const QHash<quint32, QDate> &latestStoredDates)
@@ -755,9 +755,9 @@ public:
     bool isFetching() const { return m_isFetching; }
 
     /**
-     * @param account A copy of its own. The account of the caller must not be
-     *  reached into once fetchAccount has returned, and the session outlives
-     *  that call.
+     * The account is a copy of its own. The account of the caller must not be
+     * reached into once fetchAccount has returned, and the session outlives
+     * that call.
      */
     void startFetch(const std::shared_ptr<Account> &account, const QDate &latestStoredDate)
     {
@@ -917,9 +917,8 @@ public:
     }
 
     /**
-     * @param list The descriptions the backend holds. They stay with the caller,
-     *  which frees the list; this walks over it and copies what it needs into
-     *  records of the core.
+     * The descriptions stay with the caller, which frees the list; this walks
+     * over it and copies what it needs into records of the core.
      *
      * Walked as it stands rather than duplicated first: both list functions
      * take a const list, and a copy would be left behind on the way out that
@@ -1280,10 +1279,10 @@ void Banking::fetchAccount(const Account &account, const QDate &latestStoredDate
     }
 
     // A copy of its own, and that is what the session works on: the account of
-    // the caller must not be reached into once this call has returned, and the
-    // orders are no longer built here. Which of them the account carries is read
-    // out of the configuration of the backend, and that read locks a group and
-    // reports a progress while it waits.
+    // the caller must not be reached into once this call has returned. The
+    // orders are built inside the session, because which of them the account
+    // carries is read out of the configuration of the backend, and that read
+    // locks a group and reports a progress while it waits.
     d_ptr->startFetch(std::make_shared<Account>(account.accountSpec()), latestStoredDate);
 }
 

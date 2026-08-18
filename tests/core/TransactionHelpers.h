@@ -250,11 +250,11 @@ public:
      * Each record carries its amount as its unique_id as well, so that a run over
      * several pages can be checked by the set of identifiers it delivered.
      *
-     * @param firstDate The day of the record that carries the smallest amount, in
-     *  ISO form. Every further record moves dayStep days on, so a span that
-     *  crosses a month or a year is a matter of choosing the day.
-     * @param dayStep Days between two records. Zero puts every one of them on the
-     *  same day, which is what leaves the order to the second criterion alone.
+     * The first date is the day of the record with the smallest amount, in ISO
+     * form. Every further record moves dayStep days on, so a span that crosses
+     * a month or a year is a matter of choosing the day. A step of zero puts
+     * every record on the same day, which leaves the order to the second
+     * criterion alone.
      */
     static bool putOrderedTransactions(const QString &file,
                                        const QString &key,

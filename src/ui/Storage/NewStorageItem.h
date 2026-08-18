@@ -25,7 +25,7 @@ class Storage;
 namespace olbaflinx::ui::storage {
 
 /**
- * @brief One entry in the overview of storages.
+ * One entry in the overview of storages.
  *
  * Ownership: the storage is observed only and belongs to its creator.
  */
@@ -35,9 +35,7 @@ class NewStorageItem : public QWidget
 
 public:
     /**
-     * @param storage Externally owned storage, has to outlive the entry.
-     * @param parent Optional owner.
-     * @param f Window flags.
+     * The storage is owned elsewhere and has to outlive the entry.
      */
     explicit NewStorageItem(olbaflinx::core::storage::Storage *storage,
                             QWidget *parent = nullptr,
@@ -45,7 +43,7 @@ public:
     ~NewStorageItem() override;
 
     /**
-     * @brief Names the entry, on screen and towards assistive tools.
+     * Names the entry, on screen and towards assistive tools.
      *
      * The entry is a group without a label of its own, so the title is what
      * tells one apart from the next.
@@ -61,12 +59,11 @@ Q_SIGNALS:
     void storageDeleted(bool success, NewStorageItem *item, const QString &errorMessage);
 
     /**
-     * @brief Something the user needs to read, already worded for him.
+     * Something the user needs to read, already worded for him.
      *
      * An entry sits inside a page and has no status bar of its own. The overview
-     * passes this on to the window, which is where such a sentence goes.
-     *
-     * @param message What the user gets to see. It names no path and no password.
+     * passes this on to the window, which is where such a sentence goes. The
+     * message names no path and no password.
      */
     void message(const QString &message);
 

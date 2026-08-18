@@ -36,7 +36,7 @@ class Storage;
 namespace olbaflinx::ui {
 
 /**
- * @brief The main window of the application.
+ * The main window of the application.
  *
  * Ownership: Logger and Storage are observed only. Their lifetime encloses the
  * one of the window, and the creator releases them.
@@ -47,13 +47,11 @@ class App : public QMainWindow
 
 public:
     /**
-     * @param logger Externally owned logger, has to outlive the window.
-     * @param storage Externally owned storage, has to outlive the window.
-     * @param applicationInfo What the window signs on to a bank with. Left out,
-     *  no fetch comes about and the reason says so; a window that never fetches
-     *  needs none.
-     * @param parent Optional owner.
-     * @param flags Window flags.
+     * Logger and storage are owned elsewhere and have to outlive the window.
+     *
+     * The application info is what the window signs on to a bank with. Left
+     * out, no fetch comes about and the reason says so; a window that never
+     * fetches needs none.
      */
     explicit App(core::logger::Logger *logger,
                  core::storage::Storage *storage,
@@ -67,8 +65,8 @@ public:
     void setAccounts(const BankingItems &items);
 
     /**
-     * @brief Reads the accounts of the open storage again and shows what is
-     *  there now.
+     * Reads the accounts of the open storage again and shows what is
+     * there now.
      *
      * For whoever wrote into the storage from outside the window, the wizard
      * above all. The window does not learn of such a write on its own, and the
@@ -80,31 +78,27 @@ public:
     void refreshAccounts();
 
     /**
-     * @brief Turns an error from core into something the user can act on.
+     * Turns an error from core into something the user can act on.
      *
-     * The technical message goes to the log, the status bar carries the short
-     * form. Nothing here is modal; none of these errors blocks the window.
-     *
-     * @param code The machine readable cause.
-     * @param reason The technical message. It never reaches the screen.
+     * The technical message goes to the log and never reaches the screen; the
+     * status bar carries the short form. Nothing here is modal; none of these
+     * errors blocks the window.
      */
     void showError(core::ErrorCode code, const QString &reason);
 
     /**
-     * @brief Puts a message the caller has already worded into the status bar.
+     * Puts a message the caller has already worded into the status bar.
      *
      * showError turns a code into a fixed sentence. This one carries what only
      * the caller knows, such as how many accounts of a run reached the storage.
-     * Nothing here is modal.
-     *
-     * @param message What the user gets to see. It must name no account, no
-     *  balance and no amount.
+     * Nothing here is modal. The message must name no account, no balance and
+     * no amount.
      */
     void showMessage(const QString &message);
 
 public Q_SLOTS:
     /**
-     * @brief Closes the open storage and returns to the overview.
+     * Closes the open storage and returns to the overview.
      *
      * Everything the storage brought in goes with it: the window shows the first
      * page again and the models let go of their records. A record left behind
@@ -117,7 +111,7 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     /**
-     * @brief The user asked for the setup wizard.
+     * The user asked for the setup wizard.
      *
      * The window does not know what a wizard needs to be built, so it asks
      * rather than builds. Whoever assembled the application answers, and the
@@ -131,7 +125,7 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
     /**
-     * @brief Puts off closing while a fetch runs.
+     * Puts off closing while a fetch runs.
      *
      * The application has no way of its own to end a session; the abort runs
      * over the button of the progress dialog the banking layer brings. Ending
@@ -142,7 +136,7 @@ protected:
 
 private:
     class Private;
-    Private *d_ptr = nullptr; ///< private data (pimpl)
+    Private *d_ptr = nullptr;
 };
 
 } // namespace olbaflinx::ui

@@ -37,8 +37,8 @@ namespace olbaflinx::core {
 inline constexpr auto FinTsRegistrationKey = QLatin1StringView("3E1B97FF72A24783EC2215B12");
 
 /**
- * @brief The application details core needs for its settings and for signing on
- *  to the banking backend.
+ * The application details core needs for its settings and for signing on
+ * to the banking backend.
  *
  * The values are passed in instead of being read from the running application
  * instance. Only that way can core be built and tested without a

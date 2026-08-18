@@ -381,9 +381,9 @@ private:
      * symbolic link reaches out of the directory without the text saying so. The
      * write side does the same in createStorage; this is the read side of it.
      *
-     * @param directory The storage directory, already resolved. Passed in rather
-     *  than looked up here, because the caller asks this once per entry of the
-     *  list and the directory is the same for all of them.
+     * The directory comes in already resolved rather than being looked up
+     * here, because the caller asks this once per entry of the list and the
+     * directory is the same for all of them.
      */
     [[nodiscard]] static bool staysInsideStorageDirectory(const QString &directory,
                                                           const QString &file)

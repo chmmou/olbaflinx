@@ -315,8 +315,8 @@ void AppDockLayoutTest::bothAreasCarryANameOfTheirOwn()
 }
 
 /**
- * What the story is about: the user moves the accounts to the other edge, and
- * that is where they are the next time he opens the window.
+ * The user moves the accounts to the other edge, and that is where they are the
+ * next time he opens the window.
  *
  * Measured against what is saved and read back, not against pixels. The width of
  * an area follows the size of the window, and what the library puts around the

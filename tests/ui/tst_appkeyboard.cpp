@@ -132,9 +132,9 @@ QString describe(const QList<QWidget *> &chain)
 }
 
 /**
- * @return The letter the user reaches the entry by, or a null character where
- *  the text carries none. A doubled ampersand is the escaped character itself
- *  and no mnemonic.
+ * The letter the user reaches the entry by, or a null character where the text
+ * carries none. A doubled ampersand is the escaped character itself and no
+ * mnemonic.
  */
 QChar mnemonicOf(const QString &text)
 {

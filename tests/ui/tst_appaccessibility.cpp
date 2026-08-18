@@ -79,8 +79,8 @@ private:
     }
 
     /**
-     * @return The interface a tool reaches the entry through, or null when the
-     *  action does not sit in the menu at all.
+     * The interface a tool reaches the entry through, or null when the action
+     * does not sit in the menu at all.
      *
      * An action carries no interface of its own; the menu holds one child per
      * action, in the order the actions were added.

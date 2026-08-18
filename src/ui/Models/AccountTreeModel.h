@@ -27,7 +27,7 @@
 namespace olbaflinx::ui::models {
 
 /**
- * @brief Maps the accounts reported by core onto two levels, bank and account.
+ * Maps the accounts reported by core onto two levels, bank and account.
  *
  * The upper level is no record of its own. It is formed from the bank name every
  * account carries, so two banks of that same name become one node and cannot be
@@ -68,24 +68,22 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     /**
-     * @brief The account an index stands for.
+     * The account an index stands for.
      *
      * The roles carry the fields of an account, not the account itself, and a
      * fetch needs the record: the banking layer fills its orders from the
      * description an account carries and no set of fields can stand in for it.
      *
-     * @param index An index of this model. A bank node and an invalid index
-     *  answer with an empty pointer.
-     *
-     * @return The account, shared with the model. It stays valid for as long as
-     *  the model holds it, which the next setItems ends.
+     * A bank node and an invalid index answer with an empty pointer. The
+     * account is shared with the model and stays valid for as long as the model
+     * holds it, which the next setItems ends.
      */
     [[nodiscard]] std::shared_ptr<olbaflinx::core::banking::account::Account> accountAt(
         const QModelIndex &index) const;
 
 public Q_SLOTS:
     /**
-     * @brief Takes over the reported records and groups them by bank.
+     * Takes over the reported records and groups them by bank.
      *
      * Records that are not an account are skipped, and so are accounts the user
      * has deselected. A bank whose accounts are all deselected leaves no node
