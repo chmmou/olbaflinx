@@ -171,6 +171,47 @@ public:
                        const QHash<quint32, QDate> &latestStoredDates = {});
 
     /**
+     * Fetches the standing orders of one account, which stays with its caller.
+     * The result arrives through itemsReceived, every record carrying the id of
+     * the account it belongs to.
+     *
+     * The order asks for the holding rather than for a span, so there is no
+     * starting point to hand in.
+     *
+     * This is a session of its own and never travels with the one that fetches
+     * bookings and balance: an order the bank refuses would otherwise take the
+     * bookings of the same account down with it.
+     *
+     * Preconditions: as fetchAccount.
+     *
+     * Errors: as fetchAccount, and an account the bank holds no standing order
+     * request for reports standingOrdersNotOffered, which is no error and no
+     * empty result. Every path of an accepted fetch ends in finished.
+     *
+     * Concurrency: as fetchAccount, and refused while a fetch of either kind
+     * runs.
+     */
+    void fetchStandingOrders(const Account &account);
+
+    /**
+     * Fetches the standing orders of every given account, in one call the
+     * backend sorts by institution.
+     *
+     * The accounts stay with their caller; the session works on a copy made
+     * here. An empty list is no failure and ends in finished without anything
+     * being sent.
+     *
+     * Preconditions: as fetchAccount.
+     *
+     * Errors: as fetchAccounts, and standingOrdersNotOffered per account the
+     * bank holds no such request for.
+     *
+     * Concurrency: as fetchAccount, and refused while a fetch of either kind
+     * runs.
+     */
+    void fetchStandingOrdersForAll(const QList<std::shared_ptr<Account>> &accounts);
+
+    /**
      * Builds the two orders of a fetch without sending them. The lead time is
      * subtracted here, so the orders start before the day the stored holding
      * ends on and carry no starting point at all when that date is invalid.
@@ -205,6 +246,22 @@ public:
                                             AB_TRANSACTION_COMMAND command);
 
     /**
+     * Builds the one order of a standing order fetch without sending it. It
+     * carries no starting point: the request asks for the holding, not for a
+     * span.
+     *
+     * What the backend offers decides whether it is built at all. Where the
+     * description names other orders and not this one, the list comes back
+     * empty; where it is missing or names none, the order is built, for the
+     * reason buildFetchCommands gives.
+     *
+     * The caller owns the returned list and releases it, orders included, with
+     * AB_Transaction_List2_freeAll.
+     */
+    [[nodiscard]] static AB_TRANSACTION_LIST2 *buildStandingOrderCommands(
+        const Account &account, const AB_ACCOUNT_SPEC *offered = nullptr);
+
+    /**
      * Reads the transactions and the balance out of the container a session
      * filled, in one list, and hands both to their new owner.
      *
@@ -212,6 +269,20 @@ public:
      * order failed is not in the list, neither with its transactions nor with
      * its balance.
      */
+    /**
+     * Reads the standing orders out of the container a session filled, and
+     * hands them to their new owner.
+     *
+     * Only records of the standing order type come through. A booking in the
+     * same container stays where it is, and so does a standing order for
+     * itemsFromContext.
+     *
+     * The orders that were sent carry the outcome per order. An account whose
+     * order failed is not in the list.
+     */
+    [[nodiscard]] static BankingItems standingOrdersFromContext(const AB_IMEXPORTER_CONTEXT *context,
+                                                                AB_TRANSACTION_LIST2 *commands);
+
     [[nodiscard]] static BankingItems itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
                                                        AB_TRANSACTION_LIST2 *commands);
 
@@ -283,6 +354,18 @@ Q_SIGNALS:
      * It arrives before the session starts, and finished still ends the fetch.
      */
     void transactionsNotOffered(quint32 uniqueAccountId);
+
+    /**
+     * An account the bank holds no order for standing orders for.
+     *
+     * Not an error and not a skipped account: the account has online access,
+     * and the bank holds orders for it, just not this one. Nothing is sent for
+     * it, so what this says is that an empty result is not an account without
+     * standing orders.
+     *
+     * It arrives before the session starts, and finished still ends the fetch.
+     */
+    void standingOrdersNotOffered(quint32 uniqueAccountId);
 
     /**
      * The user stopped a session. An abort is no failure and therefore no

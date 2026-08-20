@@ -18,6 +18,7 @@
 #include "core/Banking/Banking.h"
 
 #include "core/Banking/Balance/Balance.h"
+#include "core/Banking/StandingOrder/StandingOrder.h"
 #include "core/Banking/Transaction/Transaction.h"
 #include "core/Logging.h"
 
@@ -59,6 +60,7 @@
 using namespace olbaflinx::core;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::balance;
+using namespace olbaflinx::core::banking::standingorder;
 using namespace olbaflinx::core::banking::transaction;
 
 namespace {
@@ -191,6 +193,33 @@ void appendFetchCommands(AB_TRANSACTION_LIST2 *commands,
 }
 
 /**
+ * Puts the standing order request of one account at the end of a list, for the
+ * reason appendFetchCommands names.
+ *
+ * Nothing is appended where the description names other orders and not this
+ * one, and the caller is then the one that says so to the user.
+ */
+void appendStandingOrderCommand(AB_TRANSACTION_LIST2 *commands,
+                                const Account &account,
+                                const AB_ACCOUNT_SPEC *offered)
+{
+    if (!Banking::accountOffers(offered, AB_Transaction_CommandSepaGetStandingOrders)) {
+        return;
+    }
+
+    AB_TRANSACTION *command = AB_Transaction_new();
+
+    AB_Transaction_SetCommand(command, AB_Transaction_CommandSepaGetStandingOrders);
+
+    AB_Banking_FillTransactionFromAccountSpec(command, account.accountSpec());
+
+    // No date of any kind. The request asks for what the bank holds, and
+    // FirstDate would be read by the FinTS backend as the day to start at.
+
+    AB_Transaction_List2_PushBack(commands, command);
+}
+
+/**
  * Whether an order ended in a failure of its own.
  *
  * A status the backend never touched is not one: an order that ran through and
@@ -314,6 +343,40 @@ struct AllSessionsResult
 
     /** Accounts the backend holds no order for the bookings of. */
     QList<quint32> transactionsNotOffered;
+};
+
+/**
+ * What one standing order session hands back to the thread that started it.
+ *
+ * A fetch of this kind sends one order, so there is nothing left to run when
+ * the account does not carry it: notOffered then says why the result is empty
+ * and no session was run at all.
+ */
+struct StandingOrderSessionResult
+{
+    FetchOutcome outcome = FetchOutcome::Failed;
+    BankingItems items;
+    QString reason;
+
+    /** Whether the backend holds no standing order request for this account. */
+    bool notOffered = false;
+};
+
+/** What one standing order run over several accounts hands back. */
+struct AllStandingOrderSessionsResult
+{
+    FetchOutcome outcome = FetchOutcome::Failed;
+    BankingItems items;
+    QString reason;
+
+    /** Accounts whose order went out. */
+    QList<quint32> sent;
+
+    /** Accounts of those whose order the bank refused. */
+    QList<quint32> failed;
+
+    /** Accounts the backend holds no standing order request for. */
+    QList<quint32> notOffered;
 };
 
 } // namespace
@@ -597,6 +660,231 @@ public:
         return result;
     }
 
+    /**
+     * The standing order session of one account, run in a thread of its own.
+     *
+     * Built the way runSession builds its own, and for the same reason: which
+     * orders the account carries is read out of the configuration of the
+     * backend, and that read locks a group.
+     */
+    StandingOrderSessionResult runStandingOrderSession(const std::shared_ptr<Account> &account)
+    {
+        const quint32 uniqueAccountId = account->uniqueId();
+
+        const ThreadGui gui(gwenGui);
+
+        AB_ACCOUNT_SPEC *offered = nullptr;
+        AB_Banking_GetAccountSpecByUniqueId(aqBanking, uniqueAccountId, &offered);
+
+        const AccountSpecPtr held(offered, &AB_AccountSpec_free);
+
+        StandingOrderSessionResult result;
+
+        if (!Banking::accountOffers(offered, AB_Transaction_CommandSepaGetStandingOrders)) {
+            result.outcome = FetchOutcome::Received;
+            result.notOffered = true;
+
+            return result;
+        }
+
+        const CommandListPtr commands(Banking::buildStandingOrderCommands(*account, offered));
+        const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
+
+        const int rv = AB_Banking_SendCommands(aqBanking, commands.get(), context.get());
+
+        result.outcome = Banking::outcomeOfSession(rv, commands.get(), uniqueAccountId);
+
+        switch (result.outcome) {
+        case FetchOutcome::Received:
+            result.items = Banking::standingOrdersFromContext(context.get(), commands.get());
+            break;
+
+        case FetchOutcome::Aborted:
+            break;
+
+        case FetchOutcome::Failed:
+            result.reason = rv != AB_SUCCESS
+                                ? QStringLiteral("AB_Banking_SendCommands failed with %1").arg(rv)
+                                : QStringLiteral("The standing order request of account %1 was "
+                                                 "refused")
+                                      .arg(uniqueAccountId);
+            break;
+        }
+
+        return result;
+    }
+
+    /** The standing order session over several accounts, run in a thread of its own. */
+    AllStandingOrderSessionsResult runAllStandingOrderSessions(
+        const QList<std::shared_ptr<Account>> &accounts)
+    {
+        const ThreadGui gui(gwenGui);
+
+        AllStandingOrderSessionsResult result;
+
+        const CommandListPtr commands(AB_Transaction_List2_new());
+
+        for (const auto &account : accounts) {
+            const quint32 uniqueAccountId = account->uniqueId();
+
+            AB_ACCOUNT_SPEC *offered = nullptr;
+            AB_Banking_GetAccountSpecByUniqueId(aqBanking, uniqueAccountId, &offered);
+
+            const AccountSpecPtr held(offered, &AB_AccountSpec_free);
+
+            if (!Banking::accountOffers(offered, AB_Transaction_CommandSepaGetStandingOrders)) {
+                result.notOffered.append(uniqueAccountId);
+                continue;
+            }
+
+            appendStandingOrderCommand(commands.get(), *account, offered);
+
+            result.sent.append(uniqueAccountId);
+        }
+
+        if (result.sent.isEmpty()) {
+            result.outcome = FetchOutcome::Received;
+
+            return result;
+        }
+
+        const ContextPtr context(AB_ImExporterContext_new(), &AB_ImExporterContext_free);
+
+        const int rv = AB_Banking_SendCommands(aqBanking, commands.get(), context.get());
+
+        if (rv != AB_SUCCESS && rv != GWEN_ERROR_USER_ABORTED) {
+            result.outcome = FetchOutcome::Failed;
+            result.reason = QStringLiteral("AB_Banking_SendCommands failed with %1").arg(rv);
+
+            return result;
+        }
+
+        result.outcome = rv == GWEN_ERROR_USER_ABORTED ? FetchOutcome::Aborted
+                                                       : FetchOutcome::Received;
+
+        const QSet<quint32> refused = accountsOfFailedCommands(commands.get());
+
+        for (const quint32 uniqueAccountId : std::as_const(result.sent)) {
+            if (refused.contains(uniqueAccountId)) {
+                result.failed.append(uniqueAccountId);
+            }
+        }
+
+        result.items = Banking::standingOrdersFromContext(context.get(), commands.get());
+
+        return result;
+    }
+
+    /** The answer of a standing order run over one account, in the thread of this object. */
+    void deliverStandingOrderSessionResult()
+    {
+        StandingOrderSessionResult result;
+
+        const QString failure = exceptionOf(
+            [this, &result] { result = standingOrderWatcher.result(); });
+
+        m_isFetching = false;
+
+        if (!failure.isEmpty()) {
+            const auto reason = QStringLiteral("The standing order session of account %1 ended in "
+                                               "%2")
+                                    .arg(QString::number(m_fetchedAccountId), failure);
+
+            qCCritical(lcBanking) << reason;
+
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT q_ptr->finished();
+            return;
+        }
+
+        // Said before the answer, because it decides how the answer reads. An
+        // account the bank holds no such request for brings nothing, and that is
+        // no account without standing orders.
+        if (result.notOffered) {
+            qCInfo(lcBanking) << "account" << m_fetchedAccountId
+                              << "carries no request for standing orders";
+
+            Q_EMIT q_ptr->standingOrdersNotOffered(m_fetchedAccountId);
+            Q_EMIT q_ptr->finished();
+            return;
+        }
+
+        switch (result.outcome) {
+        case FetchOutcome::Received:
+            qCDebug(lcBanking) << "fetched" << result.items.size() << "standing orders";
+            Q_EMIT q_ptr->itemsReceived(result.items);
+            break;
+
+        case FetchOutcome::Aborted:
+            qCInfo(lcBanking) << "the standing order fetch was aborted by the user";
+            Q_EMIT q_ptr->aborted();
+            break;
+
+        case FetchOutcome::Failed:
+            qCCritical(lcBanking) << result.reason;
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, result.reason);
+            break;
+        }
+
+        Q_EMIT q_ptr->finished();
+    }
+
+    /** The answer of a standing order run over several accounts, in the thread of this object. */
+    void deliverAllStandingOrderSessionsResult()
+    {
+        AllStandingOrderSessionsResult result;
+
+        const QString failure = exceptionOf(
+            [this, &result] { result = allStandingOrderWatcher.result(); });
+
+        m_isFetching = false;
+
+        if (!failure.isEmpty()) {
+            const auto reason = QStringLiteral("A standing order fetch over %1 accounts ended in "
+                                               "%2")
+                                    .arg(QString::number(m_fetchedAccounts), failure);
+
+            qCCritical(lcBanking) << reason;
+
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT q_ptr->finished();
+            return;
+        }
+
+        for (const quint32 uniqueAccountId : std::as_const(result.notOffered)) {
+            qCInfo(lcBanking) << "account" << uniqueAccountId
+                              << "carries no request for standing orders";
+
+            Q_EMIT q_ptr->standingOrdersNotOffered(uniqueAccountId);
+        }
+
+        switch (result.outcome) {
+        case FetchOutcome::Received:
+            for (const quint32 uniqueAccountId : std::as_const(result.failed)) {
+                qCWarning(lcBanking)
+                    << "the bank refused the standing order request of account" << uniqueAccountId;
+
+                Q_EMIT q_ptr->accountFailed(uniqueAccountId);
+            }
+
+            qCDebug(lcBanking) << "fetched" << result.items.size() << "standing orders";
+            Q_EMIT q_ptr->itemsReceived(result.items);
+            break;
+
+        case FetchOutcome::Aborted:
+            qCInfo(lcBanking) << "the standing order fetch was aborted by the user";
+            Q_EMIT q_ptr->aborted();
+            break;
+
+        case FetchOutcome::Failed:
+            qCCritical(lcBanking) << result.reason;
+            Q_EMIT q_ptr->errorOccurred(ErrorCode::BankingFailure, result.reason);
+            break;
+        }
+
+        Q_EMIT q_ptr->finished();
+    }
+
     /** The answer of a run over several accounts, in the thread of this object. */
     void deliverAllSessionsResult()
     {
@@ -768,6 +1056,28 @@ public:
             [this, account, latestStoredDate] { return runSession(account, latestStoredDate); }));
     }
 
+    /**
+     * The account is a copy of its own, for the reason startFetch names.
+     */
+    void startStandingOrderFetch(const std::shared_ptr<Account> &account)
+    {
+        m_isFetching = true;
+        m_fetchedAccountId = account->uniqueId();
+
+        standingOrderWatcher.setFuture(
+            QtConcurrent::run([this, account] { return runStandingOrderSession(account); }));
+    }
+
+    /** The accounts are copies of their own, for the reason startFetch names. */
+    void startAllStandingOrderFetch(const QList<std::shared_ptr<Account>> &accounts)
+    {
+        m_isFetching = true;
+        m_fetchedAccounts = accounts.size();
+
+        allStandingOrderWatcher.setFuture(
+            QtConcurrent::run([this, accounts] { return runAllStandingOrderSessions(accounts); }));
+    }
+
     void finalize()
     {
         // A session reaches into the banking backend from its own thread.
@@ -789,6 +1099,18 @@ public:
         if (const QString failure = exceptionOf([this] { allFetchWatcher.waitForFinished(); });
             !failure.isEmpty()) {
             qCCritical(lcBanking) << "the session over several accounts ended in" << failure;
+        }
+
+        if (const QString failure = exceptionOf([this] { standingOrderWatcher.waitForFinished(); });
+            !failure.isEmpty()) {
+            qCCritical(lcBanking) << "the standing order session ended in" << failure;
+        }
+
+        if (const QString failure = exceptionOf(
+                [this] { allStandingOrderWatcher.waitForFinished(); });
+            !failure.isEmpty()) {
+            qCCritical(lcBanking) << "the standing order session over several accounts ended in"
+                                  << failure;
         }
 
         m_isFetching = false;
@@ -960,6 +1282,8 @@ public:
     AB_BANKING *aqBanking;
     QFutureWatcher<SessionResult> fetchWatcher;
     QFutureWatcher<AllSessionsResult> allFetchWatcher;
+    QFutureWatcher<StandingOrderSessionResult> standingOrderWatcher;
+    QFutureWatcher<AllStandingOrderSessionsResult> allStandingOrderWatcher;
 
 private:
     bool m_isFetching = false;
@@ -997,6 +1321,14 @@ Banking::Banking(ApplicationInfo applicationInfo, QObject *parent)
     connect(&d_ptr->allFetchWatcher, &QFutureWatcherBase::finished, this, [this] {
         d_ptr->deliverAllSessionsResult();
     });
+
+    connect(&d_ptr->standingOrderWatcher, &QFutureWatcherBase::finished, this, [this] {
+        d_ptr->deliverStandingOrderSessionResult();
+    });
+
+    connect(&d_ptr->allStandingOrderWatcher, &QFutureWatcherBase::finished, this, [this] {
+        d_ptr->deliverAllStandingOrderSessionsResult();
+    });
 }
 
 Banking::~Banking()
@@ -1006,6 +1338,8 @@ Banking::~Banking()
     // delivered into freed memory.
     disconnect(&d_ptr->fetchWatcher, nullptr, this, nullptr);
     disconnect(&d_ptr->allFetchWatcher, nullptr, this, nullptr);
+    disconnect(&d_ptr->standingOrderWatcher, nullptr, this, nullptr);
+    disconnect(&d_ptr->allStandingOrderWatcher, nullptr, this, nullptr);
 
     delete d_ptr;
 }
@@ -1118,6 +1452,69 @@ AB_TRANSACTION_LIST2 *Banking::buildFetchCommands(const Account &account,
     appendFetchCommands(commands, account, latestStoredDate, offered);
 
     return commands;
+}
+
+AB_TRANSACTION_LIST2 *Banking::buildStandingOrderCommands(const Account &account,
+                                                          const AB_ACCOUNT_SPEC *offered)
+{
+    AB_TRANSACTION_LIST2 *commands = AB_Transaction_List2_new();
+
+    appendStandingOrderCommand(commands, account, offered);
+
+    return commands;
+}
+
+BankingItems Banking::standingOrdersFromContext(const AB_IMEXPORTER_CONTEXT *context,
+                                                AB_TRANSACTION_LIST2 *commands)
+{
+    const QSet<quint32> failedAccounts = accountsOfFailedCommands(commands);
+
+    BankingItems items = {};
+
+    const AB_IMEXPORTER_ACCOUNTINFO *accountInfo = AB_ImExporterContext_GetFirstAccountInfo(context);
+
+    while (accountInfo != nullptr) {
+        const quint32 uniqueAccountId = AB_ImExporterAccountInfo_GetAccountId(accountInfo);
+
+        if (failedAccounts.contains(uniqueAccountId)) {
+            qCWarning(lcBanking) << "the standing order request of account" << uniqueAccountId
+                                 << "failed, the account is dropped as a whole";
+
+            accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
+            continue;
+        }
+
+        // The type is what tells a standing order from a booking, and nothing
+        // else does: both travel in the same list of the same entry, and the
+        // backend job that brings a standing order in sets the type alone. The
+        // command therefore stays open here, as it does for the bookings.
+        const AB_TRANSACTION *transaction
+            = AB_ImExporterAccountInfo_GetFirstTransaction(accountInfo,
+                                                           AB_Transaction_TypeStandingOrder,
+                                                           AB_Transaction_CommandNone);
+
+        while (transaction != nullptr) {
+            // The account comes from the entry, as it does for a booking: an
+            // order that came over the wire names none of its own. Without one
+            // there is nothing to store it against.
+            auto order = std::make_shared<StandingOrder>(uniqueAccountId, transaction);
+
+            if (order->uniqueAccountId() == 0) {
+                qCWarning(lcBanking)
+                    << "a standing order arrived without an account id and is dropped";
+            } else {
+                items.append(std::move(order));
+            }
+
+            transaction = AB_Transaction_List_FindNextByType(transaction,
+                                                             AB_Transaction_TypeStandingOrder,
+                                                             AB_Transaction_CommandNone);
+        }
+
+        accountInfo = AB_ImExporterAccountInfo_List_Next(accountInfo);
+    }
+
+    return items;
 }
 
 BankingItems Banking::itemsFromContext(const AB_IMEXPORTER_CONTEXT *context,
@@ -1361,4 +1758,118 @@ void Banking::fetchAccounts(const QList<std::shared_ptr<Account>> &accounts,
     }
 
     d_ptr->startFetchAll(reachable, latestStoredDates);
+}
+
+void Banking::fetchStandingOrders(const Account &account)
+{
+    // Reported through the event loop rather than from here, for the reason
+    // fetchAccount names.
+    const auto reportLater = [this](auto report) {
+        QMetaObject::invokeMethod(this, std::move(report), Qt::QueuedConnection);
+    };
+
+    // The refusal reaches across the two kinds of fetch: the instance belongs
+    // to one thread at a time, whichever order it is sending.
+    if (d_ptr->isFetching()) {
+        const QString reason = QStringLiteral("A fetch is already running");
+
+        qCWarning(lcBanking) << reason;
+
+        reportLater([this, reason] { Q_EMIT errorOccurred(ErrorCode::InvalidInput, reason); });
+        return;
+    }
+
+    if (!d_ptr->isInitialized()) {
+        const QString reason = QStringLiteral("The banking backend is not initialized");
+
+        qCCritical(lcBanking) << reason;
+
+        reportLater([this, reason] {
+            Q_EMIT errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT finished();
+        });
+        return;
+    }
+
+    const QString backendName = account.backendName();
+    if (backendName.isEmpty() || backendName.compare(offlineBackendName, Qt::CaseInsensitive) == 0) {
+        const QString reason = tr("The account has no online access");
+        const quint32 uniqueAccountId = account.uniqueId();
+
+        qCInfo(lcBanking) << "account" << uniqueAccountId << "skipped, no online access";
+
+        reportLater([this, uniqueAccountId, reason] {
+            Q_EMIT accountSkipped(uniqueAccountId, reason);
+            Q_EMIT finished();
+        });
+        return;
+    }
+
+    d_ptr->startStandingOrderFetch(std::make_shared<Account>(account.accountSpec()));
+}
+
+void Banking::fetchStandingOrdersForAll(const QList<std::shared_ptr<Account>> &accounts)
+{
+    const auto reportLater = [this](auto report) {
+        QMetaObject::invokeMethod(this, std::move(report), Qt::QueuedConnection);
+    };
+
+    if (d_ptr->isFetching()) {
+        const QString reason = QStringLiteral("A fetch is already running");
+
+        qCWarning(lcBanking) << reason;
+
+        reportLater([this, reason] { Q_EMIT errorOccurred(ErrorCode::InvalidInput, reason); });
+        return;
+    }
+
+    if (!d_ptr->isInitialized()) {
+        const QString reason = QStringLiteral("The banking backend is not initialized");
+
+        qCCritical(lcBanking) << reason;
+
+        reportLater([this, reason] {
+            Q_EMIT errorOccurred(ErrorCode::BankingFailure, reason);
+            Q_EMIT finished();
+        });
+        return;
+    }
+
+    QList<std::shared_ptr<Account>> reachable;
+    QList<quint32> skipped;
+
+    for (const auto &account : accounts) {
+        if (account == nullptr) {
+            continue;
+        }
+
+        const QString backendName = account->backendName();
+
+        if (backendName.isEmpty()
+            || backendName.compare(offlineBackendName, Qt::CaseInsensitive) == 0) {
+            qCInfo(lcBanking) << "account" << account->uniqueId() << "skipped, no online access";
+
+            skipped.append(account->uniqueId());
+            continue;
+        }
+
+        reachable.append(std::make_shared<Account>(account->accountSpec()));
+    }
+
+    if (!skipped.isEmpty()) {
+        const QString reason = tr("The account has no online access");
+
+        reportLater([this, skipped, reason] {
+            for (const quint32 uniqueAccountId : skipped) {
+                Q_EMIT accountSkipped(uniqueAccountId, reason);
+            }
+        });
+    }
+
+    if (reachable.isEmpty()) {
+        reportLater([this] { Q_EMIT finished(); });
+        return;
+    }
+
+    d_ptr->startAllStandingOrderFetch(reachable);
 }
