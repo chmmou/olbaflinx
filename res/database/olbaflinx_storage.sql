@@ -228,6 +228,63 @@ CREATE TABLE IF NOT EXISTS refaccounts
 CREATE INDEX IF NOT EXISTS refaccounts_account_id_index on refaccounts (account_id asc);
 CREATE INDEX IF NOT EXISTS refaccounts_iban_index on refaccounts (iban asc);
 
+-- A standing order is an instruction with a future, a booking a record of the
+-- past. They are kept apart because their identity follows from different
+-- fields: a booking carries a booking date, an order a cycle, so one unique
+-- index over one fingerprint could not hold for both. The read path chooses the
+-- table by the storage type alone, which is what keeps an order out of the
+-- booking view without a condition on any statement of that view.
+CREATE TABLE IF NOT EXISTS standing_orders
+(
+    id                   integer not null
+        constraint standing_orders_id_pk primary key autoincrement,
+    account_id           integer,
+    unique_account_id    unsigned integer,
+    fi_id                varchar,
+    unique_id            unsigned integer,
+    fingerprint          varchar not null,
+    identified_by        integer not null default 2,
+    local_iban           varchar,
+    local_bic            varchar,
+    local_name           varchar,
+    remote_iban          varchar,
+    remote_bic           varchar,
+    remote_name          varchar,
+    `value`              double,
+    currency             varchar,
+    purpose              text,
+    end_to_end_reference varchar,
+    period               integer,
+    `cycle`              unsigned integer,
+    execution_day        unsigned integer,
+    first_date           date,
+    last_date            date,
+    next_date            date,
+    status               integer,
+    ended_at             datetime default null,
+    memo                 text,
+    FOREIGN KEY (account_id) REFERENCES accounts (id)
+);
+
+CREATE INDEX IF NOT EXISTS standing_orders_account_id_index
+    on standing_orders (account_id asc);
+CREATE INDEX IF NOT EXISTS standing_orders_unique_account_id_index
+    on standing_orders (unique_account_id asc);
+CREATE INDEX IF NOT EXISTS standing_orders_fi_id_index
+    on standing_orders (fi_id asc);
+CREATE INDEX IF NOT EXISTS standing_orders_next_date_index
+    on standing_orders (next_date asc);
+
+-- Not over the fingerprint alone, although that one already covers the account.
+-- The pair says the condition out loud instead of resting on a property of the
+-- way the fingerprint is formed.
+--
+-- No unique index stands on fi_id: the column may be null, and SQLite lets
+-- several null values through one, so such an index would look like an
+-- assurance for exactly the case it cannot give one for.
+CREATE UNIQUE INDEX IF NOT EXISTS standing_orders_fingerprint_unique_index
+    on standing_orders (unique_account_id, fingerprint);
+
 CREATE TABLE IF NOT EXISTS migrations
 (
     id         integer not null
@@ -254,4 +311,5 @@ INSERT OR IGNORE INTO migrations (name)
 VALUES ('0001_initial_schema'),
        ('0002_reference_accounts'),
        ('0003_account_active'),
-       ('0004_unique_transactions');
+       ('0004_unique_transactions'),
+       ('0005_standing_orders');

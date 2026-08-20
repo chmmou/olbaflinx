@@ -21,6 +21,7 @@
 #include "core/Banking/Account/Account.h"
 #include "core/Banking/Account/ReferenceAccount.h"
 #include "core/Banking/Balance/Balance.h"
+#include "core/Banking/StandingOrder/StandingOrder.h"
 #include "core/Banking/Transaction/Transaction.h"
 #include "core/Logging.h"
 #include "core/Result.h"
@@ -29,6 +30,7 @@
 
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QDate>
+#include <QtCore/QDateTime>
 #include <QtCore/QFile>
 #include <QtCore/QFutureWatcher>
 #include <QtCore/QMetaEnum>
@@ -54,6 +56,7 @@ using namespace olbaflinx::core;
 using namespace olbaflinx::core::storage;
 using namespace olbaflinx::core::banking;
 using namespace olbaflinx::core::banking::account;
+using namespace olbaflinx::core::banking::standingorder;
 using namespace olbaflinx::core::banking::transaction;
 
 namespace {
@@ -195,6 +198,7 @@ bool isKnownTable(const QString &table)
         QStringLiteral("contacts"),
         QStringLiteral("migrations"),
         QStringLiteral("refaccounts"),
+        QStringLiteral("standing_orders"),
         QStringLiteral("transaction_categories"),
         QStringLiteral("transactions"),
     };
@@ -208,7 +212,7 @@ bool isKnownTable(const QString &table)
  * newer build and is refused; a file below it is brought up by setupTables,
  * whose statements all create what is missing rather than what is new.
  */
-constexpr int CurrentSchemaVersion = 4;
+constexpr int CurrentSchemaVersion = 5;
 
 /**
  * The number a migration name carries in its first four characters. Names
@@ -356,6 +360,49 @@ const QString &transactionInsertQuery()
     return statement;
 }
 
+constexpr auto StandingOrderColumns = QLatin1StringView(
+    "account_id, unique_account_id, fi_id, unique_id, fingerprint, identified_by, "
+    "local_iban, local_bic, local_name, remote_iban, remote_bic, remote_name, `value`, "
+    "currency, purpose, end_to_end_reference, period, `cycle`, execution_day, first_date, "
+    "last_date, next_date, status, memo");
+
+const QString &standingOrderInsertQuery()
+{
+    static const QString statement
+        = QStringLiteral("INSERT INTO standing_orders (%1) VALUES (:account_id, "
+                         ":unique_account_id, :fi_id, :unique_id, :fingerprint, :identified_by, "
+                         ":local_iban, :local_bic, :local_name, :remote_iban, :remote_bic, "
+                         ":remote_name, :value, :currency, :purpose, :end_to_end_reference, "
+                         ":period, :cycle, :execution_day, :first_date, :last_date, :next_date, "
+                         ":status, :memo);")
+              .arg(QString(StandingOrderColumns));
+
+    return statement;
+}
+
+/**
+ * An order that is already there is written whole rather than in the fields that
+ * moved: the fetch reports the current state and the row is to hold it. The mark
+ * goes with it, which is how an order that comes back loses it without a path of
+ * its own.
+ */
+const QString &standingOrderUpdateQuery()
+{
+    static const QString statement = QStringLiteral(
+        "UPDATE standing_orders SET account_id = :account_id, "
+        "unique_account_id = :unique_account_id, fi_id = :fi_id, unique_id = :unique_id, "
+        "fingerprint = :fingerprint, identified_by = :identified_by, local_iban = :local_iban, "
+        "local_bic = :local_bic, local_name = :local_name, remote_iban = :remote_iban, "
+        "remote_bic = :remote_bic, remote_name = :remote_name, `value` = :value, "
+        "currency = :currency, purpose = :purpose, "
+        "end_to_end_reference = :end_to_end_reference, period = :period, `cycle` = :cycle, "
+        "execution_day = :execution_day, first_date = :first_date, last_date = :last_date, "
+        "next_date = :next_date, status = :status, memo = :memo, ended_at = NULL "
+        "WHERE id = :id;");
+
+    return statement;
+}
+
 /**
  * Collects the placeholder names an insert statement carries, without the
  * leading colon. A property whose key is missing from that set would be dropped
@@ -446,6 +493,33 @@ const QMap<QString, QStringList> &expectedColumns()
           QStringLiteral("name"),
           QStringLiteral("migrated"),
           QStringLiteral("created_at")}},
+        {QStringLiteral("standing_orders"),
+         {QStringLiteral("id"),
+          QStringLiteral("account_id"),
+          QStringLiteral("unique_account_id"),
+          QStringLiteral("fi_id"),
+          QStringLiteral("unique_id"),
+          QStringLiteral("fingerprint"),
+          QStringLiteral("identified_by"),
+          QStringLiteral("local_iban"),
+          QStringLiteral("local_bic"),
+          QStringLiteral("local_name"),
+          QStringLiteral("remote_iban"),
+          QStringLiteral("remote_bic"),
+          QStringLiteral("remote_name"),
+          QStringLiteral("value"),
+          QStringLiteral("currency"),
+          QStringLiteral("purpose"),
+          QStringLiteral("end_to_end_reference"),
+          QStringLiteral("period"),
+          QStringLiteral("cycle"),
+          QStringLiteral("execution_day"),
+          QStringLiteral("first_date"),
+          QStringLiteral("last_date"),
+          QStringLiteral("next_date"),
+          QStringLiteral("status"),
+          QStringLiteral("ended_at"),
+          QStringLiteral("memo")}},
     };
 
     return columns;
@@ -1045,6 +1119,13 @@ public:
         auto condition = ReadCondition();
         auto parts = QStringList();
 
+        // An order the last successful fetch no longer reported is kept and
+        // hidden, and the caller does not get to ask for it: the mark says what
+        // the application observed, not what it was asked to show.
+        if (query.type == Storage::StorageStandingOrder) {
+            parts << QStringLiteral("ended_at IS NULL");
+        }
+
         if (query.accountId != 0) {
             parts << QStringLiteral("unique_account_id = :accountId");
             condition.bindings[QStringLiteral(":accountId")] = query.accountId;
@@ -1303,6 +1384,9 @@ public:
                 case Storage::StorageReferenceAccount:
                     bankingItems << ReferenceAccount::fromMap(row);
                     break;
+                case Storage::StorageStandingOrder:
+                    bankingItems << StandingOrder::fromMap(row);
+                    break;
                 case Storage::StorageCategories:
                 case Storage::StorageContacts:
                     Q_UNREACHABLE();
@@ -1420,7 +1504,8 @@ public:
     static Result<int> storeItemOn(const QSqlDatabase &database,
                                    const QString &key,
                                    const QString &fileName,
-                                   const BankingItem *bankingItem)
+                                   const BankingItem *bankingItem,
+                                   QSet<qint64> *touchedStandingOrders = nullptr)
     {
         if (bankingItem == nullptr) {
             return Error(ErrorCode::InvalidInput, QStringLiteral("No banking item to store"));
@@ -1448,6 +1533,14 @@ public:
 
         if (type == QLatin1StringView("Balance")) {
             return storeFetchedBalanceOn(database, key, fileName, bankingItem->toMap());
+        }
+
+        if (type == QLatin1StringView("StandingOrder")) {
+            return storeStandingOrderOn(database,
+                                        key,
+                                        fileName,
+                                        bankingItem->toMap(),
+                                        touchedStandingOrders);
         }
 
         // Category and Contact have no table of their own yet. Answered here,
@@ -1492,6 +1585,244 @@ public:
     }
 
     /**
+     * The row a delivered standing order belongs to, or nought where none does.
+     *
+     * The identifier of the institution comes first, and its uniqueness per
+     * account is not assumed: where several rows carry it, the fingerprint
+     * decides between them, and an order that matches none of them falls through
+     * to the search over the fingerprint alone. That last step is also what finds
+     * an order again which was reported without an identifier the first time and
+     * with one the next, so that it does not become a second order.
+     */
+    static Result<qint64> existingStandingOrderOn(const QSqlDatabase &database,
+                                                  const QString &key,
+                                                  const QString &fileName,
+                                                  const QVariant &uniqueAccountId,
+                                                  const QString &fiId,
+                                                  const QString &fingerprint)
+    {
+        QSqlQuery query;
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
+            return error;
+        }
+
+        if (!fiId.isEmpty()) {
+            if (!query.prepare(QStringLiteral("SELECT id, fingerprint FROM standing_orders WHERE "
+                                              "unique_account_id = :accountId AND fi_id = :fiId "
+                                              "ORDER BY id ASC;"))) {
+                return Error(ErrorCode::DatabaseFailure,
+                             QStringLiteral("Could not prepare the lookup of a standing order: %1")
+                                 .arg(query.lastError().text()));
+            }
+
+            query.bindValue(QStringLiteral(":accountId"), uniqueAccountId);
+            query.bindValue(QStringLiteral(":fiId"), fiId);
+
+            if (!query.exec()) {
+                return Error(ErrorCode::DatabaseFailure,
+                             QStringLiteral("Could not look a standing order up by its "
+                                            "identifier: %1")
+                                 .arg(query.lastError().text()));
+            }
+
+            auto rows = QList<QPair<qint64, QString>>();
+            while (query.next()) {
+                rows.append({query.value(0).toLongLong(), query.value(1).toString()});
+            }
+
+            if (rows.size() == 1) {
+                return rows.constFirst().first;
+            }
+
+            for (const auto &[rowId, storedFingerprint] : std::as_const(rows)) {
+                if (storedFingerprint == fingerprint) {
+                    return rowId;
+                }
+            }
+        }
+
+        if (!query.prepare(QStringLiteral("SELECT id FROM standing_orders WHERE "
+                                          "unique_account_id = :accountId AND "
+                                          "fingerprint = :fingerprint;"))) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the lookup of a standing order: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        query.bindValue(QStringLiteral(":accountId"), uniqueAccountId);
+        query.bindValue(QStringLiteral(":fingerprint"), fingerprint);
+
+        if (!query.exec()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not look a standing order up by its fingerprint: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        return query.next() ? query.value(0).toLongLong() : qint64{0};
+    }
+
+    /**
+     * Writes one standing order and answers with the number of rows it added.
+     *
+     * An order that is already there is updated and adds none. That is what the
+     * count says and what a second fetch of the same account reports: nothing
+     * came in that was not there before.
+     *
+     * The set of rows this run touched is kept by the caller. It is what the
+     * marking below tells a delivered order from one the fetch passed over, and
+     * a row that is touched twice within one run is the limit of the fingerprint
+     * showing itself.
+     */
+    static Result<int> storeStandingOrderOn(const QSqlDatabase &database,
+                                            const QString &key,
+                                            const QString &fileName,
+                                            const QMap<QString, QVariant> &map,
+                                            QSet<qint64> *touchedRows)
+    {
+        auto orderMap = map;
+
+        const auto uniqueAccountId = orderMap.value(QStringLiteral("unique_account_id"));
+
+        const auto accountId = accountIdOfOn(database, key, fileName, uniqueAccountId);
+        if (!accountId.hasValue()) {
+            return Error(ErrorCode::NotFound,
+                         QStringLiteral("No stored account for the standing order of account %1")
+                             .arg(uniqueAccountId.toString()));
+        }
+
+        orderMap[QStringLiteral("account_id")] = accountId.value();
+
+        const auto fingerprint = orderMap.value(QStringLiteral("fingerprint")).toString();
+
+        const auto existing
+            = existingStandingOrderOn(database,
+                                      key,
+                                      fileName,
+                                      uniqueAccountId,
+                                      orderMap.value(QStringLiteral("fi_id")).toString(),
+                                      fingerprint);
+        if (!existing.hasValue()) {
+            return existing.error();
+        }
+
+        if (existing.value() == 0) {
+            const auto written = insertRowOn(database,
+                                             key,
+                                             fileName,
+                                             standingOrderInsertQuery(),
+                                             orderMap,
+                                             QStringLiteral("StandingOrder"));
+            if (!written.hasValue()) {
+                return written.error();
+            }
+
+            if (touchedRows != nullptr) {
+                const auto inserted
+                    = existingStandingOrderOn(database,
+                                              key,
+                                              fileName,
+                                              uniqueAccountId,
+                                              orderMap.value(QStringLiteral("fi_id")).toString(),
+                                              fingerprint);
+                if (!inserted.hasValue()) {
+                    return inserted.error();
+                }
+
+                touchedRows->insert(inserted.value());
+            }
+
+            return written.value();
+        }
+
+        if (touchedRows != nullptr && touchedRows->contains(existing.value())) {
+            // Two orders of one account that agree in every field the fingerprint
+            // is formed over. Whether the institution holds two or reported one
+            // twice is not something this side can tell, so it goes into the log
+            // and no further. The count the run reports is the number of rows
+            // that were actually written.
+            qCWarning(lcStorage) << "two standing orders of account" << uniqueAccountId.toString()
+                                 << "cannot be told apart and were merged into one row";
+        }
+
+        orderMap[QStringLiteral("id")] = existing.value();
+
+        const auto updated = insertRowOn(database,
+                                         key,
+                                         fileName,
+                                         standingOrderUpdateQuery(),
+                                         orderMap,
+                                         QStringLiteral("StandingOrder"));
+        if (!updated.hasValue()) {
+            return updated.error();
+        }
+
+        if (touchedRows != nullptr) {
+            touchedRows->insert(existing.value());
+        }
+
+        // An order that was already there adds no row.
+        return 0;
+    }
+
+    /**
+     * Marks every standing order of one account that this run did not carry.
+     *
+     * Nothing is removed. The mark says that a fetch which went through no longer
+     * reported the order, and an order that comes back loses it again, which a
+     * deleted row could not.
+     */
+    static Error markEndedStandingOrdersOn(const QSqlDatabase &database,
+                                           const QString &key,
+                                           const QString &fileName,
+                                           quint32 uniqueAccountId,
+                                           const QSet<qint64> &touchedRows)
+    {
+        QSqlQuery query;
+        if (const auto error = openQueryOn(database, key, fileName, query); error.isError()) {
+            return error;
+        }
+
+        auto statement = QStringLiteral("UPDATE standing_orders SET ended_at = :endedAt WHERE "
+                                        "unique_account_id = :accountId AND ended_at IS NULL");
+
+        if (!touchedRows.isEmpty()) {
+            // SQL knows no binding for a list, so the row ids are written into
+            // the statement. They are numbers this run read out of the file
+            // itself and turned back into numbers here; nothing a caller wrote
+            // reaches the text.
+            auto ids = QStringList();
+            ids.reserve(touchedRows.size());
+
+            for (const auto rowId : touchedRows) {
+                ids << QString::number(rowId);
+            }
+
+            statement += QStringLiteral(" AND id NOT IN (%1)").arg(ids.join(QLatin1Char(',')));
+        }
+
+        statement += QLatin1Char(';');
+
+        if (!query.prepare(statement)) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not prepare the marking of ended standing "
+                                        "orders: %1")
+                             .arg(query.lastError().text()));
+        }
+
+        query.bindValue(QStringLiteral(":endedAt"), QDateTime::currentDateTime());
+        query.bindValue(QStringLiteral(":accountId"), uniqueAccountId);
+
+        if (!query.exec()) {
+            return Error(ErrorCode::DatabaseFailure,
+                         QStringLiteral("Could not mark the ended standing orders of account "
+                                        "%1: %2")
+                             .arg(QString::number(uniqueAccountId), query.lastError().text()));
+        }
+
+        return {};
+    }
+
+    /**
      * Writes a run of records, in a thread of its own.
      *
      * The connection is cloned rather than shared, for the same reason readItems
@@ -1509,7 +1840,8 @@ public:
                            const QString &sourceConnectionName,
                            const QString &key,
                            const QString &fileName,
-                           BankingItems items)
+                           BankingItems items,
+                           StandingOrderRun standingOrderRun)
     {
         // A name of its own, so that the two connections never collide. The one
         // of StorageConnection already carries a random number.
@@ -1560,8 +1892,16 @@ public:
             auto error = Error();
             int handled = 0;
 
+            // The rows the run wrote or updated. What is not in it when the run
+            // ends is what the fetch no longer reported.
+            auto touchedStandingOrders = QSet<qint64>();
+
             for (const auto &item : std::as_const(items)) {
-                const auto written = storeItemOn(database, key, fileName, item.get());
+                const auto written = storeItemOn(database,
+                                                 key,
+                                                 fileName,
+                                                 item.get(),
+                                                 &touchedStandingOrders);
                 if (!written.hasValue()) {
                     error = written.error();
                     break;
@@ -1571,6 +1911,20 @@ public:
 
                 ++handled;
                 promise.setProgressValue(qMin(handled * 100 / items.size(), 100));
+            }
+
+            // Inside the bracket, so that a run which failed halfway leaves
+            // neither the orders it wrote nor a mark on the ones it did not.
+            // Only a fetch that went through says anything about what the
+            // institution still holds; one that was aborted, that failed, that
+            // the bank refused, or an account that was passed over, says nothing
+            // and marks nothing.
+            if (!error.isError() && standingOrderRun.accountId != 0 && standingOrderRun.succeeded) {
+                error = markEndedStandingOrdersOn(database,
+                                                  key,
+                                                  fileName,
+                                                  standingOrderRun.accountId,
+                                                  touchedStandingOrders);
             }
 
             if (!carriesAccount) {
@@ -2290,7 +2644,7 @@ Error Storage::storeItem(const BankingItem *bankingItem)
     return {};
 }
 
-Error Storage::storeItems(const BankingItems &items)
+Error Storage::storeItems(const BankingItems &items, const StandingOrderRun &standingOrderRun)
 {
     // Answered to the caller and to nobody else. A signal here would reach
     // whoever is waiting for the run that is already going, and that receiver
@@ -2320,7 +2674,11 @@ Error Storage::storeItems(const BankingItems &items)
     // does start reports. A caller makes its connections after the call, on the
     // strength of the return value, and would not be among the receivers of a
     // signal sent before this function came back.
-    if (items.isEmpty()) {
+    //
+    // A standing order fetch is the exception: a run without records is its
+    // answer that the account holds none any more, and that answer marks the
+    // whole holding. It has to reach the write path rather than end here.
+    if (items.isEmpty() && standingOrderRun.accountId == 0) {
         QMetaObject::invokeMethod(
             this,
             [this] {
@@ -2399,7 +2757,8 @@ Error Storage::storeItems(const BankingItems &items)
                                                       sourceConnectionName,
                                                       d_ptr->m_key,
                                                       d_ptr->storageFileName(),
-                                                      items));
+                                                      items,
+                                                      standingOrderRun));
 
     return {};
 }
@@ -2432,8 +2791,21 @@ Error Storage::receiveItems(const ItemQuery &query)
     // The three of the filter bar go over columns of the transactions table as
     // well, and are refused on another type for the same reason: silently
     // dropping them would answer a narrower question with the wider holding.
-    const bool filtered = query.accountId != 0 || !query.text.isEmpty() || query.from.isValid()
-                          || query.to.isValid() || query.direction != Direction::Any;
+    // The account is the exception among the five: standing_orders carries the
+    // column as well, and a read of one account is what that path is for.
+    const bool carriesAccount = query.type == StorageTransaction
+                                || query.type == StorageStandingOrder;
+
+    if (query.accountId != 0 && !carriesAccount) {
+        return refuse(ErrorCode::InvalidInput,
+                      QStringLiteral("An account is defined for bookings and standing orders "
+                                     "only, not for %1")
+                          .arg(QString::fromUtf8(
+                              QMetaEnum::fromType<Storage::Type>().valueToKey(query.type))));
+    }
+
+    const bool filtered = !query.text.isEmpty() || query.from.isValid() || query.to.isValid()
+                          || query.direction != Direction::Any;
 
     if (filtered && query.type != StorageTransaction) {
         return refuse(ErrorCode::InvalidInput,
@@ -2464,6 +2836,9 @@ Error Storage::receiveItems(const ItemQuery &query)
         break;
     case Storage::StorageReferenceAccount:
         table = QStringLiteral("refaccounts");
+        break;
+    case Storage::StorageStandingOrder:
+        table = QStringLiteral("standing_orders");
         break;
     case Storage::StorageCategories:
     case Storage::StorageContacts:
