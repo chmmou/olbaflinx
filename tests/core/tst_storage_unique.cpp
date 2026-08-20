@@ -702,15 +702,18 @@ namespace {
 
 /**
  * Puts a storage back to the state a file carried before this step: the fourth
- * migration undone and the index gone. Nothing else of the schema differs, so
- * this is what an older file looks like from here.
+ * migration undone and the index gone. Every later step goes with it, or the
+ * version would not fall and no step would run at all.
  */
 bool putBackToSchemaThree(const QString &file, const QString &key)
 {
     return TestHelpers::runStatement(file,
                                      key,
-                                     QStringLiteral("DELETE FROM migrations WHERE name LIKE "
-                                                    "'0004%';"))
+                                     QStringLiteral("DELETE FROM migrations WHERE name >= "
+                                                    "'0004';"))
+           && TestHelpers::runStatement(file,
+                                        key,
+                                        QStringLiteral("DROP TABLE IF EXISTS standing_orders;"))
            && TestHelpers::runStatement(file,
                                         key,
                                         QStringLiteral("DROP INDEX IF EXISTS "
@@ -758,7 +761,7 @@ void StorageUniqueTest::aFileAtSchemaThreeIsTakenAndCarriesTheIndex()
 
     QTest::ignoreMessage(QtInfoMsg,
                          QRegularExpression(QStringLiteral("migrated .* from schema version 3 to "
-                                                           "4")));
+                                                           "5")));
 
     Storage storage(applicationInfo());
     QVERIFY(!storage.setKey(password()).isError());

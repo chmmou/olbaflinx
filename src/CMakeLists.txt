@@ -58,6 +58,8 @@ qt_add_library(OlbaFlinxCore STATIC
         core/Banking/Account/ReferenceAccount.h
         core/Banking/Balance/Balance.cpp
         core/Banking/Balance/Balance.h
+        core/Banking/StandingOrder/StandingOrder.cpp
+        core/Banking/StandingOrder/StandingOrder.h
         core/Banking/Transaction/Transaction.cpp
         core/Banking/Transaction/Transaction.h
         core/Logger/Logger.cpp

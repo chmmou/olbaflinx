@@ -34,6 +34,24 @@ using namespace olbaflinx::core::banking;
 namespace olbaflinx::core::storage {
 
 /**
+ * What a run of standing orders tells the write path beyond the records.
+ *
+ * An account of nought means the run is no standing order fetch, and then
+ * nothing of the holding is marked. Only a fetch that went through says anything
+ * about what the institution still holds, so a run that did not succeed marks
+ * nothing either.
+ *
+ * Beside the class rather than inside it: a default argument that falls back on
+ * one of these values needs the type to be complete, and a nested one is not
+ * while the class that holds it is still being defined.
+ */
+struct StandingOrderRun
+{
+    quint32 accountId = 0;
+    bool succeeded = false;
+};
+
+/**
  * The encrypted storage of the application, settings included.
  *
  * Ownership: the creator owns the instance. If a parent is set, the parent
@@ -59,6 +77,7 @@ public:
         StorageTransaction,
         StorageCategories,
         StorageContacts,
+        StorageStandingOrder,
     };
     Q_ENUM(Type);
 
@@ -112,10 +131,12 @@ public:
     {
         Type type = StorageAccount;
 
-        // The identifier the institution assigns, transactions.unique_account_id.
-        // Not the row id of the accounts table: neither Account nor Transaction
-        // carries that one, so the caller could not name it. 0 means no filter,
-        // and a value is only meaningful for StorageTransaction.
+        // The identifier the institution assigns, unique_account_id. Not the row
+        // id of the accounts table: neither Account nor Transaction carries that
+        // one, so the caller could not name it. 0 means no filter.
+        //
+        // Meaningful for bookings and for standing orders; a read of the latter
+        // per account is nothing else. Refused on any other type.
         quint32 accountId = 0;
 
         // Every value of the enumeration names a column of the transactions
@@ -129,8 +150,7 @@ public:
 
         // The filter above the transaction list. Every field is optional; an
         // empty text and an invalid date leave that condition out of the
-        // statement. Like accountId, all four are meaningful for
-        // StorageTransaction alone.
+        // statement. All four are meaningful for StorageTransaction alone.
         //
         // The text is looked for in the name of the other party and in the
         // purpose. It is bound rather than written into the statement, and its
@@ -292,8 +312,17 @@ public:
      * An empty run is no error. It is reported as a run of nought records, and
      * its two signals go out through the event loop, so a caller that connects
      * after the call still receives them.
+     *
+     * The second argument is what a standing order fetch adds: the account it
+     * ran for, and whether it went through. Where it names one, every order of
+     * that account the run did not carry is marked as ended, inside the same
+     * bracket, so a run that fails leaves neither half written. Every order of
+     * the run itself loses the mark. An empty run of a fetch that succeeded is
+     * the answer that the account holds none any more and marks the whole
+     * holding; a run that did not succeed marks nothing.
      */
-    [[nodiscard]] Error storeItems(const BankingItems &items);
+    [[nodiscard]] Error storeItems(const BankingItems &items,
+                                   const StandingOrderRun &standingOrderRun = {});
 
 Q_SIGNALS:
     /**
