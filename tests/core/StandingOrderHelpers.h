@@ -18,7 +18,9 @@
 
 #include "core/Banking/StandingOrder/StandingOrder.h"
 
+#include <aqbanking/types/imexporter_context.h>
 #include <aqbanking/types/transaction.h>
+#include <aqbanking/types/value.h>
 
 #include <gwenhywfar/gwendate.h>
 
@@ -93,10 +95,26 @@ public:
      */
     static std::shared_ptr<StandingOrder> fromBackend(const StandingOrderSpec &spec = {})
     {
+        AB_TRANSACTION *abTransaction = transactionFromBackend(spec);
+
+        auto order = std::make_shared<StandingOrder>(abTransaction);
+        AB_Transaction_free(abTransaction);
+
+        return order;
+    }
+
+    /**
+     * The record itself, as the banking backend reports one. The caller owns it
+     * and either releases it or hands it to a container that takes it over.
+     */
+    static AB_TRANSACTION *transactionFromBackend(const StandingOrderSpec &spec = {})
+    {
         AB_TRANSACTION *abTransaction = AB_Transaction_new();
 
+        // No command is set. The backend job that brings a standing order in
+        // sets the type and nothing else, so a record that carried one would be
+        // a container no bank ever sends.
         AB_Transaction_SetType(abTransaction, AB_Transaction_TypeStandingOrder);
-        AB_Transaction_SetCommand(abTransaction, AB_Transaction_CommandGetStandingOrders);
         AB_Transaction_SetStatus(abTransaction, spec.status);
         AB_Transaction_SetUniqueId(abTransaction, spec.uniqueId);
         AB_Transaction_SetUniqueAccountId(abTransaction, spec.uniqueAccountId);
@@ -127,10 +145,7 @@ public:
         AB_Transaction_SetValue(abTransaction, value);
         AB_Value_free(value);
 
-        auto order = std::make_shared<StandingOrder>(abTransaction);
-        AB_Transaction_free(abTransaction);
-
-        return order;
+        return abTransaction;
     }
 
     /**
@@ -166,6 +181,53 @@ public:
             {QStringLiteral("memo"), spec.memo},
             {QStringLiteral("fingerprint"), spec.fingerprint},
         };
+    }
+
+    /**
+     * Puts standing orders of one account into a container a session would have
+     * filled.
+     *
+     * The entry is looked up the way BankingHelpers builds it, so a container
+     * may carry bookings and standing orders of the same account side by side.
+     * The account number and the IBAN have to agree with the ones used there:
+     * the lookup of the backend falls through to them, and two entries that
+     * share them would be one.
+     *
+     * Every order carries the type, and that is what tells it from a booking.
+     * The account stays empty on the order itself, as it does on a booking:
+     * only the entry it sits in names it.
+     */
+    static void addStandingOrdersToContext(AB_IMEXPORTER_CONTEXT *context,
+                                           quint32 uniqueAccountId,
+                                           int count,
+                                           const QString &fiIdPrefix = {})
+    {
+        const QString accountNumber = QString::number(uniqueAccountId).rightJustified(10, u'0');
+        const QByteArray localAccountNumber = accountNumber.toLatin1();
+        const QByteArray localIban = (QStringLiteral("DE0212030000") + accountNumber).toLatin1();
+
+        AB_IMEXPORTER_ACCOUNTINFO *info
+            = AB_ImExporterContext_GetOrAddAccountInfo(context,
+                                                       uniqueAccountId,
+                                                       localIban.constData(),
+                                                       "12030000",
+                                                       localAccountNumber.constData(),
+                                                       AB_AccountType_Checking);
+
+        for (int index = 0; index < count; ++index) {
+            auto spec = StandingOrderSpec{};
+            spec.uniqueAccountId = uniqueAccountId;
+            spec.uniqueId = static_cast<quint32>(index + 1);
+            spec.value = 10.0 + index;
+            spec.purpose = QStringLiteral("Order %1").arg(index);
+            spec.remoteName = QStringLiteral("Partner %1").arg(index);
+
+            if (!fiIdPrefix.isEmpty()) {
+                spec.fiId = fiIdPrefix + QString::number(index);
+            }
+
+            AB_ImExporterAccountInfo_AddTransaction(info, transactionFromBackend(spec));
+        }
     }
 
     /**

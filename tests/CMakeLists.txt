@@ -61,6 +61,8 @@ olbaflinx_add_test(tst_storage_standingorders core/tst_storage_standingorders.cp
         OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_banking core/tst_banking.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_banking_fetch core/tst_banking_fetch.cpp OlbaFlinxCore::OlbaFlinxCore)
+olbaflinx_add_test(tst_banking_standingorders core/tst_banking_standingorders.cpp
+        OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_account core/tst_account.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_referenceaccount core/tst_referenceaccount.cpp OlbaFlinxCore::OlbaFlinxCore)
 olbaflinx_add_test(tst_transaction core/tst_transaction.cpp OlbaFlinxCore::OlbaFlinxCore)
