@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include "ui/Models/StandingOrderTableModel.h"
 #include "ui/Models/TransactionTableModel.h"
 
 #include <QtWidgets/QMainWindow>
@@ -64,6 +65,22 @@ public:
         AccountWithoutTransactions,
     };
     Q_ENUM(TransactionNotice)
+
+    /**
+     * Why the standing order view has nothing to show.
+     *
+     * The same three states the transaction view knows, for the same reason: a
+     * blank area could as well be a failure. An account whose orders have all
+     * ended lands in the third of them, and that it cannot be told from an
+     * account that never had one is the answer of the specification, not an
+     * oversight.
+     */
+    enum class StandingOrderNotice {
+        NoAccountSelected,
+        BankSelected,
+        AccountWithoutStandingOrders,
+    };
+    Q_ENUM(StandingOrderNotice)
 
     /**
      * Clears the filter bar and with it the restriction on the model.
@@ -166,6 +183,29 @@ public:
      * nullptr detaches the view.
      */
     void setTransactionModel(olbaflinx::ui::models::TransactionTableModel *model);
+
+    /**
+     * Hands the standing orders to the view and takes over the empty states.
+     *
+     * As long as the model reports no row, the notice for the state set through
+     * setStandingOrderNotice() stands in place of the table.
+     *
+     * The concrete type, not the interface: the view follows the order of the
+     * model, and only the model says which column carries it.
+     *
+     * The model is owned elsewhere and has to outlive this widget. Passing
+     * nullptr detaches the view.
+     */
+    void setStandingOrderModel(olbaflinx::ui::models::StandingOrderTableModel *model);
+
+    /**
+     * Says why the standing order view is empty.
+     *
+     * Only read while the model reports no row. Whoever changes the selection
+     * sets it along with the account, so that the right text is in place by the
+     * time the read comes back empty.
+     */
+    void setStandingOrderNotice(StandingOrderNotice notice);
 
     /**
      * Reads the transactions again and puts the view back where it stood.

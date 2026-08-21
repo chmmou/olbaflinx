@@ -24,6 +24,7 @@
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
 #include "ui/Models/AccountTreeModel.h"
+#include "ui/Models/StandingOrderTableModel.h"
 #include "ui/Models/TransactionTableModel.h"
 #include "ui/Storage/StorageDialog.h"
 
@@ -123,6 +124,7 @@ public:
         , storage(appStorage)
         , accountTreeModel(new AccountTreeModel(app))
         , transactionTableModel(new TransactionTableModel(app))
+        , standingOrderTableModel(new StandingOrderTableModel(app))
         , fetch(new AccountFetch(std::move(info), appStorage, app))
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
@@ -166,6 +168,11 @@ public:
         // never reaches either of the two above. The model says so itself.
         QObject::connect(transactionTableModel,
                          &TransactionTableModel::readRefused,
+                         q_ptr,
+                         &App::showError);
+
+        QObject::connect(standingOrderTableModel,
+                         &StandingOrderTableModel::readRefused,
                          q_ptr,
                          &App::showError);
 
@@ -758,6 +765,10 @@ public:
             transactionTableModel->setAccountId(0);
             ui->appCentralWidget->setTransactionNotice(
                 AppCentralWidget::TransactionNotice::NoAccountSelected);
+
+            standingOrderTableModel->setAccountId(0);
+            ui->appCentralWidget->setStandingOrderNotice(
+                AppCentralWidget::StandingOrderNotice::NoAccountSelected);
             return;
         }
 
@@ -765,12 +776,20 @@ public:
             transactionTableModel->setAccountId(0);
             ui->appCentralWidget->setTransactionNotice(
                 AppCentralWidget::TransactionNotice::BankSelected);
+
+            standingOrderTableModel->setAccountId(0);
+            ui->appCentralWidget->setStandingOrderNotice(
+                AppCentralWidget::StandingOrderNotice::BankSelected);
             return;
         }
 
         transactionTableModel->setAccountId(uniqueId.toUInt());
         ui->appCentralWidget->setTransactionNotice(
             AppCentralWidget::TransactionNotice::AccountWithoutTransactions);
+
+        standingOrderTableModel->setAccountId(uniqueId.toUInt());
+        ui->appCentralWidget->setStandingOrderNotice(
+            AppCentralWidget::StandingOrderNotice::AccountWithoutStandingOrders);
     }
 
     /**
@@ -959,6 +978,9 @@ public:
         transactionTableModel->setStorage(storage);
         ui->appCentralWidget->setTransactionModel(transactionTableModel);
 
+        standingOrderTableModel->setStorage(storage);
+        ui->appCentralWidget->setStandingOrderModel(standingOrderTableModel);
+
         setUpAccountSelection();
 
         // The overview is the first page of the central area. It needs the
@@ -981,6 +1003,7 @@ public:
     Storage *storage;
     AccountTreeModel *accountTreeModel;
     TransactionTableModel *transactionTableModel;
+    StandingOrderTableModel *standingOrderTableModel;
 
     // Owned by the window through the object hierarchy. It holds the banking
     // instance of the window and comes up on the first fetch, so a window that
@@ -1096,6 +1119,7 @@ void App::closeStorage()
     // that was shown go with it as well. Neither does the filter: it survives a
     // change of account, not the storage it was set in.
     d_ptr->transactionTableModel->setAccountId(0);
+    d_ptr->standingOrderTableModel->setAccountId(0);
     d_ptr->ui->appCentralWidget->resetTransactionFilter();
 
     // Building the overview is the moment an entry whose file went away leaves
@@ -1136,17 +1160,18 @@ void App::showError(ErrorCode code, const QString &reason)
     // A failed read is not an empty storage, and the views must not fall into
     // the notice that says nothing is there.
     //
-    // Which view it belongs to is what the transaction model answers: while it
-    // is reading, the failure is about the transactions, and the accounts on the
-    // left are readable. A notice at that view would point at a holding that is
-    // in order and hide the tree that shows it.
+    // Which view it belongs to is what the two models of the second page
+    // answer: while one of them is reading, the failure is about what it shows,
+    // and the accounts on the left are readable. A notice at that view would
+    // point at a holding that is in order and hide the tree that shows it.
     //
     // A fetch is the third origin. It reads nothing, so the question above would
     // hand its failure to the accounts, and the tree it covered would be in
     // perfect order. The status bar above carries it, and the outcome of the
     // fetch follows with what it means.
     if (d_ptr->ui->appCentralWidget->page() == AppCentralWidget::Page::Banking
-        && !d_ptr->fetchIsRunning && !d_ptr->transactionTableModel->isReading()) {
+        && !d_ptr->fetchIsRunning && !d_ptr->transactionTableModel->isReading()
+        && !d_ptr->standingOrderTableModel->isReading()) {
         d_ptr->ui->appCentralWidget->showAccountsUnreadable(message);
     }
 }

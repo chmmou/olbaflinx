@@ -74,6 +74,8 @@ olbaflinx_add_test(tst_accounttreemodel ui/tst_accounttreemodel.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_transactiontablemodel ui/tst_transactiontablemodel.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_standingordertablemodel ui/tst_standingordertablemodel.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_storagedialog ui/tst_storagedialog.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 olbaflinx_add_test(tst_apperrorhandling ui/tst_apperrorhandling.cpp
