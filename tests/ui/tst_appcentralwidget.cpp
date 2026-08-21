@@ -23,6 +23,7 @@
 #include "core/Storage/Storage.h"
 #include "ui/App.h"
 #include "ui/Models/AccountTreeModel.h"
+#include "ui/Models/StandingOrderTableModel.h"
 #include "ui/Models/TransactionTableModel.h"
 #include "ui/Storage/StorageDialog.h"
 
@@ -41,6 +42,7 @@
 #include <QtWidgets/QStackedWidget>
 #include <QtWidgets/QStatusBar>
 #include <QtWidgets/QTableView>
+#include <QtWidgets/QTabWidget>
 #include <QtWidgets/QToolBar>
 #include <QtWidgets/QTreeView>
 
@@ -102,6 +104,26 @@ private:
         return widget.findChild<QLabel *>(QStringLiteral("labelTransactionsNotice"));
     }
 
+    static QStackedWidget *standingOrderPagesOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QStackedWidget *>(QStringLiteral("stackedWidgetStandingOrders"));
+    }
+
+    static QLabel *standingOrderHeadlineOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QLabel *>(QStringLiteral("labelStandingOrdersHeadline"));
+    }
+
+    static QLabel *standingOrderNoticeOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QLabel *>(QStringLiteral("labelStandingOrdersNotice"));
+    }
+
+    static QTableView *standingOrderViewOf(const AppCentralWidget &widget)
+    {
+        return widget.findChild<QTableView *>(QStringLiteral("tableViewStandingOrders"));
+    }
+
     static QWidget *filterBarOf(const AppCentralWidget &widget)
     {
         return widget.findChild<QWidget *>(QStringLiteral("widgetTransactionFilter"));
@@ -161,6 +183,8 @@ private Q_SLOTS:
     void cleanup();
 
     void theEmptyTransactionViewNamesItsReason();
+    void theEmptyStandingOrderViewNamesItsReason();
+    void theStandingOrderViewSitsInTheTabThatWasKeptForIt();
     void choosingAnAccountShowsItsTransactionsAndABankClearsThem();
     void anAccountThatBecomesInactiveTakesTheSelectionWithIt();
     void openingAStorageLeavesNoAccountSelected();
@@ -261,6 +285,61 @@ void AppCentralWidgetTest::theEmptyTransactionViewNamesItsReason()
  * is no choice of an account, so the list of the account before does not stay
  * standing under it.
  */
+void AppCentralWidgetTest::theEmptyStandingOrderViewNamesItsReason()
+{
+    AppCentralWidget widget;
+    StandingOrderTableModel model;
+
+    widget.setStandingOrderModel(&model);
+
+    auto *pages = standingOrderPagesOf(widget);
+    auto *headline = standingOrderHeadlineOf(widget);
+    auto *notice = standingOrderNoticeOf(widget);
+
+    QVERIFY(pages != nullptr);
+    QVERIFY(headline != nullptr);
+    QVERIFY(notice != nullptr);
+
+    widget.setStandingOrderNotice(AppCentralWidget::StandingOrderNotice::NoAccountSelected);
+
+    QCOMPARE(pages->currentWidget(), notice->parentWidget());
+    QVERIFY(!headline->text().isEmpty());
+    QVERIFY(!notice->text().isEmpty());
+
+    const QString headlineWithoutAnAccount = headline->text();
+    const QString noticeWithoutAnAccount = notice->text();
+
+    widget.setStandingOrderNotice(AppCentralWidget::StandingOrderNotice::BankSelected);
+
+    QCOMPARE(headline->text(), headlineWithoutAnAccount);
+    QVERIFY(notice->text() != noticeWithoutAnAccount);
+    QVERIFY(!notice->text().isEmpty());
+
+    widget.setStandingOrderNotice(
+        AppCentralWidget::StandingOrderNotice::AccountWithoutStandingOrders);
+
+    QVERIFY(headline->text() != headlineWithoutAnAccount);
+    QVERIFY(notice->text() != noticeWithoutAnAccount);
+}
+
+void AppCentralWidgetTest::theStandingOrderViewSitsInTheTabThatWasKeptForIt()
+{
+    AppCentralWidget widget;
+
+    auto *const tabs = widget.findChild<QTabWidget *>(QStringLiteral("tabWidgetBanking"));
+    auto *const tab = widget.findChild<QWidget *>(QStringLiteral("tabStandingOrders"));
+    auto *const view = standingOrderViewOf(widget);
+
+    QVERIFY(tabs != nullptr);
+    QVERIFY(tab != nullptr);
+    QVERIFY(view != nullptr);
+
+    // The view is inside that tab and the tab is one of the tab widget's, so
+    // nothing of it lives in an area of its own.
+    QVERIFY(tabs->indexOf(tab) >= 0);
+    QVERIFY(tab->isAncestorOf(view));
+}
+
 void AppCentralWidgetTest::choosingAnAccountShowsItsTransactionsAndABankClearsThem()
 {
     Logger logger;

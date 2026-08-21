@@ -77,12 +77,15 @@ public:
         // one of their own for an assistive tool to announce.
         ui->treeViewBankingAccounts->setAccessibleName(AppCentralWidget::tr("Accounts"));
         ui->tableViewTransactions->setAccessibleName(AppCentralWidget::tr("Transactions"));
+        ui->tableViewStandingOrders->setAccessibleName(AppCentralWidget::tr("Standing orders"));
 
         setUpTransactionFilter();
         setUpTransactionSorting();
+        setUpStandingOrderView();
 
         applyAccountNotice();
         applyTransactionNotice();
+        applyStandingOrderNotice();
     }
 
     /**
@@ -134,6 +137,200 @@ public:
 
         header->setSortIndicator(column,
                                  alreadyAscending ? Qt::DescendingOrder : Qt::AscendingOrder);
+    }
+
+    /**
+     * Sets the standing order view up: how a row grows, and the way to the
+     * ordering that needs no mouse.
+     *
+     * Which column gives way is not decided here. A section carries a mode of
+     * its own only once a model gives the header its sections, and a header
+     * without one has no section to take it.
+     */
+    void setUpStandingOrderView()
+    {
+        auto *const view = ui->tableViewStandingOrders;
+
+        view->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+        view->verticalHeader()->setVisible(false);
+
+        // Wrapping alone does not keep a text whole. The delegate shortens what
+        // does not fit and puts three dots in its place, so a payee of two words
+        // loses the end of the first one even though the row has lines to spare.
+        //
+        // Without eliding every word that its column can hold is shown in full.
+        // What is left is the word wider than the column itself: it is cut at
+        // the edge, because the layout of an item breaks between words and not
+        // inside one. That is the limit of this way and it is reported.
+        view->setTextElideMode(Qt::ElideNone);
+
+        // The header is the only place that offers the ordering, and a
+        // QHeaderView takes no keyboard focus. The action sits on the table
+        // instead, the way the transaction view holds it.
+        auto *const sort = new QAction(AppCentralWidget::tr("&Sort By This Column"), view);
+        sort->setObjectName(QStringLiteral("actionSortStandingOrders"));
+        sort->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
+        sort->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+
+        QObject::connect(sort, &QAction::triggered, q_ptr, [this] {
+            sortStandingOrdersByCurrentColumn();
+        });
+
+        view->addAction(sort);
+        view->setContextMenuPolicy(Qt::ActionsContextMenu);
+    }
+
+    void sortStandingOrdersByCurrentColumn() const
+    {
+        auto *const view = ui->tableViewStandingOrders;
+        if (view->model() == nullptr) {
+            return;
+        }
+
+        auto *const header = view->horizontalHeader();
+
+        // The ordering resets the model and the current cell goes with it, so a
+        // second press has none to read. The column that carries the indicator
+        // is the one it worked on, and taking it back up is what turns the order
+        // around.
+        const QModelIndex current = view->currentIndex();
+        const int column = current.isValid() ? current.column() : header->sortIndicatorSection();
+
+        const bool alreadyAscending = header->sortIndicatorSection() == column
+                                      && header->sortIndicatorOrder() == Qt::AscendingOrder;
+
+        header->setSortIndicator(column,
+                                 alreadyAscending ? Qt::DescendingOrder : Qt::AscendingOrder);
+    }
+
+    void setStandingOrderModel(StandingOrderTableModel *model)
+    {
+        if (standingOrderModel) {
+            QObject::disconnect(standingOrderModel, nullptr, q_ptr, nullptr);
+        }
+
+        standingOrderModel = model;
+        ui->tableViewStandingOrders->setModel(model);
+
+        if (model != nullptr) {
+            // Now and not at setup: the sections exist with the model and not
+            // before it. Payee and purpose take what is left over, because both
+            // of them run over several lines where they are longer than their
+            // column; the other three take what they need.
+            auto *const header = ui->tableViewStandingOrders->horizontalHeader();
+
+            header->setSectionResizeMode(StandingOrderTableModel::RemoteNameColumn,
+                                         QHeaderView::Stretch);
+            header->setSectionResizeMode(StandingOrderTableModel::PurposeColumn,
+                                         QHeaderView::Stretch);
+            header->setSectionResizeMode(StandingOrderTableModel::NextDateColumn,
+                                         QHeaderView::ResizeToContents);
+            header->setSectionResizeMode(StandingOrderTableModel::IntervalColumn,
+                                         QHeaderView::ResizeToContents);
+            header->setSectionResizeMode(StandingOrderTableModel::ValueColumn,
+                                         QHeaderView::ResizeToContents);
+        }
+
+        // Without a model there is nothing to order. The indicator is set before
+        // sorting is switched on, because switching it on orders by whatever the
+        // indicator says at that moment.
+        ui->tableViewStandingOrders->setSortingEnabled(false);
+
+        if (standingOrderModel) {
+            const auto refresh = [this] {
+                // A row that runs over several lines is only as high as its text
+                // once the text is there.
+                ui->tableViewStandingOrders->resizeRowsToContents();
+
+                applyStandingOrderNotice();
+            };
+
+            QObject::connect(standingOrderModel, &QAbstractItemModel::modelReset, q_ptr, refresh);
+            QObject::connect(standingOrderModel, &QAbstractItemModel::rowsInserted, q_ptr, refresh);
+            QObject::connect(standingOrderModel, &QAbstractItemModel::rowsRemoved, q_ptr, refresh);
+
+            // The model orders by something else on its own where the storage is
+            // given up, and the indicator has to follow it there.
+            QObject::connect(standingOrderModel,
+                             &StandingOrderTableModel::sortChanged,
+                             q_ptr,
+                             [this](int column, Qt::SortOrder order) {
+                                 ui->tableViewStandingOrders->horizontalHeader()
+                                     ->setSortIndicator(column, order);
+                             });
+
+            ui->tableViewStandingOrders->horizontalHeader()
+                ->setSortIndicator(standingOrderModel->sortColumn(),
+                                   standingOrderModel->sortOrder());
+            ui->tableViewStandingOrders->setSortingEnabled(true);
+        }
+
+        applyStandingOrderNotice();
+    }
+
+    void setStandingOrderNotice(AppCentralWidget::StandingOrderNotice notice)
+    {
+        standingOrderNotice = notice;
+
+        applyStandingOrderNotice();
+    }
+
+    /**
+     * Decides between the table and the notice that stands in for it, and puts
+     * the words of the current state into that notice.
+     */
+    void applyStandingOrderNotice()
+    {
+        if (standingOrderModel != nullptr && standingOrderModel->rowCount() > 0) {
+            ui->stackedWidgetStandingOrders->setCurrentWidget(ui->pageStandingOrderTable);
+            return;
+        }
+
+        // Choosing a bank is no choice of an account, so it shares the headline
+        // of the state where nothing is chosen at all.
+        const bool withoutAnAccount
+            = standingOrderNotice
+              != AppCentralWidget::StandingOrderNotice::AccountWithoutStandingOrders;
+
+        ui->labelStandingOrdersHeadline->setText(withoutAnAccount
+                                                     ? AppCentralWidget::tr("No account selected")
+                                                     : AppCentralWidget::tr("No standing orders"));
+
+        switch (standingOrderNotice) {
+        case AppCentralWidget::StandingOrderNotice::NoAccountSelected:
+            ui->labelStandingOrdersNotice->setText(
+                AppCentralWidget::tr("Choose an account on the left to see its standing orders."));
+            break;
+        case AppCentralWidget::StandingOrderNotice::BankSelected:
+            ui->labelStandingOrdersNotice->setText(
+                AppCentralWidget::tr("A bank only groups the accounts it keeps. Choose one of them "
+                                     "to see its standing orders."));
+            break;
+        case AppCentralWidget::StandingOrderNotice::AccountWithoutStandingOrders:
+            ui->labelStandingOrdersNotice->setText(
+                AppCentralWidget::tr("This account holds no standing orders yet."));
+            break;
+        }
+
+        ui->stackedWidgetStandingOrders->setCurrentWidget(ui->pageStandingOrdersNotice);
+
+        announceStandingOrderNotice();
+    }
+
+    /**
+     * Has the assistive tools read out what the area now says, the way the
+     * transaction view does it and for the same reason: a label that changes its
+     * text raises no event of its own.
+     */
+    void announceStandingOrderNotice()
+    {
+        const auto message = QStringLiteral("%1. %2").arg(ui->labelStandingOrdersHeadline->text(),
+                                                          ui->labelStandingOrdersNotice->text());
+
+        QAccessibleAnnouncementEvent event(ui->labelStandingOrdersHeadline, message);
+        event.setPoliteness(QAccessible::AnnouncementPoliteness::Polite);
+
+        QAccessible::updateAccessibility(&event);
     }
 
     /**
@@ -510,9 +707,12 @@ public:
 private:
     QAbstractItemModel *accountModel;
     TransactionTableModel *transactionModel = nullptr;
+    StandingOrderTableModel *standingOrderModel = nullptr;
     QTimer *searchTimer = nullptr;
     AppCentralWidget::TransactionNotice transactionNotice
         = AppCentralWidget::TransactionNotice::NoAccountSelected;
+    AppCentralWidget::StandingOrderNotice standingOrderNotice
+        = AppCentralWidget::StandingOrderNotice::NoAccountSelected;
     QString unreadable;
     App *app;
     AppCentralWidget *q_ptr;
@@ -581,6 +781,16 @@ void AppCentralWidget::refreshTransactions()
 void AppCentralWidget::setTransactionNotice(TransactionNotice notice)
 {
     d_ptr->setTransactionNotice(notice);
+}
+
+void AppCentralWidget::setStandingOrderModel(StandingOrderTableModel *model)
+{
+    d_ptr->setStandingOrderModel(model);
+}
+
+void AppCentralWidget::setStandingOrderNotice(StandingOrderNotice notice)
+{
+    d_ptr->setStandingOrderNotice(notice);
 }
 
 void AppCentralWidget::setPage(Page page)

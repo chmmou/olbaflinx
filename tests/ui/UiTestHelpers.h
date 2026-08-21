@@ -61,11 +61,29 @@ public:
      *
      * The connection holds for this one read. A standing one would hand the
      * transactions of an account to the account tree as well and leave it empty.
+     * It is made once the read has started, for the same reason: while the way
+     * to the storage is still held by somebody else, a result of theirs would
+     * reach it.
      */
     static bool readAccountsInto(App &app, Storage &storage)
     {
         auto *const overview = app.findChild<StorageDialog *>();
         if (overview == nullptr) {
+            return false;
+        }
+
+        Q_EMIT overview->storageOpened();
+
+        // The storage takes one read at a time, and the second page carries two
+        // models that read on a choice of account. A refusal is that moment and
+        // not a failure, so the read is asked for again until it starts.
+        const bool started = QTest::qWaitFor(
+            [&storage] {
+                return !storage.receiveItems({.type = Storage::StorageAccount}).isError();
+            },
+            workerTimeoutMs);
+
+        if (!started) {
             return false;
         }
 
@@ -75,13 +93,7 @@ public:
                          &App::setAccounts,
                          Qt::SingleShotConnection);
 
-        Q_EMIT overview->storageOpened();
-
         QSignalSpy finishedSpy(&storage, &Storage::readFinished);
-
-        if (storage.receiveItems({.type = Storage::StorageAccount}).isError()) {
-            return false;
-        }
 
         return finishedSpy.wait(workerTimeout);
     }
