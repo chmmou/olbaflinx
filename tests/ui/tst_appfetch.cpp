@@ -24,6 +24,7 @@
 #include "ui/App.h"
 #include "ui/AppCentralWidget.h"
 #include "ui/BankingGui.h"
+#include "ui/BankingSession.h"
 #include "ui/ErrorMessage.h"
 #include "ui/Models/AccountTreeModel.h"
 #include "ui/Models/TransactionTableModel.h"
@@ -817,10 +818,12 @@ void AppFetchTest::theRegistrationKeyIsNotEmptyWhenTheBankingLayerComesUp()
     auto withoutAKey = applicationInfo();
     withoutAKey.registrationKey.clear();
 
-    AccountFetch fetch(withoutAKey, &storage);
+    BankingSession sessionWithoutAKey(withoutAKey);
+    AccountFetch fetch(&sessionWithoutAKey, &storage);
     QVERIFY(fetch.initialize().isError());
 
-    AccountFetch withAKey(applicationInfo(), &storage);
+    BankingSession session(applicationInfo());
+    AccountFetch withAKey(&session, &storage);
     QVERIFY2(!withAKey.initialize().isError(), "the banking layer refused a key that is there");
 
     // The value the application signs on with is the one place it stands.
@@ -850,7 +853,8 @@ void AppFetchTest::theWindowComesUpBesideAnInstanceOfTheWizard()
                               wizardGui->getCInterface())
                  .isError());
 
-    AccountFetch fetch(applicationInfo(), &storage);
+    BankingSession session(applicationInfo());
+    AccountFetch fetch(&session, &storage);
     QVERIFY(!fetch.initialize().isError());
 
     // The wizard is still usable afterwards, and both go down in the order the

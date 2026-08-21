@@ -102,6 +102,8 @@ olbaflinx_add_test(tst_bankinggui ui/tst_bankinggui.cpp
 # banking backend, so it needs a home of its own for the configuration.
 olbaflinx_add_test(tst_appfetch ui/tst_appfetch.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+olbaflinx_add_test(tst_standingorderfetch ui/tst_standingorderfetch.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 
 # The only test that reaches for the docking library itself. OlbaFlinxUi links
 # it privately, which carries the symbols but not the right to name its types.

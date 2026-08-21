@@ -125,6 +125,8 @@ qt_add_library(OlbaFlinxUi STATIC
         ui/AppCentralWidget.ui
         ui/BankingGui.cpp
         ui/BankingGui.h
+        ui/BankingSession.cpp
+        ui/BankingSession.h
         ui/ErrorMessage.cpp
         ui/ErrorMessage.h
         ui/Logging.cpp
@@ -142,6 +144,8 @@ qt_add_library(OlbaFlinxUi STATIC
         ui/Models/StandingOrderTableModel.h
         ui/Models/TransactionTableModel.cpp
         ui/Models/TransactionTableModel.h
+        ui/StandingOrderFetch.cpp
+        ui/StandingOrderFetch.h
         ui/Storage/NewStorageDialog.cpp
         ui/Storage/NewStorageDialog.h
         ui/Storage/NewStorageDialog.ui

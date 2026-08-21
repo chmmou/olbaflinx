@@ -21,11 +21,13 @@
 #include "ui/AccountFetch.h"
 #include "ui/AppCentralWidget.h"
 #include "ui/Assistant/SetupAssistant.h"
+#include "ui/BankingSession.h"
 #include "ui/ErrorMessage.h"
 #include "ui/Logging.h"
 #include "ui/Models/AccountTreeModel.h"
 #include "ui/Models/StandingOrderTableModel.h"
 #include "ui/Models/TransactionTableModel.h"
+#include "ui/StandingOrderFetch.h"
 #include "ui/Storage/StorageDialog.h"
 
 #include "ui_App.h"
@@ -125,7 +127,9 @@ public:
         , accountTreeModel(new AccountTreeModel(app))
         , transactionTableModel(new TransactionTableModel(app))
         , standingOrderTableModel(new StandingOrderTableModel(app))
-        , fetch(new AccountFetch(std::move(info), appStorage, app))
+        , session(new BankingSession(std::move(info), app))
+        , fetch(new AccountFetch(session, appStorage, app))
+        , standingOrderFetch(new StandingOrderFetch(session, appStorage, app))
         , ui(new Ui::UiApp)
         , dockManager(nullptr)
         , centralDockWidget(nullptr)
@@ -270,18 +274,33 @@ public:
             fetchEveryAccount();
         });
 
+        // The two of the standing orders, beside those of the bookings and not
+        // in place of them: an order the bank refuses for the one must not take
+        // the other with it, so each kind of fetch has its own command.
+        QObject::connect(ui->appFetchStandingOrdersAction, &QAction::triggered, q_ptr, [this] {
+            fetchStandingOrdersOfTheChosenAccount();
+        });
+
+        QObject::connect(ui->appFetchAllStandingOrdersAction, &QAction::triggered, q_ptr, [this] {
+            fetchStandingOrdersOfEveryAccount();
+        });
+
         // The third way to the command, beside the menu and the tool bar. A
         // plain addAction would leave it unreachable: the tree stands on the
         // default policy and shows no menu of its own for the actions it holds.
         auto *const accountView = ui->appCentralWidget->accountWidget();
         accountView->addAction(ui->appFetchTransactionsAction);
+        accountView->addAction(ui->appFetchStandingOrdersAction);
         accountView->setContextMenuPolicy(Qt::ActionsContextMenu);
 
         setUpFetch();
+        setUpStandingOrderFetch();
 
         ui->appToolBar->addAction(ui->appSetupAssistantAction);
         ui->appToolBar->addAction(ui->appFetchTransactionsAction);
         ui->appToolBar->addAction(ui->appFetchAllTransactionsAction);
+        ui->appToolBar->addAction(ui->appFetchStandingOrdersAction);
+        ui->appToolBar->addAction(ui->appFetchAllStandingOrdersAction);
         ui->appToolBar->addSeparator();
         ui->appToolBar->addAction(ui->appCloseStorageAction);
     }
@@ -352,6 +371,69 @@ public:
         // whether anything is written at all.
         QObject::connect(fetch, &AccountFetch::abortNeedsAnswer, q_ptr, [this] {
             askWhetherToKeep();
+        });
+    }
+
+    /**
+     * The same for the fetch of the standing orders. It refreshes the view
+     * rather than the tree: a standing order changes no balance, so there is
+     * nothing about the accounts on the left that could have moved.
+     */
+    void setUpStandingOrderFetch()
+    {
+        QObject::connect(standingOrderFetch, &StandingOrderFetch::started, q_ptr, [this] {
+            standingOrderFetchIsRunning = true;
+            applyActionStates();
+        });
+
+        QObject::connect(standingOrderFetch,
+                         &StandingOrderFetch::ended,
+                         q_ptr,
+                         [this](StandingOrderFetch::Outcome outcome,
+                                int storedCount,
+                                const QString &) {
+                             standingOrderFetchIsRunning = false;
+                             applyActionStates();
+
+                             q_ptr->statusBar()->showMessage(
+                                 standingOrderMessage(outcome, storedCount));
+
+                             if (outcome == StandingOrderFetch::Outcome::Received) {
+                                 // Through the event loop, so that whatever the
+                                 // storage still has queued is delivered first.
+                                 // The refresh asks it whether it is reading,
+                                 // and an answer given before that queue is
+                                 // empty is out of date.
+                                 QTimer::singleShot(0, q_ptr, [this] {
+                                     standingOrderTableModel->refresh();
+                                 });
+                             }
+                         });
+
+        QObject::connect(standingOrderFetch,
+                         &StandingOrderFetch::allEnded,
+                         q_ptr,
+                         [this](const StandingOrderFetch::Summary &summary) {
+                             standingOrderFetchIsRunning = false;
+                             applyActionStates();
+
+                             q_ptr->statusBar()->showMessage(
+                                 collectiveStandingOrderMessage(summary));
+
+                             const bool nothingWasWritten
+                                 = summary.outcome == StandingOrderFetch::Outcome::Failed
+                                   || (summary.outcome == StandingOrderFetch::Outcome::Aborted
+                                       && !summary.keptAfterAbort);
+
+                             if (!nothingWasWritten) {
+                                 QTimer::singleShot(0, q_ptr, [this] {
+                                     standingOrderTableModel->refresh();
+                                 });
+                             }
+                         });
+
+        QObject::connect(standingOrderFetch, &StandingOrderFetch::abortNeedsAnswer, q_ptr, [this] {
+            askWhetherToKeepStandingOrders();
         });
     }
 
@@ -487,6 +569,118 @@ public:
         return App::tr("The fetch is through. %1").arg(figures);
     }
 
+    /**
+     * The same question for a stopped fetch of the standing orders, worded for
+     * what it brought. No order is marked as ended either way: a run that was
+     * cut off says nothing about what the institution still holds.
+     */
+    void askWhetherToKeepStandingOrders()
+    {
+        QMessageBox question(q_ptr);
+        question.setObjectName(QStringLiteral("appStandingOrderAbortQuestion"));
+        question.setIcon(QMessageBox::Question);
+        question.setWindowTitle(App::tr("Fetch stopped"));
+        question.setText(App::tr("The fetch was stopped. Keep what has already been fetched?"));
+        question.setInformativeText(
+            App::tr("What was fetched is not stored yet. Discarding it leaves your standing "
+                    "orders as they were before the fetch."));
+
+        auto *const keep = question.addButton(App::tr("Keep"), QMessageBox::AcceptRole);
+        auto *const discard = question.addButton(App::tr("Discard"), QMessageBox::DestructiveRole);
+
+        keep->setObjectName(QStringLiteral("appStandingOrderKeepButton"));
+        discard->setObjectName(QStringLiteral("appStandingOrderDiscardButton"));
+
+        question.setDefaultButton(keep);
+
+        question.exec();
+
+        standingOrderFetch->answerAbort(question.clickedButton() != discard);
+    }
+
+    /**
+     * What the status bar carries once a fetch of the standing orders is over.
+     *
+     * Seven ways out, and the three that brought nothing are told apart: an
+     * account without online access, one whose bank holds no request of this
+     * kind, and one whose bank holds no request at all.
+     */
+    static QString standingOrderMessage(StandingOrderFetch::Outcome outcome, int storedCount)
+    {
+        switch (outcome) {
+        case StandingOrderFetch::Outcome::Received:
+            // Nought is an answer here: an order that is already stored adds no
+            // row, and a bank that reports none has ended the ones it held.
+            return storedCount == 0
+                       ? App::tr("The fetch is through. No new standing orders came in.")
+                       : App::tr("The fetch is through. %n new standing order(s) came in.",
+                                 nullptr,
+                                 storedCount);
+        case StandingOrderFetch::Outcome::Skipped:
+            return App::tr("This account has no online access, so nothing was fetched.");
+        case StandingOrderFetch::Outcome::NothingOffered:
+            return App::tr("Your bank offers no requests for this account, so nothing was "
+                           "fetched.");
+        case StandingOrderFetch::Outcome::NotOffered:
+            return App::tr("Your bank does not offer standing orders for this account. What is "
+                           "stored for it stays as it is.");
+        case StandingOrderFetch::Outcome::Aborted:
+            return App::tr("The fetch was stopped. Nothing of this account was stored.");
+        case StandingOrderFetch::Outcome::StoreFailed:
+            return App::tr("The fetch could not be stored and nothing of it was kept. Please "
+                           "fetch again.");
+        case StandingOrderFetch::Outcome::Failed:
+            return App::tr("The fetch failed. Your bank could not be reached, or it refused the "
+                           "request.");
+        }
+
+        return {};
+    }
+
+    /**
+     * What the status bar carries once a fetch of the standing orders over all
+     * accounts is over. Four figures, the way the collective fetch of the
+     * bookings reports, and an account whose bank holds no request of this kind
+     * is counted apart from one that failed.
+     */
+    static QString collectiveStandingOrderMessage(const StandingOrderFetch::Summary &summary)
+    {
+        const QString figures = App::tr("Fetched: %1. Skipped: %2. Not offered: %3. Failed: %4. "
+                                        "New standing orders: %5.")
+                                    .arg(summary.fetched)
+                                    .arg(summary.skipped)
+                                    .arg(summary.notOffered)
+                                    .arg(summary.failed)
+                                    .arg(summary.storedCount);
+
+        switch (summary.outcome) {
+        case StandingOrderFetch::Outcome::Aborted:
+            return summary.keptAfterAbort
+                       ? App::tr("The fetch was stopped. What had already been fetched was kept. "
+                                 "%1")
+                             .arg(figures)
+                       : App::tr("The fetch was stopped. Nothing of it was stored.");
+
+        case StandingOrderFetch::Outcome::StoreFailed:
+            return App::tr("The fetch could not be stored in full. Please fetch again. %1")
+                .arg(figures);
+
+        case StandingOrderFetch::Outcome::Failed:
+            return summary.reason.isEmpty()
+                       ? App::tr("The fetch failed. Your bank could not be reached, or it refused "
+                                 "the request.")
+                       : summary.reason;
+
+        case StandingOrderFetch::Outcome::Received:
+        case StandingOrderFetch::Outcome::Skipped:
+        case StandingOrderFetch::Outcome::NothingOffered:
+        case StandingOrderFetch::Outcome::NotOffered:
+            break;
+        }
+
+        return App::tr("The fetch is through. %1").arg(figures);
+    }
+
     /** The account the tree has chosen, or an empty pointer for anything else. */
     [[nodiscard]] std::shared_ptr<Account> chosenAccount() const
     {
@@ -546,6 +740,33 @@ public:
         q_ptr->statusBar()->showMessage(App::tr("Your bank is being contacted."));
 
         fetch->start(account);
+    }
+
+    void fetchStandingOrdersOfEveryAccount()
+    {
+        const auto accounts = everyAccount();
+        if (accounts.isEmpty()) {
+            return;
+        }
+
+        // Said before anything goes out, for the reason the fetch of the
+        // bookings gives: until the progress window of the banking layer stands
+        // the command would be unacknowledged.
+        q_ptr->statusBar()->showMessage(App::tr("Your bank is being contacted."));
+
+        standingOrderFetch->startAll(accounts);
+    }
+
+    void fetchStandingOrdersOfTheChosenAccount()
+    {
+        const auto account = chosenAccount();
+        if (account == nullptr) {
+            return;
+        }
+
+        q_ptr->statusBar()->showMessage(App::tr("Your bank is being contacted."));
+
+        standingOrderFetch->start(account);
     }
 
     /**
@@ -727,7 +948,11 @@ public:
     void applyActionStates()
     {
         const bool storageIsOpen = ui->appCentralWidget->page() == AppCentralWidget::Page::Banking;
-        const bool idle = !fetchIsRunning;
+
+        // One fetch is out at a time, whichever kind it is: the banking instance
+        // belongs to one thread while it sends. So both kinds switch off what
+        // either of them would pull the ground from under.
+        const bool idle = !fetchIsRunning && !standingOrderFetchIsRunning;
 
         ui->appCloseStorageAction->setEnabled(storageIsOpen && idle);
         ui->appSetupAssistantAction->setEnabled(storageIsOpen && idle);
@@ -738,6 +963,12 @@ public:
         // tree has nothing to ask any bank about.
         ui->appFetchAllTransactionsAction->setEnabled(storageIsOpen && idle
                                                       && accountTreeModel->rowCount() > 0);
+
+        ui->appFetchStandingOrdersAction->setEnabled(storageIsOpen && idle
+                                                     && chosenAccount() != nullptr);
+
+        ui->appFetchAllStandingOrdersAction->setEnabled(storageIsOpen && idle
+                                                        && accountTreeModel->rowCount() > 0);
 
         // The areas only stand on the second page, so there is nothing to put
         // back on the first. A fetch does not touch them.
@@ -1005,10 +1236,13 @@ public:
     TransactionTableModel *transactionTableModel;
     StandingOrderTableModel *standingOrderTableModel;
 
-    // Owned by the window through the object hierarchy. It holds the banking
-    // instance of the window and comes up on the first fetch, so a window that
-    // never fetches never reaches the banking layer.
+    // Owned by the window through the object hierarchy. The session holds the
+    // one banking instance of the window and comes up on the first fetch, so a
+    // window that never fetches never reaches the banking layer. Both fetches
+    // run over it, and it is what keeps them from running at the same time.
+    BankingSession *session;
     AccountFetch *fetch;
+    StandingOrderFetch *standingOrderFetch;
 
     Ui::UiApp *ui;
 
@@ -1030,6 +1264,11 @@ public:
     // than read back from it: what the window switches off follows those two
     // moments.
     bool fetchIsRunning = false;
+
+    // The same for the fetch of the standing orders. Held apart from the one
+    // above so that a message can say which of the two is out; what they switch
+    // off is the same for both.
+    bool standingOrderFetchIsRunning = false;
 
     // The first page of the central area. Owned by the window through the widget
     // hierarchy; kept here because the menu reaches into it.
@@ -1111,8 +1350,9 @@ void App::closeStorage()
 
     // The interface of the banking layer belongs to the window and outlives the
     // storage. Left to the span that empties it after a fetch, a PIN entered for
-    // this storage would still be cached while the next one is open.
-    d_ptr->fetch->clearPasswordCache();
+    // this storage would still be cached while the next one is open. Emptied at
+    // the session, so that it is gone whichever kind of fetch put it there.
+    d_ptr->session->clearPasswordCache();
 
     // A choice of account does not outlive the storage it was made in. Emptying
     // the tree takes the selection with it, and the transactions of the account
@@ -1170,7 +1410,8 @@ void App::showError(ErrorCode code, const QString &reason)
     // perfect order. The status bar above carries it, and the outcome of the
     // fetch follows with what it means.
     if (d_ptr->ui->appCentralWidget->page() == AppCentralWidget::Page::Banking
-        && !d_ptr->fetchIsRunning && !d_ptr->transactionTableModel->isReading()
+        && !d_ptr->fetchIsRunning && !d_ptr->standingOrderFetchIsRunning
+        && !d_ptr->transactionTableModel->isReading()
         && !d_ptr->standingOrderTableModel->isReading()) {
         d_ptr->ui->appCentralWidget->showAccountsUnreadable(message);
     }
@@ -1204,7 +1445,7 @@ void App::resizeEvent(QResizeEvent *event)
 
 void App::closeEvent(QCloseEvent *event)
 {
-    if (d_ptr->fetchIsRunning) {
+    if (d_ptr->fetchIsRunning || d_ptr->standingOrderFetchIsRunning) {
         // Not a dialog: the progress window of the banking layer already stands
         // in front of everything, and a second one over it would ask the user to
         // answer the wrong question first.
