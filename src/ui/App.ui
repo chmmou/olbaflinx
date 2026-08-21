@@ -44,6 +44,8 @@
     <addaction name="appSetupAssistantAction"/>
     <addaction name="appFetchTransactionsAction"/>
     <addaction name="appFetchAllTransactionsAction"/>
+    <addaction name="appFetchStandingOrdersAction"/>
+    <addaction name="appFetchAllStandingOrdersAction"/>
    </widget>
    <widget class="QMenu" name="appViewMenu">
     <property name="title">
@@ -99,6 +101,16 @@
   <action name="appFetchAllTransactionsAction">
    <property name="text">
     <string>Fetch &amp;All Transactions</string>
+   </property>
+  </action>
+  <action name="appFetchStandingOrdersAction">
+   <property name="text">
+    <string>Fetch Standin&amp;g Orders</string>
+   </property>
+  </action>
+  <action name="appFetchAllStandingOrdersAction">
+   <property name="text">
+    <string>Fetch All Stan&amp;ding Orders</string>
    </property>
   </action>
   <action name="appResetLayoutAction">
