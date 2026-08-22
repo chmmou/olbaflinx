@@ -114,7 +114,8 @@ inline QString exceptionOf(const std::function<void()> &call)
                 std::rethrow_exception(held);
             } catch (const std::exception &inner) {
                 return QString::fromUtf8(inner.what());
-            } catch (...) {}
+            } catch (...) {
+            }
         }
 
         return QStringLiteral("an exception of unknown type");
