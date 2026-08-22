@@ -171,7 +171,8 @@ private:
      * A call that already runs in that thread is made on the spot. Handing it
      * over instead would wait for a thread that is waiting for itself.
      */
-    template<typename Callable> auto callOnOwnerThread(Callable call) -> decltype(call())
+    template<typename Callable>
+    auto callOnOwnerThread(Callable call) -> decltype(call())
     {
         if (QThread::currentThread() == m_ownerThread.thread()) {
             return call();
