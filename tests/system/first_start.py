@@ -169,6 +169,7 @@ def walk_the_way(driver, password):
     # only a run from outside sees that a user meets it disabled.
     for locked in ("appCloseStorageAction", "appSetupAssistantAction",
                    "appFetchTransactionsAction", "appFetchAllTransactionsAction",
+                   "appFetchStandingOrdersAction", "appFetchAllStandingOrdersAction",
                    "appResetLayoutAction"):
         report(not find(driver, locked).is_enabled(),
                f"{locked} is not available while no vault is open")
@@ -232,6 +233,28 @@ def walk_the_way(driver, password):
            "appFetchAllTransactionsAction is still offered once a vault is open")
     report(not find(driver, "appFetchAllTransactionsAction").is_enabled(),
            "appFetchAllTransactionsAction is not available while no account is set up")
+
+    # The two commands of the standing orders stand beside those of the
+    # bookings and are held back by the same two conditions. A run from outside
+    # is where the pair shows as the user meets it: four entries, told apart by
+    # their id and not by what they read.
+    report(exists(driver, "appFetchStandingOrdersAction"),
+           "appFetchStandingOrdersAction is still offered once a vault is open")
+    report(not find(driver, "appFetchStandingOrdersAction").is_enabled(),
+           "appFetchStandingOrdersAction is not available while no account is chosen")
+
+    report(exists(driver, "appFetchAllStandingOrdersAction"),
+           "appFetchAllStandingOrdersAction is still offered once a vault is open")
+    report(not find(driver, "appFetchAllStandingOrdersAction").is_enabled(),
+           "appFetchAllStandingOrdersAction is not available while no account is set up")
+
+    # The view of the standing orders sits behind a tab, and a tab of a QTabBar
+    # carries no id a run could hold it by. What is reachable by id is the page
+    # that stands, and it is the one with the bookings until somebody presses
+    # the tab. The name and the role of the view itself are held by the test
+    # inside the process instead.
+    report(find(driver, "pageBanking").is_displayed(),
+           "the second page carries the views of the account")
 
     take_menu_entry(driver, "appFileMenu", "appCloseStorageAction")
     report(wait_until(lambda: find(driver, "pageStorages").is_displayed()),

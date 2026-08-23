@@ -585,13 +585,17 @@ public:
             App::tr("What was fetched is not stored yet. Discarding it leaves your standing "
                     "orders as they were before the fetch."));
 
-        auto *const keep = question.addButton(App::tr("Keep"), QMessageBox::AcceptRole);
-        auto *const discard = question.addButton(App::tr("Discard"), QMessageBox::DestructiveRole);
+        auto *const keep = question.addButton(App::tr("&Keep"), QMessageBox::AcceptRole);
+        auto *const discard = question.addButton(App::tr("&Discard"), QMessageBox::DestructiveRole);
 
         keep->setObjectName(QStringLiteral("appStandingOrderKeepButton"));
         discard->setObjectName(QStringLiteral("appStandingOrderDiscardButton"));
 
+        // Keeping is what the return key answers and what the escape key
+        // answers. Neither of the two roles here is one Qt takes for the way
+        // out, so without the second line escape leaves the box standing.
         question.setDefaultButton(keep);
+        question.setEscapeButton(keep);
 
         question.exec();
 

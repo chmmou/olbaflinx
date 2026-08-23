@@ -105,6 +105,12 @@ olbaflinx_add_test(tst_appfetch ui/tst_appfetch.cpp
 olbaflinx_add_test(tst_standingorderfetch ui/tst_standingorderfetch.cpp
         OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
 
+# What the standing order view says about itself and what the keyboard reaches
+# of it. The checks span the whole window, so they sit apart from the two
+# targets that measure the view and the commands.
+olbaflinx_add_test(tst_standingorder_accessibility ui/tst_standingorder_accessibility.cpp
+        OlbaFlinxUi::OlbaFlinxUi Qt6::Widgets)
+
 # The only test that reaches for the docking library itself. OlbaFlinxUi links
 # it privately, which carries the symbols but not the right to name its types.
 olbaflinx_add_test(tst_appdocklayout ui/tst_appdocklayout.cpp
