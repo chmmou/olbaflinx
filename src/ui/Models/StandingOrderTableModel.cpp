@@ -19,6 +19,7 @@
 
 #include "ui/Logging.h"
 
+#include <QtCore/QDate>
 #include <QtCore/QLocale>
 
 #include <algorithm>
@@ -201,9 +202,10 @@ QVariant StandingOrderTableModel::data(const QModelIndex &index, int role) const
         case PurposeColumn:
             return order->purpose();
         case NextDateColumn:
-            // An empty cell where the institution named no next execution. Any
-            // other date of the order would read as one, and it is not.
-            return dateText(order->nextDate());
+            // Counted where the institution names no next execution, which is
+            // the usual case: the request that brings a standing order in
+            // reports the first execution and the cycle and no more.
+            return dateText(order->nextExecution(QDate::currentDate()));
         case IntervalColumn:
             return intervalText(order->period(), order->cycle());
         case ValueColumn:
@@ -461,10 +463,14 @@ void StandingOrderTableModel::sortRows()
     const auto column = m_sortColumn;
     const bool ascending = m_sortOrder == Qt::AscendingOrder;
 
+    // Read once, so that every comparison of a run sees the same day. A run
+    // that crossed midnight would otherwise order one half against the other.
+    const auto today = QDate::currentDate();
+
     std::stable_sort(m_orders.begin(),
                      m_orders.end(),
-                     [column, ascending](const std::shared_ptr<StandingOrder> &left,
-                                         const std::shared_ptr<StandingOrder> &right) {
+                     [column, ascending, today](const std::shared_ptr<StandingOrder> &left,
+                                                const std::shared_ptr<StandingOrder> &right) {
                          bool inOrder = false;
 
                          switch (column) {
@@ -478,7 +484,7 @@ void StandingOrderTableModel::sortRows()
                                        < 0;
                              break;
                          case NextDateColumn:
-                             inOrder = left->nextDate() < right->nextDate();
+                             inOrder = left->nextExecution(today) < right->nextExecution(today);
                              break;
                          case IntervalColumn:
                              inOrder = intervalSpan(left->period(), left->cycle())
