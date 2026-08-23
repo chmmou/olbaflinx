@@ -46,6 +46,12 @@ private Q_SLOTS:
     void anOrderWithoutAFirstDateStillCarriesAFingerprint();
     void theMapNamesTheWayTheOrderIsIdentifiedBy();
     void anOrderOfAnotherTypeIsNotValid();
+    void theReportedExecutionStandsWhereItIsStillToCome();
+    void theExecutionIsCountedWhereNoneIsReported_data();
+    void theExecutionIsCountedWhereNoneIsReported();
+    void anOrderWithoutACycleFallsBackOnItsFirstExecution();
+    void anOrderPastItsLastExecutionRunsNoMore();
+    void anOrderWithoutAnyDateHasNoNextExecution();
 };
 
 void StandingOrderTest::anOrderFromTheBackendCarriesItsFields()
@@ -251,6 +257,121 @@ void StandingOrderTest::anOrderOfAnotherTypeIsNotValid()
     AB_Transaction_free(abTransaction);
 
     QVERIFY(!order.isValid());
+}
+
+/**
+ * A date the institution itself reports is the answer, and nothing is counted
+ * beside it. Only a date that has passed gives way, because an execution behind
+ * the day asked about is not the next one.
+ */
+void StandingOrderTest::theReportedExecutionStandsWhereItIsStillToCome()
+{
+    auto spec = StandingOrderSpec{};
+    spec.firstDate = QDate(2026, 1, 1);
+    spec.nextDate = QDate(2026, 3, 1);
+
+    const auto order = StandingOrderHelpers::fromBackend(spec);
+
+    QCOMPARE(order->nextExecution(QDate(2026, 2, 15)), QDate(2026, 3, 1));
+    QCOMPARE(order->nextExecution(QDate(2026, 3, 1)), QDate(2026, 3, 1));
+
+    // Past the reported one, so it is counted from the first execution instead.
+    QCOMPARE(order->nextExecution(QDate(2026, 3, 2)), QDate(2026, 4, 1));
+}
+
+void StandingOrderTest::theExecutionIsCountedWhereNoneIsReported_data()
+{
+    QTest::addColumn<int>("period");
+    QTest::addColumn<quint32>("cycle");
+    QTest::addColumn<QDate>("firstDate");
+    QTest::addColumn<QDate>("from");
+    QTest::addColumn<QDate>("expected");
+
+    const auto monthly = static_cast<int>(AB_Transaction_PeriodMonthly);
+    const auto weekly = static_cast<int>(AB_Transaction_PeriodWeekly);
+
+    QTest::newRow("monthly, still ahead")
+        << monthly << 1u << QDate(2027, 1, 15) << QDate(2026, 8, 23) << QDate(2027, 1, 15);
+    QTest::newRow("monthly, on an execution")
+        << monthly << 1u << QDate(2026, 1, 15) << QDate(2026, 8, 15) << QDate(2026, 8, 15);
+    QTest::newRow("monthly, between two")
+        << monthly << 1u << QDate(2026, 1, 15) << QDate(2026, 8, 16) << QDate(2026, 9, 15);
+    QTest::newRow("quarterly") << monthly << 3u << QDate(2026, 1, 15) << QDate(2026, 8, 23)
+                               << QDate(2026, 10, 15);
+    QTest::newRow("annually") << monthly << 12u << QDate(2020, 3, 1) << QDate(2026, 8, 23)
+                              << QDate(2027, 3, 1);
+
+    // A short month shortens its own execution and none of the ones after it.
+    // Counting from the execution before would keep the 28th for good.
+    QTest::newRow("month end, shortened")
+        << monthly << 1u << QDate(2026, 1, 31) << QDate(2026, 2, 1) << QDate(2026, 2, 28);
+    QTest::newRow("month end, back to full length")
+        << monthly << 1u << QDate(2026, 1, 31) << QDate(2026, 3, 1) << QDate(2026, 3, 31);
+
+    QTest::newRow("weekly") << weekly << 1u << QDate(2026, 1, 1) << QDate(2026, 1, 20)
+                            << QDate(2026, 1, 22);
+    QTest::newRow("fortnightly") << weekly << 2u << QDate(2026, 1, 1) << QDate(2026, 2, 1)
+                                 << QDate(2026, 2, 12);
+}
+
+void StandingOrderTest::theExecutionIsCountedWhereNoneIsReported()
+{
+    QFETCH(int, period);
+    QFETCH(quint32, cycle);
+    QFETCH(QDate, firstDate);
+    QFETCH(QDate, from);
+    QFETCH(QDate, expected);
+
+    auto spec = StandingOrderSpec{};
+    spec.period = static_cast<AB_TRANSACTION_PERIOD>(period);
+    spec.cycle = cycle;
+    spec.firstDate = firstDate;
+    spec.nextDate = QDate();
+
+    QCOMPARE(StandingOrderHelpers::fromBackend(spec)->nextExecution(from), expected);
+}
+
+/**
+ * Without a period or with a cycle of nought there is no run to count on, and
+ * the first execution is what the order carries instead.
+ */
+void StandingOrderTest::anOrderWithoutACycleFallsBackOnItsFirstExecution()
+{
+    auto spec = StandingOrderSpec{};
+    spec.firstDate = QDate(2026, 1, 1);
+    spec.nextDate = QDate();
+    spec.cycle = 0;
+
+    QCOMPARE(StandingOrderHelpers::fromBackend(spec)->nextExecution(QDate(2026, 8, 23)),
+             QDate(2026, 1, 1));
+
+    spec.cycle = 1;
+    spec.period = AB_Transaction_PeriodUnknown;
+
+    QCOMPARE(StandingOrderHelpers::fromBackend(spec)->nextExecution(QDate(2026, 8, 23)),
+             QDate(2026, 1, 1));
+}
+
+void StandingOrderTest::anOrderPastItsLastExecutionRunsNoMore()
+{
+    auto spec = StandingOrderSpec{};
+    spec.firstDate = QDate(2026, 1, 1);
+    spec.lastDate = QDate(2026, 6, 1);
+    spec.nextDate = QDate();
+
+    const auto order = StandingOrderHelpers::fromBackend(spec);
+
+    QCOMPARE(order->nextExecution(QDate(2026, 5, 2)), QDate(2026, 6, 1));
+    QVERIFY(!order->nextExecution(QDate(2026, 6, 2)).isValid());
+}
+
+void StandingOrderTest::anOrderWithoutAnyDateHasNoNextExecution()
+{
+    auto spec = StandingOrderSpec{};
+    spec.firstDate = QDate();
+    spec.nextDate = QDate();
+
+    QVERIFY(!StandingOrderHelpers::fromBackend(spec)->nextExecution(QDate(2026, 8, 23)).isValid());
 }
 
 } // namespace olbaflinx::core::banking::standingorder::tests

@@ -25,6 +25,7 @@
 #include <QtCore/QIODevice>
 #include <QtCore/QObject>
 
+#include <algorithm>
 #include <memory>
 
 using namespace olbaflinx::core::banking::standingorder;
@@ -37,6 +38,61 @@ namespace {
  */
 using GwenDatePtr = std::unique_ptr<GWEN_DATE, decltype(&GWEN_Date_free)>;
 using GwenBufferPtr = std::unique_ptr<GWEN_BUFFER, decltype(&GWEN_Buffer_free)>;
+
+/** The length of a weekly period. The monthly one is counted in months. */
+constexpr int DaysPerWeek = 7;
+
+/**
+ * The execution on or after the given day, counted from the first one.
+ *
+ * Answers with an invalid date where the span between two executions is not
+ * known, which is the case for an order without a period and for one whose
+ * cycle nobody reported.
+ */
+QDate executionOnOrAfter(const QDate &first,
+                         AB_TRANSACTION_PERIOD period,
+                         quint32 cycle,
+                         const QDate &from)
+{
+    const auto step = static_cast<int>(cycle);
+    if (step <= 0) {
+        return {};
+    }
+
+    if (period == AB_Transaction_PeriodMonthly) {
+        // Every candidate is counted from the first execution rather than from
+        // the one before it. An order of the 31st that met a February would
+        // otherwise keep the shortened day and never return to the end of a
+        // month.
+        const int months = ((from.year() - first.year()) * 12) + (from.month() - first.month());
+
+        auto taken = std::max(0, months / step);
+        auto execution = first.addMonths(taken * step);
+
+        while (execution < from) {
+            ++taken;
+            execution = first.addMonths(taken * step);
+        }
+
+        return execution;
+    }
+
+    if (period == AB_Transaction_PeriodWeekly) {
+        const auto span = static_cast<qint64>(step) * DaysPerWeek;
+
+        auto taken = std::max<qint64>(0, first.daysTo(from) / span);
+        auto execution = first.addDays(taken * span);
+
+        while (execution < from) {
+            ++taken;
+            execution = first.addDays(taken * span);
+        }
+
+        return execution;
+    }
+
+    return {};
+}
 
 } // namespace
 
@@ -305,6 +361,38 @@ QDate StandingOrder::lastDate() const
 QDate StandingOrder::nextDate() const
 {
     return Private::toDate(AB_Transaction_GetNextDate(d_ptr->abTransaction));
+}
+
+QDate StandingOrder::nextExecution(const QDate &from) const
+{
+    const auto untilTheLastOne = [this](const QDate &execution) {
+        const auto last = lastDate();
+
+        return last.isValid() && execution.isValid() && execution > last ? QDate() : execution;
+    };
+
+    const auto reported = nextDate();
+    if (reported.isValid() && reported >= from) {
+        return untilTheLastOne(reported);
+    }
+
+    const auto first = firstDate();
+    if (!first.isValid()) {
+        // Nothing to count from. What the institution reported stands even
+        // where it has passed, because it is the only date the order carries.
+        return untilTheLastOne(reported);
+    }
+
+    if (first >= from) {
+        return untilTheLastOne(first);
+    }
+
+    const auto execution = executionOnOrAfter(first, period(), cycle(), from);
+
+    // The first execution is the floor. An order whose cycle nobody reported
+    // has no run to count on, and the day it started says more than an empty
+    // cell, which would read as an order that never runs at all.
+    return untilTheLastOne(execution.isValid() ? execution : first);
 }
 
 AB_TRANSACTION_STATUS StandingOrder::status() const

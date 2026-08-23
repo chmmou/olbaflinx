@@ -196,6 +196,10 @@ private:
 
     /**
      * Three orders of one account, told apart in every field a column shows.
+     *
+     * Their executions lie far ahead so that the reported date is what the cell
+     * shows. One that had passed would be counted forward instead, and the rows
+     * would depend on the day the test runs.
      */
     static BankingItems threeOrders(quint32 uniqueAccountId)
     {
@@ -210,7 +214,7 @@ private:
         first.value = 750.0;
         first.period = AB_Transaction_PeriodMonthly;
         first.cycle = 1;
-        first.nextDate = QDate(2026, 9, 1);
+        first.nextDate = QDate(2099, 9, 1);
 
         auto second = StandingOrderSpec{};
         second.uniqueAccountId = uniqueAccountId;
@@ -221,7 +225,7 @@ private:
         second.value = 42.5;
         second.period = AB_Transaction_PeriodMonthly;
         second.cycle = 3;
-        second.nextDate = QDate(2026, 9, 15);
+        second.nextDate = QDate(2099, 9, 15);
 
         auto third = StandingOrderSpec{};
         third.uniqueAccountId = uniqueAccountId;
@@ -232,7 +236,7 @@ private:
         third.value = 100.0;
         third.period = AB_Transaction_PeriodWeekly;
         third.cycle = 1;
-        third.nextDate = QDate(2026, 8, 25);
+        third.nextDate = QDate(2099, 8, 25);
 
         items << orderWith(first) << orderWith(second) << orderWith(third);
 
@@ -250,7 +254,8 @@ private Q_SLOTS:
     void everyColumnShowsWhatItsHeaderPromises();
     void theIntervalNamesThePairOfPeriodAndCycle();
     void theIntervalNamesThePairOfPeriodAndCycle_data();
-    void anOrderWithoutANextExecutionLeavesTheCellEmpty();
+    void theCellCountsTheExecutionWhereTheInstitutionNamesNone();
+    void anOrderWithoutAnyDateLeavesTheCellEmpty();
     void anAmountCarriesTwoDecimalsAndStandsRight();
     void aDateCarriesTheDayTheMonthAndFourDigitsOfYear();
     void aDateCarriesTheDayTheMonthAndFourDigitsOfYear_data();
@@ -339,7 +344,7 @@ void StandingOrderTableModelTest::everyColumnShowsWhatItsHeaderPromises()
     spec.value = 750.0;
     spec.period = AB_Transaction_PeriodMonthly;
     spec.cycle = 1;
-    spec.nextDate = QDate(2026, 9, 1);
+    spec.nextDate = QDate(2099, 9, 1);
 
     fill(model, BankingItems{orderWith(spec)});
 
@@ -348,7 +353,7 @@ void StandingOrderTableModelTest::everyColumnShowsWhatItsHeaderPromises()
              QStringLiteral("Erika Musterfrau"));
     QCOMPARE(shownAt(model, 0, StandingOrderTableModel::PurposeColumn), QStringLiteral("Miete"));
     QCOMPARE(shownAt(model, 0, StandingOrderTableModel::NextDateColumn),
-             QStringLiteral("01.09.2026"));
+             QStringLiteral("01.09.2099"));
     QCOMPARE(shownAt(model, 0, StandingOrderTableModel::IntervalColumn), QStringLiteral("Monthly"));
     QCOMPARE(shownAt(model, 0, StandingOrderTableModel::ValueColumn), QStringLiteral("750,00"));
 }
@@ -405,23 +410,54 @@ void StandingOrderTableModelTest::theIntervalNamesThePairOfPeriodAndCycle()
     QCOMPARE(shownAt(model, 0, StandingOrderTableModel::IntervalColumn), shown);
 }
 
-void StandingOrderTableModelTest::anOrderWithoutANextExecutionLeavesTheCellEmpty()
+/**
+ * What a real institution sends: the first execution and the cycle, and no next
+ * one. The cell counts the run rather than staying empty.
+ *
+ * The order runs on the first of every month, so the day it falls on follows
+ * from the calendar alone and not from the day the test runs.
+ */
+void StandingOrderTableModelTest::theCellCountsTheExecutionWhereTheInstitutionNamesNone()
+{
+    QLocale::setDefault(QLocale(QLocale::German, QLocale::Germany));
+
+    StandingOrderTableModel model;
+
+    const auto today = QDate::currentDate();
+    const auto firstOfThisMonth = QDate(today.year(), today.month(), 1);
+
+    auto spec = StandingOrderSpec{};
+    spec.period = AB_Transaction_PeriodMonthly;
+    spec.cycle = 1;
+    spec.firstDate = QDate(today.year(), 1, 1);
+    spec.lastDate = QDate();
+    spec.nextDate = QDate();
+
+    fill(model, BankingItems{orderWith(spec)});
+
+    const auto expected = today == firstOfThisMonth ? today : firstOfThisMonth.addMonths(1);
+
+    QCOMPARE(shownAt(model, 0, StandingOrderTableModel::NextDateColumn),
+             expected.toString(QStringLiteral("dd.MM.yyyy")));
+
+    // The raw field of the institution stays what it was. What the column shows
+    // is worked out, and the role goes on carrying what came over the wire.
+    QVERIFY(
+        !model.data(model.index(0, 0), StandingOrderTableModel::NextDateRole).toDate().isValid());
+}
+
+void StandingOrderTableModelTest::anOrderWithoutAnyDateLeavesTheCellEmpty()
 {
     StandingOrderTableModel model;
 
     auto spec = StandingOrderSpec{};
-    spec.firstDate = QDate(2026, 1, 1);
-    spec.lastDate = QDate(2027, 1, 1);
+    spec.firstDate = QDate();
+    spec.lastDate = QDate();
     spec.nextDate = QDate();
 
     fill(model, BankingItems{orderWith(spec)});
 
     QVERIFY(shownAt(model, 0, StandingOrderTableModel::NextDateColumn).isEmpty());
-
-    // The other two dates are there and stay out of that column. A cell that
-    // fell back on one of them would name an execution that is not the next one.
-    QCOMPARE(model.data(model.index(0, 0), StandingOrderTableModel::FirstDateRole).toDate(),
-             QDate(2026, 1, 1));
 }
 
 void StandingOrderTableModelTest::anAmountCarriesTwoDecimalsAndStandsRight()
@@ -451,9 +487,9 @@ void StandingOrderTableModelTest::aDateCarriesTheDayTheMonthAndFourDigitsOfYear_
     QTest::addColumn<QString>("shown");
 
     QTest::newRow("de_DE") << QLocale(QLocale::German, QLocale::Germany)
-                           << QStringLiteral("01.09.2026");
+                           << QStringLiteral("01.09.2099");
     QTest::newRow("en_GB") << QLocale(QLocale::English, QLocale::UnitedKingdom)
-                           << QStringLiteral("01/09/2026");
+                           << QStringLiteral("01/09/2099");
 }
 
 void StandingOrderTableModelTest::aDateCarriesTheDayTheMonthAndFourDigitsOfYear()
@@ -466,7 +502,7 @@ void StandingOrderTableModelTest::aDateCarriesTheDayTheMonthAndFourDigitsOfYear(
     StandingOrderTableModel model;
 
     auto spec = StandingOrderSpec{};
-    spec.nextDate = QDate(2026, 9, 1);
+    spec.nextDate = QDate(2099, 9, 1);
 
     fill(model, BankingItems{orderWith(spec)});
 

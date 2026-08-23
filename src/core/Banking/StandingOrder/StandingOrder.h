@@ -133,6 +133,19 @@ public:
     [[nodiscard]] QDate nextDate() const;
 
     /**
+     * When the order runs next, seen from the given day.
+     *
+     * The date the institution reports where it lies on or after that day,
+     * otherwise the execution worked out from the first one and the cycle.
+     *
+     * An order whose period or cycle is unknown answers with its first
+     * execution, the only date it then carries. An order past its last
+     * execution answers with an invalid date, and so does one that carries no
+     * date at all.
+     */
+    [[nodiscard]] QDate nextExecution(const QDate &from) const;
+
+    /**
      * The state the institution reports. Carried through the storage without
      * being read anywhere yet.
      */
